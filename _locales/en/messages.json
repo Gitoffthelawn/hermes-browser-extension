@@ -5395,6 +5395,10 @@
     "message": "Sidebar",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "This browser keeps the Hermes sidebar open on every tab in the window. Click the Hermes toolbar button again to close it.",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "Signal",
     "description": "Runtime interface message ui.signal"

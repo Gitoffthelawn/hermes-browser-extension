@@ -5395,6 +5395,10 @@
     "message": "แถบด้านข้าง",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "เบราว์เซอร์นี้จะเปิดแถบข้าง Hermes ค้างไว้ในทุกแท็บของหน้าต่าง คลิกปุ่ม Hermes บนแถบเครื่องมืออีกครั้งเพื่อปิด",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "สัญญาณ",
     "description": "Runtime interface message ui.signal"

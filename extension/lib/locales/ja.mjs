@@ -1195,6 +1195,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "書き込みフィールドに Hermes Assist を表示",
   "ui.side.panel": "サイドパネル",
   "ui.sidebar": "サイドバー",
+  "ui.sidebar.stays.open.across.tabs": "このブラウザーでは、Hermes のサイドバーはウィンドウ内のすべてのタブで開いたままになります。閉じるには、ツールバーの Hermes ボタンをもう一度クリックしてください。",
   "ui.signal": "信号",
   "ui.site": "サイト",
   "ui.size": "サイズ",

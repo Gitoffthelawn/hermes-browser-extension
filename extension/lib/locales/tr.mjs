@@ -1195,6 +1195,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "Hermes Assist'i yazma alanlarında göster",
   "ui.side.panel": "Yan panel",
   "ui.sidebar": "Kenar çubuğu",
+  "ui.sidebar.stays.open.across.tabs": "Bu tarayıcı, Hermes kenar çubuğunu penceredeki her sekmede açık tutar. Kapatmak için araç çubuğundaki Hermes düğmesine yeniden tıklayın.",
   "ui.signal": "Sinyal",
   "ui.site": "sitesi",
   "ui.size": "Boyut",

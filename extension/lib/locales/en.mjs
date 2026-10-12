@@ -1226,6 +1226,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "Show Hermes Assist in writing fields",
   "ui.side.panel": "Side panel",
   "ui.sidebar": "Sidebar",
+  "ui.sidebar.stays.open.across.tabs": "This browser keeps the Hermes sidebar open on every tab in the window. Click the Hermes toolbar button again to close it.",
   "ui.signal": "Signal",
   "ui.site": "Site",
   "ui.size": "Size",

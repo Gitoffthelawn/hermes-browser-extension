@@ -1195,6 +1195,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "Hermes weergeven Assisteren bij het schrijven van velden",
   "ui.side.panel": "Zijpaneel",
   "ui.sidebar": "Zijbalk",
+  "ui.sidebar.stays.open.across.tabs": "Deze browser houdt de Hermes-zijbalk open op elk tabblad in het venster. Klik nogmaals op de Hermes-knop in de werkbalk om hem te sluiten.",
   "ui.signal": "Signaal",
   "ui.site": "Locatie",
   "ui.size": "Grootte",

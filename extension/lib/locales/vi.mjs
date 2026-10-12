@@ -1195,6 +1195,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "Hiển thị Hermes Assist trong trường viết",
   "ui.side.panel": "Bảng điều khiển bên",
   "ui.sidebar": "Thanh bên",
+  "ui.sidebar.stays.open.across.tabs": "Trình duyệt này giữ thanh bên Hermes mở trên mọi thẻ trong cửa sổ. Nhấp lại vào nút Hermes trên thanh công cụ để đóng.",
   "ui.signal": "tín hiệu",
   "ui.site": "Trang web",
   "ui.size": "Kích thước",

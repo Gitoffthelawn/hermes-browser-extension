@@ -1222,6 +1222,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "在写作字段中显示 Hermes Assist",
   "ui.side.panel": "侧面板",
   "ui.sidebar": "侧边栏",
+  "ui.sidebar.stays.open.across.tabs": "此浏览器会在窗口的所有标签页上保持 Hermes 侧边栏打开。再次点击工具栏中的 Hermes 按钮即可关闭。",
   "ui.signal": "信号",
   "ui.site": "站点",
   "ui.size": "大小",

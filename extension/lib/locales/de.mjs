@@ -1195,6 +1195,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "Zeigen Sie Hermes Assist in Schreibfeldern an",
   "ui.side.panel": "Seitenteil",
   "ui.sidebar": "Seitenleiste",
+  "ui.sidebar.stays.open.across.tabs": "Dieser Browser hält die Hermes-Seitenleiste auf jedem Tab im Fenster geöffnet. Klicke erneut auf die Hermes-Schaltfläche in der Symbolleiste, um sie zu schließen.",
   "ui.signal": "Signal",
   "ui.site": "Website",
   "ui.size": "Größe",

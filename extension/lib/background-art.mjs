@@ -1,5 +1,8 @@
 export const ORIGINAL_BACKGROUND_ART = 'assets/img/hermes-browser-enter-gate-ink.png';
 export const BACKGROUND_ART_STORAGE_KEY = 'hermesBrowserBackgroundArt';
+// How many recent picks a newly opened panel avoids, so panels open side by
+// side in different tabs show different artwork.
+export const BACKGROUND_ART_RECENT_LIMIT = 5;
 
 export const BACKGROUND_ART = Object.freeze([
   ORIGINAL_BACKGROUND_ART,
@@ -19,8 +22,17 @@ export const BACKGROUND_ART = Object.freeze([
   'assets/img/background-art/stack-graf12-ink.webp',
 ]);
 
+/** Recent picks, newest first. Accepts the older single-string storage value. */
+export function recentBackgroundArt(saved) {
+  const list = Array.isArray(saved) ? saved : [saved];
+  return [...new Set(list.filter((entry) => BACKGROUND_ART.includes(entry)))].slice(0, BACKGROUND_ART_RECENT_LIMIT);
+}
+
+/** A random entry that avoids `previous` (one entry or a list of recent ones). */
 export function pickBackgroundArt(random = Math.random, previous = '') {
-  const pool = BACKGROUND_ART.filter((entry) => entry !== previous);
+  const avoid = new Set(Array.isArray(previous) ? previous : [previous]);
+  const filtered = BACKGROUND_ART.filter((entry) => !avoid.has(entry));
+  const pool = filtered.length ? filtered : BACKGROUND_ART;
   const value = Number(typeof random === 'function' ? random() : random);
   const index = Number.isFinite(value)
     ? Math.min(pool.length - 1, Math.max(0, Math.floor(value * pool.length)))
@@ -32,58 +44,47 @@ export function backgroundArtCssValue(entry = '') {
   return BACKGROUND_ART.includes(entry) ? `url("${entry}")` : '';
 }
 
+/**
+ * One artwork per open panel. Each panel picks once when it opens and keeps
+ * that picture until it closes: switching tabs, or hiding and showing the
+ * panel, never changes it. The pick avoids the last few used, so panels open
+ * in separate tabs at the same time get different pictures.
+ */
 export function createBackgroundArtRotation({
   root,
-  document,
   storage,
   random = Math.random,
   locks = globalThis.navigator?.locks,
 }) {
   let current = '';
-  let hidden = document.visibilityState === 'hidden';
-  let pending = Promise.resolve('');
 
   async function chooseAndApply() {
-    let previous = current;
+    let recent = [];
     try {
       const saved = await storage?.get(BACKGROUND_ART_STORAGE_KEY);
-      if (BACKGROUND_ART.includes(saved?.[BACKGROUND_ART_STORAGE_KEY])) {
-        previous = saved[BACKGROUND_ART_STORAGE_KEY];
-      }
+      recent = recentBackgroundArt(saved?.[BACKGROUND_ART_STORAGE_KEY]);
     } catch {
       // Artwork must not block startup when optional storage is unavailable.
     }
-    current = pickBackgroundArt(random, previous);
+    current = pickBackgroundArt(random, recent);
     root.style.setProperty('--background-art', backgroundArtCssValue(current));
     try {
-      await storage?.set({ [BACKGROUND_ART_STORAGE_KEY]: current });
+      await storage?.set({ [BACKGROUND_ART_STORAGE_KEY]: [current, ...recent].slice(0, BACKGROUND_ART_RECENT_LIMIT) });
     } catch {
-      // The current page can still avoid repeats without persisted state.
+      // The panel keeps its pick even when the choice cannot be remembered.
     }
     return current;
   }
 
-  function rotate() {
-    pending = pending.then(() => (
-      typeof locks?.request === 'function'
-        ? locks.request('hermes-background-art', chooseAndApply)
-        : chooseAndApply()
-    )).catch(() => current);
-    return pending;
-  }
-
-  function onVisibilityChange() {
-    const wasHidden = hidden;
-    hidden = document.visibilityState === 'hidden';
-    return wasHidden && !hidden ? rotate() : pending;
-  }
-
-  document.addEventListener('visibilitychange', onVisibilityChange);
-  const ready = hidden ? pending : rotate();
+  // The lock serializes panels opening at the same moment, so each one sees
+  // the others' picks before choosing.
+  const ready = Promise.resolve()
+    .then(() => (typeof locks?.request === 'function'
+      ? locks.request('hermes-background-art', chooseAndApply)
+      : chooseAndApply()))
+    .catch(() => current);
   return {
     ready,
-    dispose() {
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    },
+    dispose() {},
   };
 }

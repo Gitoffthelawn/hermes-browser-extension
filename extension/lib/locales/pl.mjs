@@ -1195,6 +1195,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "Pokaż Hermes Pomoc w pisaniu pól",
   "ui.side.panel": "Panel boczny",
   "ui.sidebar": "Pasek boczny",
+  "ui.sidebar.stays.open.across.tabs": "Ta przeglądarka utrzymuje pasek boczny Hermes otwarty na każdej karcie w oknie. Kliknij ponownie przycisk Hermes na pasku narzędzi, aby go zamknąć.",
   "ui.signal": "Sygnał",
   "ui.site": "Witryna",
   "ui.size": "Rozmiar",

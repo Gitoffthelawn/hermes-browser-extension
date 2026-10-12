@@ -5395,6 +5395,10 @@
     "message": "साइड बार",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "यह ब्राउज़र विंडो के हर टैब पर Hermes साइडबार खुला रखता है। इसे बंद करने के लिए टूलबार में Hermes बटन पर फिर से क्लिक करें।",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "संकेत",
     "description": "Runtime interface message ui.signal"

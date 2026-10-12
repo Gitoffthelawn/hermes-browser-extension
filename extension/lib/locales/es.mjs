@@ -1195,6 +1195,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "Mostrar Hermes Assist en los campos de escritura",
   "ui.side.panel": "Panel lateral",
   "ui.sidebar": "Barra lateral",
+  "ui.sidebar.stays.open.across.tabs": "Este navegador mantiene abierta la barra lateral de Hermes en todas las pestañas de la ventana. Haz clic de nuevo en el botón de Hermes de la barra de herramientas para cerrarla.",
   "ui.signal": "señal",
   "ui.site": "Sitio",
   "ui.size": "Tamaño",

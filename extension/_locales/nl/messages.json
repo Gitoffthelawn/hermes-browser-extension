@@ -5395,6 +5395,10 @@
     "message": "Zijbalk",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "Deze browser houdt de Hermes-zijbalk open op elk tabblad in het venster. Klik nogmaals op de Hermes-knop in de werkbalk om hem te sluiten.",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "Signaal",
     "description": "Runtime interface message ui.signal"

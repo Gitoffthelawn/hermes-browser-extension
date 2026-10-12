@@ -5395,6 +5395,10 @@
     "message": "Thanh bên",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "Trình duyệt này giữ thanh bên Hermes mở trên mọi thẻ trong cửa sổ. Nhấp lại vào nút Hermes trên thanh công cụ để đóng.",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "tín hiệu",
     "description": "Runtime interface message ui.signal"

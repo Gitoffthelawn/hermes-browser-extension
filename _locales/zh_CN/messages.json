@@ -5395,6 +5395,10 @@
     "message": "侧边栏",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "此浏览器会在窗口的所有标签页上保持 Hermes 侧边栏打开。再次点击工具栏中的 Hermes 按钮即可关闭。",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "信号",
     "description": "Runtime interface message ui.signal"

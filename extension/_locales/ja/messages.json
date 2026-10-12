@@ -5395,6 +5395,10 @@
     "message": "サイドバー",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "このブラウザーでは、Hermes のサイドバーはウィンドウ内のすべてのタブで開いたままになります。閉じるには、ツールバーの Hermes ボタンをもう一度クリックしてください。",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "信号",
     "description": "Runtime interface message ui.signal"

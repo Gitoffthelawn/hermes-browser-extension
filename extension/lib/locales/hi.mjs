@@ -1195,6 +1195,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "Hermes Assist को लेखन फ़ील्ड में दिखाएँ",
   "ui.side.panel": "साइड पैनल",
   "ui.sidebar": "साइड बार",
+  "ui.sidebar.stays.open.across.tabs": "यह ब्राउज़र विंडो के हर टैब पर Hermes साइडबार खुला रखता है। इसे बंद करने के लिए टूलबार में Hermes बटन पर फिर से क्लिक करें।",
   "ui.signal": "संकेत",
   "ui.site": "साइट",
   "ui.size": "आकार",

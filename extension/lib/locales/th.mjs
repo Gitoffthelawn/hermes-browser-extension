@@ -1195,6 +1195,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "แสดง Hermes Assist ในช่องการเขียน",
   "ui.side.panel": "แผงด้านข้าง",
   "ui.sidebar": "แถบด้านข้าง",
+  "ui.sidebar.stays.open.across.tabs": "เบราว์เซอร์นี้จะเปิดแถบข้าง Hermes ค้างไว้ในทุกแท็บของหน้าต่าง คลิกปุ่ม Hermes บนแถบเครื่องมืออีกครั้งเพื่อปิด",
   "ui.signal": "สัญญาณ",
   "ui.site": "เว็บไซต์",
   "ui.size": "ขนาด",

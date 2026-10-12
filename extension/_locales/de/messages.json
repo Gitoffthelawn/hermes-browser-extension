@@ -5395,6 +5395,10 @@
     "message": "Seitenleiste",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "Dieser Browser hält die Hermes-Seitenleiste auf jedem Tab im Fenster geöffnet. Klicke erneut auf die Hermes-Schaltfläche in der Symbolleiste, um sie zu schließen.",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "Signal",
     "description": "Runtime interface message ui.signal"

@@ -44,9 +44,11 @@ test('background rotation module exists', () => {
 if (existsSync(moduleUrl)) {
   const {
     BACKGROUND_ART,
+    BACKGROUND_ART_RECENT_LIMIT,
     BACKGROUND_ART_STORAGE_KEY,
     ORIGINAL_BACKGROUND_ART,
     pickBackgroundArt,
+    recentBackgroundArt,
     backgroundArtCssValue,
     createBackgroundArtRotation,
   } = await import(moduleUrl);
@@ -112,7 +114,7 @@ if (existsSync(moduleUrl)) {
     const first = createBackgroundArtRotation({ ...shared, random: () => 0, locks: null });
     const selected = await first.ready;
     assert.equal(selected, BACKGROUND_ART[1]);
-    assert.equal(shared.saved[BACKGROUND_ART_STORAGE_KEY], selected);
+    assert.deepEqual(shared.saved[BACKGROUND_ART_STORAGE_KEY], [selected, ORIGINAL_BACKGROUND_ART], 'recent picks, newest first; the old single-string value is read too');
     assert.equal(shared.values.get('--background-art'), backgroundArtCssValue(selected));
     first.dispose();
     const second = createBackgroundArtRotation({ ...shared, random: () => 0, locks: null });
@@ -120,44 +122,35 @@ if (existsSync(moduleUrl)) {
     second.dispose();
   });
 
-  test('a retained panel changes only after a hidden-to-visible reopening', async () => {
+  test('an open panel keeps its picture: switching tabs or hiding the panel never changes it', async () => {
     const view = fixture(ORIGINAL_BACKGROUND_ART);
     const rotation = createBackgroundArtRotation({ ...view, random: () => 0, locks: null });
     const first = await rotation.ready;
-    await view.visibility('visible');
-    await view.visibility('visible');
-    assert.equal(view.values.get('--background-art'), backgroundArtCssValue(first));
-    assert.deepEqual([...view.listeners.keys()], ['visibilitychange'], 'no resize or focus rotation');
     await view.visibility('hidden');
-    assert.equal(view.values.get('--background-art'), backgroundArtCssValue(first));
     await view.visibility('visible');
-    assert.notEqual(view.values.get('--background-art'), backgroundArtCssValue(first));
-    rotation.dispose();
-    assert.equal(view.listeners.size, 0);
+    await view.visibility('hidden');
+    await view.visibility('visible');
+    assert.equal(view.values.get('--background-art'), backgroundArtCssValue(first));
+    assert.equal(view.listeners.size, 0, 'no visibility, focus or resize listeners');
+    assert.doesNotMatch(readFileSync(moduleUrl, 'utf8'), /visibilitychange/);
   });
 
-  test('hidden preload waits until the panel is actually visible', async () => {
+  test('a panel that loads in a background tab still picks its picture right away', async () => {
     const view = fixture('', { hidden: true });
     const rotation = createBackgroundArtRotation({ ...view, random: () => 0, locks: null });
-    assert.equal(await rotation.ready, '');
-    assert.equal(view.values.size, 0);
-    await view.visibility('visible');
+    assert.equal(await rotation.ready, ORIGINAL_BACKGROUND_ART);
     assert.equal(view.values.get('--background-art'), backgroundArtCssValue(ORIGINAL_BACKGROUND_ART));
-    rotation.dispose();
   });
 
-  test('optional storage failure does not break the panel or repeat the same in-memory choice', async () => {
+  test('optional storage failure does not break the panel', async () => {
     const view = fixture('', { readFails: true, writeFails: true });
     const rotation = createBackgroundArtRotation({ ...view, random: () => 0, locks: null });
     const first = await rotation.ready;
     assert.ok(BACKGROUND_ART.includes(first));
-    await view.visibility('hidden');
-    await view.visibility('visible');
-    assert.notEqual(view.values.get('--background-art'), backgroundArtCssValue(first));
-    rotation.dispose();
+    assert.equal(view.values.get('--background-art'), backgroundArtCssValue(first));
   });
 
-  test('shared Web Lock serializes choices between concurrently opening panels', async () => {
+  test('panels open in several tabs at once all get different pictures', async () => {
     let queue = Promise.resolve();
     const locks = { request(name, callback) {
       assert.equal(name, 'hermes-background-art');
@@ -166,19 +159,25 @@ if (existsSync(moduleUrl)) {
       return result;
     } };
     const shared = fixture(ORIGINAL_BACKGROUND_ART);
-    const first = createBackgroundArtRotation({ ...shared, random: () => 0, locks });
-    const other = fixture();
-    const second = createBackgroundArtRotation({ ...other, storage: shared.storage, random: () => 0, locks });
-    assert.notEqual(await first.ready, await second.ready);
-    first.dispose();
-    second.dispose();
+    const picks = await Promise.all(Array.from({ length: BACKGROUND_ART_RECENT_LIMIT }, () => {
+      const view = fixture();
+      return createBackgroundArtRotation({ ...view, storage: shared.storage, random: () => 0, locks }).ready;
+    }));
+    assert.equal(new Set(picks).size, picks.length, picks.join(', '));
+    assert.equal(shared.saved[BACKGROUND_ART_STORAGE_KEY].length, BACKGROUND_ART_RECENT_LIMIT, 'the remembered list stays short');
+  });
+
+  test('recent list ignores unknown entries and never runs the pool dry', () => {
+    assert.deepEqual(recentBackgroundArt(['nope', BACKGROUND_ART[2], BACKGROUND_ART[2], BACKGROUND_ART[3]]), [BACKGROUND_ART[2], BACKGROUND_ART[3]]);
+    assert.deepEqual(recentBackgroundArt(undefined), []);
+    assert.ok(BACKGROUND_ART.includes(pickBackgroundArt(() => 0.5, [...BACKGROUND_ART])));
   });
 
   test('shell and startup share the selected mask without changing full-bleed sizing', () => {
     const selectedMasks = css.match(/var\(--background-art, url\("assets\/img\/hermes-browser-enter-gate-ink\.png"\)\) center \/ cover no-repeat/g) || [];
     assert.equal(selectedMasks.length, 4, 'both prefixed and standard masks on shell and startup');
     assert.match(panel, /import \{ createBackgroundArtRotation \} from '\.\/lib\/background-art\.mjs';/);
-    assert.match(panel, /createBackgroundArtRotation\(\{[\s\S]*?root: document\.documentElement,[\s\S]*?document,[\s\S]*?storage: browserApi\?\.storage\?\.local,/);
+    assert.match(panel, /createBackgroundArtRotation\(\{[\s\S]*?root: document\.documentElement,[\s\S]*?storage: browserApi\?\.storage\?\.local,/);
     assert.match(panel, /^applySidecarArt\(\);/m, 'existing banner rotation remains independent');
   });
 }

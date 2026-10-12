@@ -5395,6 +5395,10 @@
     "message": "側邊欄",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "此瀏覽器會在視窗的所有分頁上保持 Hermes 側邊欄開啟。再次點擊工具列中的 Hermes 按鈕即可關閉。",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "訊號",
     "description": "Runtime interface message ui.signal"

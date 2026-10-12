@@ -5395,6 +5395,10 @@
     "message": "Bilah samping",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "Browser ini membiarkan sidebar Hermes terbuka di setiap tab dalam jendela. Klik lagi tombol Hermes di toolbar untuk menutupnya.",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "Sinyal",
     "description": "Runtime interface message ui.signal"

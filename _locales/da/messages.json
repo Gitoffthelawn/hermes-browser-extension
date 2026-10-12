@@ -5395,6 +5395,10 @@
     "message": "Sidebjælke",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "Denne browser holder Hermes-sidepanelet åbent på alle faner i vinduet. Klik på Hermes-knappen i værktøjslinjen igen for at lukke det.",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "Signal",
     "description": "Runtime interface message ui.signal"

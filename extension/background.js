@@ -904,7 +904,21 @@ browserApi.runtime.onStartup.addListener(async () => {
   await configureInstalledSurfaces({ controllerReason: 'browser-startup' });
   restoreWakeController();
 });
-browserApi.action.onClicked.addListener(openHermesPanelFromGesture);
+// Firefox's sidebar is per window, so the toolbar button toggles it: one click
+// opens Hermes, the next closes it on every tab. toggle() must run inside the
+// click listener before any await, or Firefox rejects it as not user input.
+function handleActionClick(tab) {
+  const sidebar = browserApi.sidebarAction;
+  if (!browserApi.sidePanel && typeof sidebar?.toggle === 'function') {
+    try {
+      return Promise.resolve(sidebar.toggle()).catch(() => openHermesPanelFromGesture(tab));
+    } catch {
+      return openHermesPanelFromGesture(tab);
+    }
+  }
+  return openHermesPanelFromGesture(tab);
+}
+browserApi.action.onClicked.addListener(handleActionClick);
 browserApi.contextMenus?.onClicked?.addListener?.((info, tab) => {
   return contextMenuController.handleClick(info, tab)
     .catch((error) => console.warn('[Hermes Browser] Context menu action failed:', error));

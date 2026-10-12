@@ -1195,6 +1195,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "إظهار Hermes Assist في حقول الكتابة",
   "ui.side.panel": "لوحة جانبية",
   "ui.sidebar": "الشريط الجانبي",
+  "ui.sidebar.stays.open.across.tabs": "يُبقي هذا المتصفح الشريط الجانبي لـ Hermes مفتوحًا في كل علامات التبويب داخل النافذة. انقر زر Hermes في شريط الأدوات مرة أخرى لإغلاقه.",
   "ui.signal": "إشارة",
   "ui.site": "موقع",
   "ui.size": "مقاس",

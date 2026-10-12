@@ -2687,6 +2687,22 @@ function currentBrowserPlatformSnapshot() {
   };
 }
 
+// Firefox and Opera dock Hermes in the browser's own sidebar, which the
+// browser keeps open on every tab of a window. Per-tab attachment only exists
+// for the Chromium side panel, so those browsers get an honest note instead
+// of a choice that would do nothing.
+function panelUsesWindowSidebar() {
+  return !browserApi?.sidePanel && Boolean(globalThis.opr?.sidebarAction || browserApi?.sidebarAction);
+}
+
+function renderPanelResidencyHost() {
+  const sidebarHost = panelUsesWindowSidebar();
+  const note = document.getElementById('panelResidencySidebarNote');
+  if (note) note.hidden = !sidebarHost;
+  const grid = document.getElementById('panelResidencyOptions')?.querySelector('.settings-choice-grid');
+  if (grid) grid.hidden = sidebarHost;
+}
+
 function currentGatewaySummary(overrides = {}) {
   return gatewayConnectionSummary({
     gatewayMode: overrides.gatewayMode ?? settings.gatewayMode,
@@ -8494,7 +8510,6 @@ function applySidecarArt() {
 applySidecarArt();
 createBackgroundArtRotation({
   root: document.documentElement,
-  document,
   storage: browserApi?.storage?.local,
 });
 
@@ -18034,6 +18049,7 @@ function syncSettingsForm() {
   for (const input of els.panelResidencyInputs || []) {
     input.checked = input.value === normalizePanelResidencyMode(settings.panelResidencyMode);
   }
+  renderPanelResidencyHost();
   if (els.autoNameSessionsInput) els.autoNameSessionsInput.checked = settings.autoNameSessions !== false;
   if (els.showMessageTimesInput) els.showMessageTimesInput.checked = settings.showMessageTimes !== false;
   if (els.agentHostInput) els.agentHostInput.value = settings.agentDiscoveryHost || DEFAULT_SETTINGS.agentDiscoveryHost;

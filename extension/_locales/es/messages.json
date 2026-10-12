@@ -5395,6 +5395,10 @@
     "message": "Barra lateral",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "Este navegador mantiene abierta la barra lateral de Hermes en todas las pestañas de la ventana. Haz clic de nuevo en el botón de Hermes de la barra de herramientas para cerrarla.",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "señal",
     "description": "Runtime interface message ui.signal"

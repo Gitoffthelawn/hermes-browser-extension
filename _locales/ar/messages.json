@@ -5395,6 +5395,10 @@
     "message": "الشريط الجانبي",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "يُبقي هذا المتصفح الشريط الجانبي لـ Hermes مفتوحًا في كل علامات التبويب داخل النافذة. انقر زر Hermes في شريط الأدوات مرة أخرى لإغلاقه.",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "إشارة",
     "description": "Runtime interface message ui.signal"

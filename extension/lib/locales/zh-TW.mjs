@@ -1195,6 +1195,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "在寫作欄位中顯示 Hermes Assist",
   "ui.side.panel": "側邊面板",
   "ui.sidebar": "側邊欄",
+  "ui.sidebar.stays.open.across.tabs": "此瀏覽器會在視窗的所有分頁上保持 Hermes 側邊欄開啟。再次點擊工具列中的 Hermes 按鈕即可關閉。",
   "ui.signal": "訊號",
   "ui.site": "站點",
   "ui.size": "大小",

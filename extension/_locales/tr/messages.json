@@ -5395,6 +5395,10 @@
     "message": "Kenar çubuğu",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "Bu tarayıcı, Hermes kenar çubuğunu penceredeki her sekmede açık tutar. Kapatmak için araç çubuğundaki Hermes düğmesine yeniden tıklayın.",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "Sinyal",
     "description": "Runtime interface message ui.signal"

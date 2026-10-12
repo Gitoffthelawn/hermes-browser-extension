@@ -5395,6 +5395,10 @@
     "message": "Бічна панель",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "Цей браузер тримає бічну панель Hermes відкритою на всіх вкладках вікна. Щоб закрити її, знову натисніть кнопку Hermes на панелі інструментів.",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "Сигнал",
     "description": "Runtime interface message ui.signal"

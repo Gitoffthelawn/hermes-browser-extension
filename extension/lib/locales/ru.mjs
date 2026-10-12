@@ -1195,6 +1195,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "Показывать Hermes Assist в полях записи.",
   "ui.side.panel": "Боковая панель",
   "ui.sidebar": "Боковая панель",
+  "ui.sidebar.stays.open.across.tabs": "Этот браузер держит боковую панель Hermes открытой на всех вкладках окна. Чтобы закрыть её, снова нажмите кнопку Hermes на панели инструментов.",
   "ui.signal": "Сигнал",
   "ui.site": "Сайт",
   "ui.size": "Размер",

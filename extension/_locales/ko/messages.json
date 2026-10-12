@@ -5395,6 +5395,10 @@
     "message": "사이드바",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "이 브라우저는 창의 모든 탭에서 Hermes 사이드바를 열어 둡니다. 닫으려면 도구 모음의 Hermes 버튼을 다시 클릭하세요.",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "신호",
     "description": "Runtime interface message ui.signal"

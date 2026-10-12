@@ -1195,6 +1195,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "쓰기 필드에 Hermes Assist 표시",
   "ui.side.panel": "측면 패널",
   "ui.sidebar": "사이드바",
+  "ui.sidebar.stays.open.across.tabs": "이 브라우저는 창의 모든 탭에서 Hermes 사이드바를 열어 둡니다. 닫으려면 도구 모음의 Hermes 버튼을 다시 클릭하세요.",
   "ui.signal": "신호",
   "ui.site": "대지",
   "ui.size": "크기",

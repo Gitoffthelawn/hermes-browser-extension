@@ -1195,6 +1195,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "Tampilkan Hermes Assist pada kolom tulisan",
   "ui.side.panel": "Panel samping",
   "ui.sidebar": "Bilah samping",
+  "ui.sidebar.stays.open.across.tabs": "Browser ini membiarkan sidebar Hermes terbuka di setiap tab dalam jendela. Klik lagi tombol Hermes di toolbar untuk menutupnya.",
   "ui.signal": "Sinyal",
   "ui.site": "Lokasi",
   "ui.size": "Ukuran",

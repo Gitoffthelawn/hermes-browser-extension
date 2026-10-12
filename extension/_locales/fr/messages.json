@@ -5395,6 +5395,10 @@
     "message": "Barre latérale",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "Ce navigateur garde la barre latérale Hermes ouverte sur tous les onglets de la fenêtre. Cliquez à nouveau sur le bouton Hermes de la barre d'outils pour la fermer.",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "Signal",
     "description": "Runtime interface message ui.signal"

@@ -5395,6 +5395,10 @@
     "message": "Pasek boczny",
     "description": "Runtime interface message ui.sidebar"
   },
+  "runtime_ui_sidebar_stays_open_across_tabs": {
+    "message": "Ta przeglądarka utrzymuje pasek boczny Hermes otwarty na każdej karcie w oknie. Kliknij ponownie przycisk Hermes na pasku narzędzi, aby go zamknąć.",
+    "description": "Runtime interface message ui.sidebar.stays.open.across.tabs"
+  },
   "runtime_ui_signal": {
     "message": "Sygnał",
     "description": "Runtime interface message ui.signal"

@@ -1195,6 +1195,7 @@ export default Object.freeze({
   "ui.show.hermes.assist.in.writing.fields": "Vis Hermes Assist i skrivefelter",
   "ui.side.panel": "Sidepanel",
   "ui.sidebar": "Sidebjælke",
+  "ui.sidebar.stays.open.across.tabs": "Denne browser holder Hermes-sidepanelet åbent på alle faner i vinduet. Klik på Hermes-knappen i værktøjslinjen igen for at lukke det.",
   "ui.signal": "Signal",
   "ui.site": "websted",
   "ui.size": "Størrelse",
