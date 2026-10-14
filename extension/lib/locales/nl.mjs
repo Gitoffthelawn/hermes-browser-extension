@@ -1554,4 +1554,11 @@ export default Object.freeze({
   "settings.mode.dark": "Donker",
   "settings.mode.system": "Systeem",
   "settings.custom_theme_help": "Voeg meer thema's toe: bekijk VS Code-thema's, importeer een themabestand of laat een agent er een ontwerpen. Geïnstalleerde thema's verschijnen in het raster hierboven.",
+  "live_tools.using_count": Object.freeze({"one": "Gebruikt {count} hulpmiddel", "other": "Gebruikt {count} hulpmiddelen"}),
+  "live_tools.used_count": Object.freeze({"one": "{count} hulpmiddel gebruikt", "other": "{count} hulpmiddelen gebruikt"}),
+  "live_tools.completed": "Voltooid",
+  "live_tools.failed": "Mislukt",
+  "live_tools.running": "Actief",
+  "composer.restore_held_draft": "Concept herstellen",
+  "composer.other_session_running": "Er is een andere sessie actief",
 });

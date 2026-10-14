@@ -1083,9 +1083,17 @@
     "message": "Maak eerst verbinding met Hermes",
     "description": "Runtime interface message composer.connect_first"
   },
+  "runtime_composer_other_session_running": {
+    "message": "Er is een andere sessie actief",
+    "description": "Runtime interface message composer.other_session_running"
+  },
   "runtime_composer_queue_message": {
     "message": "Wachtrij bericht",
     "description": "Runtime interface message composer.queue_message"
+  },
+  "runtime_composer_restore_held_draft": {
+    "message": "Concept herstellen",
+    "description": "Runtime interface message composer.restore_held_draft"
   },
   "runtime_connect_approve_or_paste": {
     "message": "Keur het koppelen goed, indien beschikbaar, of plak",
@@ -1446,6 +1454,26 @@
   "runtime_items_count": {
     "message": "{count}-artikelen",
     "description": "Runtime interface message items.count"
+  },
+  "runtime_live_tools_completed": {
+    "message": "Voltooid",
+    "description": "Runtime interface message live_tools.completed"
+  },
+  "runtime_live_tools_failed": {
+    "message": "Mislukt",
+    "description": "Runtime interface message live_tools.failed"
+  },
+  "runtime_live_tools_running": {
+    "message": "Actief",
+    "description": "Runtime interface message live_tools.running"
+  },
+  "runtime_live_tools_used_count": {
+    "message": "{count} hulpmiddelen gebruikt",
+    "description": "Runtime interface message live_tools.used_count"
+  },
+  "runtime_live_tools_using_count": {
+    "message": "Gebruikt {count} hulpmiddelen",
+    "description": "Runtime interface message live_tools.using_count"
   },
   "runtime_manifest_extension_description": {
     "message": "Browser-native zijbalk voor Hermes Agent. Verbind webcontext met uw lokale of externe Hermes-runtime.",

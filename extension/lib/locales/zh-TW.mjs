@@ -1554,4 +1554,11 @@ export default Object.freeze({
   "settings.mode.dark": "深色",
   "settings.mode.system": "跟隨系統",
   "settings.custom_theme_help": "新增更多佈景主題：瀏覽 VS Code 主題、匯入主題檔，或讓代理程式設計一個。已安裝的主題會顯示在上方格狀區。",
+  "live_tools.using_count": Object.freeze({"one": "正在使用 {count} 個工具", "other": "正在使用 {count} 個工具"}),
+  "live_tools.used_count": Object.freeze({"one": "已使用 {count} 個工具", "other": "已使用 {count} 個工具"}),
+  "live_tools.completed": "已完成",
+  "live_tools.failed": "失敗",
+  "live_tools.running": "執行中",
+  "composer.restore_held_draft": "還原草稿",
+  "composer.other_session_running": "另一個工作階段正在執行",
 });

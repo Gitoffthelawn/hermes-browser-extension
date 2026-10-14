@@ -53,7 +53,7 @@ test('askHermes recovers an inactive Bot Chat writer instead of silently swallow
   const sendGuard = askHermes.indexOf('if (sending) return false;');
   const switchGuard = askHermes.indexOf('if (!canSwitchActiveSession({ sending, runControl: activeRunControl }))');
   const recovery = askHermes.indexOf('canRecoverStaleDashboardRunControl({');
-  const visibleBlock = askHermes.indexOf("setStatus('warn', 'Hermes is still working'");
+  const visibleBlock = askHermes.indexOf("setStatus('warn', 'Hermes is still working'", recovery);
 
   assert.ok(guardStart >= 0, 'dashboard transport is captured before the send guard');
   assert.ok(sendGuard > guardStart, 'sending guard follows the transport decision');

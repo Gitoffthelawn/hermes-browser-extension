@@ -1083,9 +1083,17 @@
     "message": "Conecte-se primeiro ao Hermes",
     "description": "Runtime interface message composer.connect_first"
   },
+  "runtime_composer_other_session_running": {
+    "message": "Outra sessão está em execução",
+    "description": "Runtime interface message composer.other_session_running"
+  },
   "runtime_composer_queue_message": {
     "message": "Mensagem de fila",
     "description": "Runtime interface message composer.queue_message"
+  },
+  "runtime_composer_restore_held_draft": {
+    "message": "Restaurar rascunho",
+    "description": "Runtime interface message composer.restore_held_draft"
   },
   "runtime_connect_approve_or_paste": {
     "message": "Aprove o pareamento quando disponível ou cole",
@@ -1446,6 +1454,26 @@
   "runtime_items_count": {
     "message": "{count} itens",
     "description": "Runtime interface message items.count"
+  },
+  "runtime_live_tools_completed": {
+    "message": "Concluído",
+    "description": "Runtime interface message live_tools.completed"
+  },
+  "runtime_live_tools_failed": {
+    "message": "Falhou",
+    "description": "Runtime interface message live_tools.failed"
+  },
+  "runtime_live_tools_running": {
+    "message": "Em execução",
+    "description": "Runtime interface message live_tools.running"
+  },
+  "runtime_live_tools_used_count": {
+    "message": "{count} ferramentas utilizadas",
+    "description": "Runtime interface message live_tools.used_count"
+  },
+  "runtime_live_tools_using_count": {
+    "message": "Usando {count} ferramentas",
+    "description": "Runtime interface message live_tools.using_count"
   },
   "runtime_manifest_extension_description": {
     "message": "Painel lateral nativo do navegador para Hermes Agent. Conecta o contexto da web ao seu ambiente Hermes local ou remoto.",

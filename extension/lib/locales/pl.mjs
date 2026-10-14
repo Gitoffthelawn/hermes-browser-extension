@@ -1554,4 +1554,11 @@ export default Object.freeze({
   "settings.mode.dark": "Ciemno",
   "settings.mode.system": "System",
   "settings.custom_theme_help": "Dodaj więcej motywów: przeglądaj motywy VS Code, zaimportuj plik motywu lub poproś agenta o zaprojektowanie własnego. Zainstalowane motywy pojawią się w siatce powyżej.",
+  "live_tools.using_count": Object.freeze({"one": "Używanie {count} narzędzia", "other": "Narzędzia w użyciu: {count}"}),
+  "live_tools.used_count": Object.freeze({"one": "Użyto {count} narzędzia", "other": "Użyte narzędzia: {count}"}),
+  "live_tools.completed": "Ukończono",
+  "live_tools.failed": "Niepowodzenie",
+  "live_tools.running": "W toku",
+  "composer.restore_held_draft": "Przywróć szkic",
+  "composer.other_session_running": "Inna sesja jest w toku",
 });

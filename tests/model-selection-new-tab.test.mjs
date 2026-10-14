@@ -7,6 +7,7 @@ import path from 'node:path';
 import test from 'node:test';
 import vm from 'node:vm';
 import * as common from '../extension/lib/common.mjs';
+import { friendlyModelName } from '../extension/lib/model-friendly-name.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const source = readFileSync(path.join(root, 'extension/sidepanel.js'), 'utf8');
@@ -45,6 +46,7 @@ function panel(stored) {
     normalizeHermesModels: common.normalizeHermesModels,
     isModelRuntimeSelectable: common.isModelRuntimeSelectable,
     modelDisplayName: common.modelDisplayName,
+    friendlyModelName,
     modelRuntimeStatus: common.modelRuntimeStatus,
     updateBrowserModelScope: common.updateBrowserModelScope,
     translateUiText: (text) => text,
@@ -92,14 +94,14 @@ test('#119: a new tab keeps the saved Gateway default instead of the first catal
 
   tab.load(STARTUP_CACHE);
   assert.equal(tab.context.settings.model, 'hermes-agent', 'the startup cache has no alias rows; that is not "nothing chosen"');
-  assert.equal(tab.context.els.currentModelName.textContent, 'Gateway default', 'the footer names the saved choice, not row 0');
+  assert.equal(tab.context.els.currentModelName.textContent, 'Hermes Agent', 'the footer names the saved choice, not row 0');
   assert.equal(tab.context.settings.extensionPreferredModel.modelId, 'hermes-agent');
   assert.equal(tab.context.settings.extensionPreferredModel.gatewayDefault, true, 're-applying the choice keeps its saved binding');
 
   // The live catalog lists the gateway default, but not first.
   tab.load([FABLE, SOL, GATEWAY_DEFAULT, OPUS]);
   assert.equal(tab.context.settings.model, 'hermes-agent');
-  assert.equal(tab.context.els.currentModelName.textContent, 'hermes-agent (gateway default)');
+  assert.equal(tab.context.els.currentModelName.textContent, 'Hermes Agent');
 
   await tab.save();
   const saved = tab.writes.at(-1).hermesBrowserSettings;
@@ -120,7 +122,7 @@ test('#119: a saved model the catalog does not list stays chosen, with its saved
 
   tab.load([FABLE, SOL]);
   assert.equal(tab.context.settings.model, OPUS.id, 'never swapped for another lane');
-  assert.equal(tab.context.els.currentModelName.textContent, 'claude-opus-5-5', 'shown by its model name');
+  assert.equal(tab.context.els.currentModelName.textContent, 'Opus 5.5', 'shown by its friendly model name, no provider or dashes');
   assert.equal(tab.context.settings.extensionPreferredModel.provider, 'anthropic', 'the placeholder row does not become the provider');
   assert.equal(tab.context.settings.extensionPreferredModel.rawModelId, OPUS.rawModelId);
 

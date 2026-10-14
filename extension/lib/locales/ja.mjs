@@ -1554,4 +1554,11 @@ export default Object.freeze({
   "settings.mode.dark": "ダーク",
   "settings.mode.system": "システム",
   "settings.custom_theme_help": "テーマを追加: VS Code テーマを検索する、テーマファイルを取り込む、またはエージェントに作らせることができます。インストール済みテーマは上のグリッドに表示されます。",
+  "live_tools.using_count": Object.freeze({"one": "{count} 個のツールを使用中", "other": "{count} 個のツールを使用中"}),
+  "live_tools.used_count": Object.freeze({"one": "{count} 個のツールを使用", "other": "{count} 個のツールを使用"}),
+  "live_tools.completed": "完了",
+  "live_tools.failed": "失敗",
+  "live_tools.running": "実行中",
+  "composer.restore_held_draft": "下書きを復元",
+  "composer.other_session_running": "別のセッションが実行中です",
 });

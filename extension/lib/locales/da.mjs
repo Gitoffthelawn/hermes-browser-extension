@@ -1554,4 +1554,11 @@ export default Object.freeze({
   "settings.mode.dark": "Mørkt",
   "settings.mode.system": "System",
   "settings.custom_theme_help": "Tilføj flere temaer: gennemse VS Code-temaer, importér en temafil, eller lad en agent designe et. Installerede temaer vises i gitteret ovenfor.",
+  "live_tools.using_count": Object.freeze({"one": "Bruger {count} værktøj", "other": "Bruger {count} værktøjer"}),
+  "live_tools.used_count": Object.freeze({"one": "Brugt {count} værktøj", "other": "Brugt {count} værktøjer"}),
+  "live_tools.completed": "Fuldført",
+  "live_tools.failed": "Mislykkedes",
+  "live_tools.running": "Kører",
+  "composer.restore_held_draft": "Gendan kladde",
+  "composer.other_session_running": "En anden session kører",
 });

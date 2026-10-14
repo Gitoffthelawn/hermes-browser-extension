@@ -1083,9 +1083,17 @@
     "message": "सबसे पहले Hermes से कनेक्ट करें",
     "description": "Runtime interface message composer.connect_first"
   },
+  "runtime_composer_other_session_running": {
+    "message": "दूसरा सेशन चल रहा है",
+    "description": "Runtime interface message composer.other_session_running"
+  },
   "runtime_composer_queue_message": {
     "message": "कतार संदेश",
     "description": "Runtime interface message composer.queue_message"
+  },
+  "runtime_composer_restore_held_draft": {
+    "message": "ड्राफ़्ट वापस लाएँ",
+    "description": "Runtime interface message composer.restore_held_draft"
   },
   "runtime_connect_approve_or_paste": {
     "message": "उपलब्ध होने पर पेयरिंग स्वीकृत करें, या पेस्ट करें",
@@ -1446,6 +1454,26 @@
   "runtime_items_count": {
     "message": "{count} आइटम",
     "description": "Runtime interface message items.count"
+  },
+  "runtime_live_tools_completed": {
+    "message": "पूरा",
+    "description": "Runtime interface message live_tools.completed"
+  },
+  "runtime_live_tools_failed": {
+    "message": "विफल",
+    "description": "Runtime interface message live_tools.failed"
+  },
+  "runtime_live_tools_running": {
+    "message": "चल रहा है",
+    "description": "Runtime interface message live_tools.running"
+  },
+  "runtime_live_tools_used_count": {
+    "message": "{count} टूल इस्तेमाल हुए",
+    "description": "Runtime interface message live_tools.used_count"
+  },
+  "runtime_live_tools_using_count": {
+    "message": "{count} टूल इस्तेमाल हो रहे हैं",
+    "description": "Runtime interface message live_tools.using_count"
   },
   "runtime_manifest_extension_description": {
     "message": "Hermes Agent के लिए ब्राउज़र-नेटिव साइड पैनल। वेब संदर्भ को अपने स्थानीय या रिमोट Hermes रनटाइम से कनेक्ट करें।",

@@ -1083,9 +1083,17 @@
     "message": "まず Hermes に接続してください",
     "description": "Runtime interface message composer.connect_first"
   },
+  "runtime_composer_other_session_running": {
+    "message": "別のセッションが実行中です",
+    "description": "Runtime interface message composer.other_session_running"
+  },
   "runtime_composer_queue_message": {
     "message": "メッセージをキューに登録",
     "description": "Runtime interface message composer.queue_message"
+  },
+  "runtime_composer_restore_held_draft": {
+    "message": "下書きを復元",
+    "description": "Runtime interface message composer.restore_held_draft"
   },
   "runtime_connect_approve_or_paste": {
     "message": "利用可能になったらペアリングを承認するか、貼り付けてください",
@@ -1446,6 +1454,26 @@
   "runtime_items_count": {
     "message": "{count} アイテム",
     "description": "Runtime interface message items.count"
+  },
+  "runtime_live_tools_completed": {
+    "message": "完了",
+    "description": "Runtime interface message live_tools.completed"
+  },
+  "runtime_live_tools_failed": {
+    "message": "失敗",
+    "description": "Runtime interface message live_tools.failed"
+  },
+  "runtime_live_tools_running": {
+    "message": "実行中",
+    "description": "Runtime interface message live_tools.running"
+  },
+  "runtime_live_tools_used_count": {
+    "message": "{count} 個のツールを使用",
+    "description": "Runtime interface message live_tools.used_count"
+  },
+  "runtime_live_tools_using_count": {
+    "message": "{count} 個のツールを使用中",
+    "description": "Runtime interface message live_tools.using_count"
   },
   "runtime_manifest_extension_description": {
     "message": "Hermes Agent 用のブラウザネイティブサイドパネル。ウェブのコンテキストをローカルまたはリモートの Hermes ランタイムに接続します。",

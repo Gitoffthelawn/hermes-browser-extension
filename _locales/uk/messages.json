@@ -1083,9 +1083,17 @@
     "message": "Спочатку підключіться до Hermes",
     "description": "Runtime interface message composer.connect_first"
   },
+  "runtime_composer_other_session_running": {
+    "message": "Виконується інший сеанс",
+    "description": "Runtime interface message composer.other_session_running"
+  },
   "runtime_composer_queue_message": {
     "message": "Повідомлення в черзі",
     "description": "Runtime interface message composer.queue_message"
+  },
+  "runtime_composer_restore_held_draft": {
+    "message": "Відновити чернетку",
+    "description": "Runtime interface message composer.restore_held_draft"
   },
   "runtime_connect_approve_or_paste": {
     "message": "Підтвердьте створення пари, якщо воно доступне, або вставте",
@@ -1446,6 +1454,26 @@
   "runtime_items_count": {
     "message": "{count} елементів",
     "description": "Runtime interface message items.count"
+  },
+  "runtime_live_tools_completed": {
+    "message": "Завершено",
+    "description": "Runtime interface message live_tools.completed"
+  },
+  "runtime_live_tools_failed": {
+    "message": "Помилка",
+    "description": "Runtime interface message live_tools.failed"
+  },
+  "runtime_live_tools_running": {
+    "message": "Виконується",
+    "description": "Runtime interface message live_tools.running"
+  },
+  "runtime_live_tools_used_count": {
+    "message": "Використані інструменти: {count}",
+    "description": "Runtime interface message live_tools.used_count"
+  },
+  "runtime_live_tools_using_count": {
+    "message": "Інструменти в роботі: {count}",
+    "description": "Runtime interface message live_tools.using_count"
   },
   "runtime_manifest_extension_description": {
     "message": "Вбудована в браузер бічна панель для Hermes Agent. Підключіть вебконтекст до локального або віддаленого середовища виконання Hermes.",

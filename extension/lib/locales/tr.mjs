@@ -1554,4 +1554,11 @@ export default Object.freeze({
   "settings.mode.dark": "Koyu",
   "settings.mode.system": "Sistem",
   "settings.custom_theme_help": "Daha fazla tema ekleyin: VS Code temalarına göz atın, bir tema dosyası içe aktarın veya bir ajana tasarlatın. Yüklü temalar yukarıdaki ızgarada görünür.",
+  "live_tools.using_count": Object.freeze({"one": "{count} araç kullanılıyor", "other": "{count} araç kullanılıyor"}),
+  "live_tools.used_count": Object.freeze({"one": "{count} araç kullanıldı", "other": "{count} araç kullanıldı"}),
+  "live_tools.completed": "Tamamlandı",
+  "live_tools.failed": "Başarısız",
+  "live_tools.running": "Çalışıyor",
+  "composer.restore_held_draft": "Taslağı geri yükle",
+  "composer.other_session_running": "Başka bir oturum çalışıyor",
 });

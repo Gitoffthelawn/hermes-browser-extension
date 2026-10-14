@@ -1083,9 +1083,17 @@
     "message": "Kết nối với Hermes trước",
     "description": "Runtime interface message composer.connect_first"
   },
+  "runtime_composer_other_session_running": {
+    "message": "Một phiên khác đang chạy",
+    "description": "Runtime interface message composer.other_session_running"
+  },
   "runtime_composer_queue_message": {
     "message": "Tin nhắn xếp hàng",
     "description": "Runtime interface message composer.queue_message"
+  },
+  "runtime_composer_restore_held_draft": {
+    "message": "Khôi phục bản nháp",
+    "description": "Runtime interface message composer.restore_held_draft"
   },
   "runtime_connect_approve_or_paste": {
     "message": "Phê duyệt ghép nối khi có sẵn hoặc dán",
@@ -1446,6 +1454,26 @@
   "runtime_items_count": {
     "message": "{count} mục",
     "description": "Runtime interface message items.count"
+  },
+  "runtime_live_tools_completed": {
+    "message": "Hoàn tất",
+    "description": "Runtime interface message live_tools.completed"
+  },
+  "runtime_live_tools_failed": {
+    "message": "Thất bại",
+    "description": "Runtime interface message live_tools.failed"
+  },
+  "runtime_live_tools_running": {
+    "message": "Đang chạy",
+    "description": "Runtime interface message live_tools.running"
+  },
+  "runtime_live_tools_used_count": {
+    "message": "Đã dùng {count} công cụ",
+    "description": "Runtime interface message live_tools.used_count"
+  },
+  "runtime_live_tools_using_count": {
+    "message": "Đang dùng {count} công cụ",
+    "description": "Runtime interface message live_tools.using_count"
   },
   "runtime_manifest_extension_description": {
     "message": "Thanh bên tích hợp sẵn trong trình duyệt dành cho Hermes Agent. Kết nối ngữ cảnh web với môi trường chạy Hermes cục bộ hoặc từ xa của bạn.",

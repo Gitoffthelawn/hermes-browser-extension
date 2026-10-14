@@ -1554,4 +1554,11 @@ export default Object.freeze({
   "settings.mode.dark": "다크",
   "settings.mode.system": "시스템",
   "settings.custom_theme_help": "테마 추가: VS Code 테마를 둘러보거나 테마 파일을 가져오거나 에이전트에게 만들게 할 수 있습니다. 설치된 테마는 위 그리드에 표시됩니다.",
+  "live_tools.using_count": Object.freeze({"one": "{count}개 도구 사용 중", "other": "{count}개 도구 사용 중"}),
+  "live_tools.used_count": Object.freeze({"one": "{count}개 도구 사용됨", "other": "{count}개 도구 사용됨"}),
+  "live_tools.completed": "완료",
+  "live_tools.failed": "실패",
+  "live_tools.running": "실행 중",
+  "composer.restore_held_draft": "초안 복원",
+  "composer.other_session_running": "다른 세션이 실행 중입니다",
 });

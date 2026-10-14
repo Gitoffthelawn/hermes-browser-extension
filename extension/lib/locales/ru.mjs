@@ -1554,4 +1554,11 @@ export default Object.freeze({
   "settings.mode.dark": "Тёмная",
   "settings.mode.system": "Системная",
   "settings.custom_theme_help": "Добавьте темы: просмотрите темы VS Code, импортируйте файл темы или попросите агента создать её. Установленные темы появятся в сетке выше.",
+  "live_tools.using_count": Object.freeze({"one": "Используется {count} инструмент", "other": "Инструменты в работе: {count}"}),
+  "live_tools.used_count": Object.freeze({"one": "Использован {count} инструмент", "other": "Использованные инструменты: {count}"}),
+  "live_tools.completed": "Завершено",
+  "live_tools.failed": "Ошибка",
+  "live_tools.running": "Выполняется",
+  "composer.restore_held_draft": "Восстановить черновик",
+  "composer.other_session_running": "Выполняется другой сеанс",
 });

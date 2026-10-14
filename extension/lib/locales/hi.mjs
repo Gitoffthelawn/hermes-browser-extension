@@ -1554,4 +1554,11 @@ export default Object.freeze({
   "settings.mode.dark": "अंधेरा",
   "settings.mode.system": "सिस्टम",
   "settings.custom_theme_help": "और थीम जोड़ें: VS Code थीम ब्राउज़ करें, थीम फ़ाइल आयात करें, या एजेंट से बनवाएँ। इंस्टॉल की गई थीम ऊपर ग्रिड में दिखती हैं।",
+  "live_tools.using_count": Object.freeze({"one": "{count} टूल इस्तेमाल हो रहा है", "other": "{count} टूल इस्तेमाल हो रहे हैं"}),
+  "live_tools.used_count": Object.freeze({"one": "{count} टूल इस्तेमाल हुआ", "other": "{count} टूल इस्तेमाल हुए"}),
+  "live_tools.completed": "पूरा",
+  "live_tools.failed": "विफल",
+  "live_tools.running": "चल रहा है",
+  "composer.restore_held_draft": "ड्राफ़्ट वापस लाएँ",
+  "composer.other_session_running": "दूसरा सेशन चल रहा है",
 });

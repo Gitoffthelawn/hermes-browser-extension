@@ -1554,4 +1554,11 @@ export default Object.freeze({
   "settings.mode.dark": "داكن",
   "settings.mode.system": "النظام",
   "settings.custom_theme_help": "أضف المزيد من السمات: تصفّح سمات VS Code أو استورد ملف سمة أو اطلب من وكيل تصميم سمة. تظهر السمات المثبّتة في الشبكة أعلاه.",
+  "live_tools.using_count": Object.freeze({"one": "{count} أداة قيد الاستخدام", "other": "الأدوات قيد الاستخدام: {count}"}),
+  "live_tools.used_count": Object.freeze({"one": "تم استخدام {count} أداة", "other": "الأدوات المستخدمة: {count}"}),
+  "live_tools.completed": "مكتمل",
+  "live_tools.failed": "فشل",
+  "live_tools.running": "قيد التشغيل",
+  "composer.restore_held_draft": "استعادة المسودة",
+  "composer.other_session_running": "جلسة أخرى قيد التشغيل",
 });

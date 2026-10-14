@@ -102,22 +102,33 @@ test('all live stream callbacks reject stale generations before touching active 
   }
 });
 
-test('both surfaces deny new-chat and session switches while a run owns the writer', () => {
+test('new-chat and session switches stay allowed while a run is live (gateway owns the run)', () => {
   const functions = [
     [panel, 'beginHermesBrowserDraft'],
     [panel, 'openHermesSession'],
-    [web, 'beginHermesWebDraft'],
-    [web, 'openSession'],
   ];
   for (const [source, functionName] of functions) {
     const start = source.indexOf(`async function ${functionName}`);
     const end = source.indexOf('\nfunction ', start + 1);
     const body = source.slice(start, end);
     assert.ok(start >= 0, `missing ${functionName}`);
-    assert.match(body, /canSwitchActiveSession\(\{ sending, runControl: activeRunControl \}\)/);
-    assert.match(body, /return false/);
+    assert.doesNotMatch(body, /canSwitchActiveSession\(/, `${functionName} must not block on a live run`);
   }
 });
+
+test('the deprecated full-tab retains its existing session-switch writer guard', () => {
+  for (const name of ['beginHermesWebDraft','openSession']) {
+    const start=web.indexOf(`function ${name}(`);
+    const end=web.indexOf('\nfunction ',start+1);
+    assert.match(web.slice(start,end),/canSwitchActiveSession\(\{ sending, runControl: activeRunControl \}\)/);
+  }
+});
+
+test('a finishing run mirrors its reply only into the session it started in', () => {
+  assert.match(panel, /const runSessionId = String\(settings\.sessionId \|\| ''\)\.trim\(\);/);
+  assert.match(panel, /if \(String\(settings\.sessionId \|\| ''\)\.trim\(\) === runSessionId\) \{\s*messages\.push\(\{ role: 'assistant'/);
+});
+
 
 test('unconfirmed runs expose safe retry and queue-discard recovery without a writer-release button', () => {
   assert.match(panelHtml, /id="retryRunStatusButton"/);

@@ -1554,4 +1554,11 @@ export default Object.freeze({
   "settings.mode.dark": "Dark",
   "settings.mode.system": "System",
   "settings.custom_theme_help": "Add more themes: browse VS Code themes, import a theme file, or have an agent design one. Installed themes appear in the grid above.",
+  "live_tools.using_count": Object.freeze({"one": "Using {count} tool", "other": "Using {count} tools"}),
+  "live_tools.used_count": Object.freeze({"one": "Used {count} tool", "other": "Used {count} tools"}),
+  "live_tools.completed": "Completed",
+  "live_tools.failed": "Failed",
+  "live_tools.running": "Running",
+  "composer.restore_held_draft": "Restore draft",
+  "composer.other_session_running": "Another session is running",
 });

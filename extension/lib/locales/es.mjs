@@ -1554,4 +1554,11 @@ export default Object.freeze({
   "settings.mode.dark": "Oscuro",
   "settings.mode.system": "Sistema",
   "settings.custom_theme_help": "Añade más temas: explora temas de VS Code, importa un archivo de tema o pide a un agente que diseñe uno. Los temas instalados aparecen en la cuadrícula de arriba.",
+  "live_tools.using_count": Object.freeze({"one": "Usando {count} herramienta", "other": "Usando {count} herramientas"}),
+  "live_tools.used_count": Object.freeze({"one": "{count} herramienta utilizada", "other": "{count} herramientas utilizadas"}),
+  "live_tools.completed": "Completado",
+  "live_tools.failed": "Fallido",
+  "live_tools.running": "En ejecución",
+  "composer.restore_held_draft": "Restaurar borrador",
+  "composer.other_session_running": "Hay otra sesión en ejecución",
 });

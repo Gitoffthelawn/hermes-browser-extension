@@ -1083,9 +1083,17 @@
     "message": "먼저 Hermes에 연결하세요.",
     "description": "Runtime interface message composer.connect_first"
   },
+  "runtime_composer_other_session_running": {
+    "message": "다른 세션이 실행 중입니다",
+    "description": "Runtime interface message composer.other_session_running"
+  },
   "runtime_composer_queue_message": {
     "message": "메시지 대기열에 추가",
     "description": "Runtime interface message composer.queue_message"
+  },
+  "runtime_composer_restore_held_draft": {
+    "message": "초안 복원",
+    "description": "Runtime interface message composer.restore_held_draft"
   },
   "runtime_connect_approve_or_paste": {
     "message": "페어링이 가능해지면 승인하거나 붙여넣으세요",
@@ -1446,6 +1454,26 @@
   "runtime_items_count": {
     "message": "{count} 항목",
     "description": "Runtime interface message items.count"
+  },
+  "runtime_live_tools_completed": {
+    "message": "완료",
+    "description": "Runtime interface message live_tools.completed"
+  },
+  "runtime_live_tools_failed": {
+    "message": "실패",
+    "description": "Runtime interface message live_tools.failed"
+  },
+  "runtime_live_tools_running": {
+    "message": "실행 중",
+    "description": "Runtime interface message live_tools.running"
+  },
+  "runtime_live_tools_used_count": {
+    "message": "{count}개 도구 사용됨",
+    "description": "Runtime interface message live_tools.used_count"
+  },
+  "runtime_live_tools_using_count": {
+    "message": "{count}개 도구 사용 중",
+    "description": "Runtime interface message live_tools.using_count"
   },
   "runtime_manifest_extension_description": {
     "message": "Hermes Agent용 브라우저 네이티브 사이드 패널입니다. 웹 컨텍스트를 로컬 또는 원격 Hermes 런타임에 연결하세요.",

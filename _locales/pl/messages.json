@@ -1083,9 +1083,17 @@
     "message": "Najpierw połącz się z Hermes",
     "description": "Runtime interface message composer.connect_first"
   },
+  "runtime_composer_other_session_running": {
+    "message": "Inna sesja jest w toku",
+    "description": "Runtime interface message composer.other_session_running"
+  },
   "runtime_composer_queue_message": {
     "message": "Wiadomość w kolejce",
     "description": "Runtime interface message composer.queue_message"
+  },
+  "runtime_composer_restore_held_draft": {
+    "message": "Przywróć szkic",
+    "description": "Runtime interface message composer.restore_held_draft"
   },
   "runtime_connect_approve_or_paste": {
     "message": "Zatwierdź parowanie, jeśli jest dostępne, lub wklej",
@@ -1446,6 +1454,26 @@
   "runtime_items_count": {
     "message": "Elementy {count}",
     "description": "Runtime interface message items.count"
+  },
+  "runtime_live_tools_completed": {
+    "message": "Ukończono",
+    "description": "Runtime interface message live_tools.completed"
+  },
+  "runtime_live_tools_failed": {
+    "message": "Niepowodzenie",
+    "description": "Runtime interface message live_tools.failed"
+  },
+  "runtime_live_tools_running": {
+    "message": "W toku",
+    "description": "Runtime interface message live_tools.running"
+  },
+  "runtime_live_tools_used_count": {
+    "message": "Użyte narzędzia: {count}",
+    "description": "Runtime interface message live_tools.used_count"
+  },
+  "runtime_live_tools_using_count": {
+    "message": "Narzędzia w użyciu: {count}",
+    "description": "Runtime interface message live_tools.using_count"
   },
   "runtime_manifest_extension_description": {
     "message": "Natywny dla przeglądarki panel boczny dla Hermes Agent. Połącz kontekst internetowy z lokalnym lub zdalnym środowiskiem wykonawczym Hermes.",

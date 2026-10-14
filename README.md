@@ -24,6 +24,8 @@ Hermes Browser Extension is not a browser chatbot. It is a Chrome/Firefox/Edge/C
 - **File attachments** show one card per file per message. Open previews the file, Open on computer reveals the original file's containing folder through local Hermes, and Save downloads a copy.
 - **Tab screenshot** stages the visible, approved page as an image attachment when you choose it from the attachment menu. Screenshots are never captured automatically.
 - **Browser Control** changes which tabs a turn reads from the composer: This tab, Selected tabs, or a Task set of tabs you pick explicitly.
+- **Live sessions**: running chats are highlighted in Sessions. On gateways that expose live sessions, reopen a working chat to follow its reply and tool activity. Supported live sessions offer Steer, Queue, and Stop instead of idle send controls, and steers sent from another client appear in the followed transcript.
+- **Tool activity**: a compact expandable list keeps calls out of the reply. Inspect individual calls, close the list without hiding thinking, and keep your place while activity updates.
 - **Message tools**: Copy, Edit, and Restore checkpoint on supported turns, with day dividers, message times, and theme-aware bubbles.
 - **Reasoning effort**: a slider with tick marks, or buttons if you prefer. The choice is remembered. In a group chat each bot keeps its own effort.
 - **Hermes Assist** drafts beside supported text composers and never sends, posts, or submits for you.

@@ -1083,9 +1083,17 @@
     "message": "Stellen Sie zunächst eine Verbindung zu Hermes her",
     "description": "Runtime interface message composer.connect_first"
   },
+  "runtime_composer_other_session_running": {
+    "message": "Eine andere Sitzung läuft",
+    "description": "Runtime interface message composer.other_session_running"
+  },
   "runtime_composer_queue_message": {
     "message": "Warteschlangennachricht",
     "description": "Runtime interface message composer.queue_message"
+  },
+  "runtime_composer_restore_held_draft": {
+    "message": "Entwurf wiederherstellen",
+    "description": "Runtime interface message composer.restore_held_draft"
   },
   "runtime_connect_approve_or_paste": {
     "message": "Genehmigen Sie die Kopplung, sofern verfügbar, oder fügen Sie sie ein",
@@ -1446,6 +1454,26 @@
   "runtime_items_count": {
     "message": "{count} Elemente",
     "description": "Runtime interface message items.count"
+  },
+  "runtime_live_tools_completed": {
+    "message": "Abgeschlossen",
+    "description": "Runtime interface message live_tools.completed"
+  },
+  "runtime_live_tools_failed": {
+    "message": "Fehlgeschlagen",
+    "description": "Runtime interface message live_tools.failed"
+  },
+  "runtime_live_tools_running": {
+    "message": "Läuft",
+    "description": "Runtime interface message live_tools.running"
+  },
+  "runtime_live_tools_used_count": {
+    "message": "{count} Werkzeuge verwendet",
+    "description": "Runtime interface message live_tools.used_count"
+  },
+  "runtime_live_tools_using_count": {
+    "message": "Verwendet {count} Werkzeuge",
+    "description": "Runtime interface message live_tools.using_count"
   },
   "runtime_manifest_extension_description": {
     "message": "Native Browser-Seitenleiste für Hermes Agent. Verbindet Webkontext mit Ihrer lokalen oder entfernten Hermes-Laufzeit.",

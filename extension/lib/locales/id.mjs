@@ -1554,4 +1554,11 @@ export default Object.freeze({
   "settings.mode.dark": "Gelap",
   "settings.mode.system": "Sistem",
   "settings.custom_theme_help": "Tambahkan tema: jelajahi tema VS Code, impor file tema, atau minta agen merancang satu. Tema yang terpasang muncul di kisi di atas.",
+  "live_tools.using_count": Object.freeze({"one": "Menggunakan {count} alat", "other": "Menggunakan {count} alat"}),
+  "live_tools.used_count": Object.freeze({"one": "{count} alat digunakan", "other": "{count} alat digunakan"}),
+  "live_tools.completed": "Selesai",
+  "live_tools.failed": "Gagal",
+  "live_tools.running": "Berjalan",
+  "composer.restore_held_draft": "Pulihkan draf",
+  "composer.other_session_running": "Sesi lain sedang berjalan",
 });

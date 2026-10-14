@@ -4,6 +4,8 @@
 
 ### Added
 
+- Sessions highlights running chats and follows live replies and tool activity on supported gateways, including chats started outside the browser panel.
+- Tool calls are grouped behind a compact disclosure. Individual calls can be expanded, and live refreshes keep the list open and preserve its scroll position. Thinking stays in its message card and cycles through compact expressions.
 - Everforest, Classic Hermes, and Anti-Nous themes, each with light and dark palettes. Anti-Nous combines crimson and berry accents with navy reading panels and fine gold trim; its light palette uses white panels and crimson controls.
 - Settings now opens to a category grid. Each category has its own view and Back navigation, edited categories are marked, and related controls open the section they belong to. Models has a runtime summary and opens the model picker above Settings.
 - A Tab screenshot action in the attachment menu captures the current tab only when you ask, and Bot Mode group turns on a local Hermes connection can include approved, redacted page context. Chat-only and remote group turns never capture page context.
@@ -24,6 +26,11 @@
 
 ### Fixed
 
+- Reopening a working session restores streamed text and tool activity instead of leaving an empty or detached view. Followed live sessions offer Steer, Queue, and Stop, with controls aimed at that session.
+- Expanded tool lists use the themed scrollbar with room between the scrollbar and completion labels.
+- Live history refreshes keep the same assistant card without restarting its fade-in, and a completion wait no longer adds a duplicate thinking card. Steers sent from another client appear in the followed transcript.
+- Steer, Stop, queued messages and late errors stay with the session that owns the run. Navigation during a pending action cannot redirect it to another chat, and refused queued sends retain a restorable draft.
+- The model footer uses readable model names without changing the selected model or provider.
 - The background picture no longer changes every time you switch tabs and come back. Each Hermes panel picks one when it opens and keeps it until you close it, and panels open in different tabs at the same time each get a different picture.
 - In Firefox, the Hermes toolbar button now closes the sidebar when it is already open, so one click puts it away on every tab. Firefox keeps an add-on sidebar open across all tabs in a window, so Settings now says that instead of offering a per-tab choice that Firefox cannot apply.
 - New tabs keep the model you picked in the side panel, including Gateway default, instead of switching to the first model in the list, which could be a provider with no credits left. A saved model the list does not show yet stays selected with its provider, and on dashboard and remote connections Gateway default starts chats on your profile's own default model. Thanks to @Prediction6767 for the report and root cause (#119).

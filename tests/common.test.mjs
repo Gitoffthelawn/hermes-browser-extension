@@ -201,7 +201,7 @@ test('sidepanel replays stored history without emptying canonical messages betwe
   const renderer = source.match(/function renderMessagesFromStorage\(\) \{[\s\S]*?\n\}/)?.[0] || '';
 
   assert.match(renderer, /els\.messages\.innerHTML = '';/);
-  assert.match(renderer, /for \(const message of browserDisplayMessages\((?:visibleMessages|messages)\)\) \{/);
+  assert.match(renderer, /for \(const message of groupToolHistoryMessages\(sessionToolDisplayMessages\((?:visibleMessages|messages)\)\)\) \{/);
   assert.match(renderer, /if \(isDelegationCompletionMarkerMessage\(message\)\) continue;/);
   // Replay keeps roleLabel pass-through (group projection author labels).
   assert.match(renderer, /addMessage\(message\.role, message\.content, \{[\s\S]*?persist: false[\s\S]*?attachments: message\.attachments \|\| null[\s\S]*?\}\);/);
@@ -1712,7 +1712,9 @@ test('assistant thinking placeholder renders animated indicator markup and reduc
   assert.match(source, /const THINKING_STATUSES = \['thinking', 'brainstorming', 'contemplating', 'reasoning', 'processing', 'analyzing', 'reflecting', 'pondering', 'deliberating', 'formulating'\]/);
   assert.match(source, /function renderThinkingIndicator/);
   assert.match(source, /class="thinking-indicator" role="status" aria-live="polite" aria-label="Hermes is thinking, brainstorming, contemplating, reasoning, processing, analyzing, reflecting, pondering, deliberating, and formulating"/);
-  assert.match(source, /<span class="thinking-glyph" aria-hidden="true">\(o_o\)<\/span>/);
+  assert.match(source, /classicThinkingFace\(thinkingFaceStep\)/);
+  assert.match(source, /scheduleClassicThinkingFaces/);
+  assert.doesNotMatch(css, /thinkingFaceCycle/);
   assert.match(source, /<span class="thinking-line">/);
   assert.match(source, /<span class="thinking-word">\$\{escapeHtml\(word\)\}<\/span>/);
   assert.match(source, /<span class="thinking-dots" aria-hidden="true"><i><\/i><i><\/i><i><\/i><\/span>/);

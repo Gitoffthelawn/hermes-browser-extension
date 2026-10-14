@@ -224,7 +224,12 @@ test('control follows an outside restart with no click and never calls restart',
       return { ok: true };
     },
   });
-  await new Promise((r) => setTimeout(r, 40));
+  // Poll for the terminal phase instead of a fixed sleep so the assertion does
+  // not race the watcher timers under full-suite load.
+  const deadline = Date.now() + 2000;
+  while (action.dataset.phase !== 'done' && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 10));
+  }
   assert.equal(action.dataset.phase, 'done');
   assert.equal(q('.gateway-restart-buttons').hidden, true);
   assert.equal(restarts, 0);

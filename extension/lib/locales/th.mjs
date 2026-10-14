@@ -1554,4 +1554,11 @@ export default Object.freeze({
   "settings.mode.dark": "มืด",
   "settings.mode.system": "ระบบ",
   "settings.custom_theme_help": "เพิ่มธีม: เรียกดูธีม VS Code นำเข้าไฟล์ธีม หรือให้เอเจนต์ออกแบบให้ ธีมที่ติดตั้งแล้วจะแสดงในตารางด้านบน",
+  "live_tools.using_count": Object.freeze({"one": "กำลังใช้เครื่องมือ {count} รายการ", "other": "กำลังใช้เครื่องมือ {count} รายการ"}),
+  "live_tools.used_count": Object.freeze({"one": "ใช้เครื่องมือแล้ว {count} รายการ", "other": "ใช้เครื่องมือแล้ว {count} รายการ"}),
+  "live_tools.completed": "เสร็จสิ้น",
+  "live_tools.failed": "ล้มเหลว",
+  "live_tools.running": "กำลังทำงาน",
+  "composer.restore_held_draft": "คืนข้อความร่าง",
+  "composer.other_session_running": "มีเซสชันอื่นกำลังทำงาน",
 });

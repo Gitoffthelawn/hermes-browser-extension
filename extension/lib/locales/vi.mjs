@@ -1554,4 +1554,11 @@ export default Object.freeze({
   "settings.mode.dark": "Tối",
   "settings.mode.system": "Hệ thống",
   "settings.custom_theme_help": "Thêm chủ đề: duyệt chủ đề VS Code, nhập tệp chủ đề hoặc nhờ tác tử thiết kế. Chủ đề đã cài hiển thị trong lưới phía trên.",
+  "live_tools.using_count": Object.freeze({"one": "Đang dùng {count} công cụ", "other": "Đang dùng {count} công cụ"}),
+  "live_tools.used_count": Object.freeze({"one": "Đã dùng {count} công cụ", "other": "Đã dùng {count} công cụ"}),
+  "live_tools.completed": "Hoàn tất",
+  "live_tools.failed": "Thất bại",
+  "live_tools.running": "Đang chạy",
+  "composer.restore_held_draft": "Khôi phục bản nháp",
+  "composer.other_session_running": "Một phiên khác đang chạy",
 });

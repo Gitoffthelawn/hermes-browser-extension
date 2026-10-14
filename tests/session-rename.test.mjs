@@ -130,7 +130,7 @@ test('sidepanel auto-naming persists through the shared rename path and cannot c
 
   // Trigger: title computed at turn start, persisted at turn completion.
   assert.match(source, /const autoTitle = turnOptions\.disableAutoTitle \? '' : autoTitleForCurrentTurn\(userText\);/);
-  assert.match(source, /if \(autoTitle\) await maybeAutoNameCurrentSession\(autoTitle\);/);
+  assert.match(source, /if \(autoTitle && String\(settings\.sessionId \|\| ''\)\.trim\(\) === runSessionId\) await maybeAutoNameCurrentSession\(autoTitle\);/);
 
   const compute = functionBody(source, 'autoTitleForCurrentTurn');
   assert.match(compute, /settings\.autoNameSessions === false/);

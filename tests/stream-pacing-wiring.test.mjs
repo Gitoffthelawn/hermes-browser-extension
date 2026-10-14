@@ -29,5 +29,5 @@ test('the paced reveal finishes before the terminal paint so the bubble cannot j
 
 test('terminal error paths paint whatever the pacer still holds', () => {
   assert.match(sidepanelSource, /let streamPacer = null;/);
-  assert.equal((sidepanelSource.match(/streamPacer\?\.flush\?\.\(\);/g) || []).length, 2);
+  assert.equal((sidepanelSource.match(/streamPacer\?\.flush\?\.\(\);/g) || []).length, 3);
 });

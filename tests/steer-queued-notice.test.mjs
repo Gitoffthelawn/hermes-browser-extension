@@ -28,7 +28,7 @@ function buildHarness() {
     const factory = new Function(
       'document', 'els', 'pendingSteerText', 'sending', 'completionSettlePending',
       'translateUiText', 'messageDisplayText', 'renderMessageContentElement',
-      'scrollMessageStreamToBottom', 'assistantMessageRoleLabel', 'THINKING_PLACEHOLDER',
+      'scrollMessageStreamToBottom', 'assistantMessageRoleLabel', 'THINKING_PLACEHOLDER', 'viewedSessionIsRunning', 'addMessage',
       `${slice}\nreturn { renderSteerNotice, renderCompletionPendingRow };`,
     );
     const api = factory(
@@ -43,6 +43,18 @@ function buildHarness() {
       () => {},
       () => 'Hermes',
       THINKING_PLACEHOLDER,
+      () => overrides.sending ?? false,
+      (role, content, options = {}) => {
+        const row = document.createElement('div');
+        row.className = 'message-row';
+        const node = template.content.firstElementChild.cloneNode(true);
+        node.classList.add(role);
+        node.querySelector('.message-role').textContent = options.roleLabel || role;
+        node.querySelector('.message-content').textContent = content;
+        row.append(node);
+        messages.append(row);
+        return { row, node };
+      },
     );
     api.renderSteerNotice();
     api.renderCompletionPendingRow();
@@ -107,7 +119,8 @@ test('completion wait keeps a live thinking row in the transcript until the repl
 
   const row = harness.messages.querySelector('.completion-pending-row');
   assert.ok(row, 'a .completion-pending-row must hold the transcript while the completion turn generates');
-  assert.ok(row.classList.contains('assistant'));
+  assert.ok(row.classList.contains('message-row'));
+  assert.ok(row.querySelector('.message').classList.contains('assistant'));
   assert.equal(row.querySelector('.message-role').textContent, 'Hermes');
   assert.equal(row.querySelector('.message-content').textContent, THINKING_PLACEHOLDER);
   assert.equal(harness.messages.lastElementChild, row);
