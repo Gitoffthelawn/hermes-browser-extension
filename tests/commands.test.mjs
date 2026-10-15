@@ -136,7 +136,7 @@ test('/queue preserves staged attachments on both Browser surfaces', () => {
   const webEnd = fulltab.indexOf('\nasync function runWebCommand', webStart);
   assert.match(sidepanel.slice(sideStart, sideEnd), /queuedTurn = \{ text: userInput, attachments: \[\.\.\.attachments\]/);
   assert.match(sidepanel.slice(sideStart, sideEnd), /clearAttachments\(\)/);
-  assert.match(fulltab.slice(webStart, webEnd), /queuedTurn = \{ text: userInput, attachments: \[\.\.\.attachments\] \}/);
+  assert.match(fulltab.slice(webStart, webEnd), /queuedTurn = \{ text: userInput, attachments: \[\.\.\.attachments\], sessionId: String\(activeSessionId \|\| ''\)\.trim\(\) \}/);
   assert.match(fulltab.slice(webStart, webEnd), /renderAttachments\(\)/);
 });
 

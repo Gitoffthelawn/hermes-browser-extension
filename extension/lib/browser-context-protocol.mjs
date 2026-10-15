@@ -11,7 +11,7 @@ export const BROWSER_CONTEXT_TURN_BUDGETS = Object.freeze({
   totalSerializedChars: 48_000,
   humanInputChars: 6_000,
   instructionTransformChars: 6_000,
-  pageTextChars: 12_000,
+  pageTextChars: 30_000,
   selectedTextChars: 6_000,
   transcriptChars: 6_000,
   attachmentTextChars: 4_000,
@@ -241,6 +241,8 @@ function normalizeSiteAdapterMetadata(pageContext = {}) {
     capabilities,
     actions,
     suppressed: Boolean(source?.suppressed),
+    truncated: Boolean(source?.truncated),
+    itemCount: Math.max(0, Math.floor(Number(source?.itemCount) || 0)),
   };
 }
 
@@ -345,7 +347,7 @@ function normalizeProtocolPageContext(pageContext = {}, settings = DEFAULT_BROWS
     youtubeTranscript: pageContext?.youtubeTranscript?.ok
       ? clampText(formatYoutubeTranscript(pageContext.youtubeTranscript, normalLimit), normalLimit)
       : (pageContext?.youtubeTranscript || pageContext?.transcript || ''),
-    extraction: normalizeExtractionMetadata(pageContext),
+    extraction: { ...normalizeExtractionMetadata(pageContext), truncated: Boolean(normalizeExtractionMetadata(pageContext)?.truncated) || (mergedSettings.includePageText && String(pageContext?.text || '').length > normalLimit) },
     siteAdapter: normalizeSiteAdapterMetadata(pageContext),
     meta: {
       description: String(pageContext?.meta?.description || ''),
@@ -773,6 +775,17 @@ function budgetTabs(tabs, state, source) {
   }));
 }
 
+// The panel passes the same array as both `tabs` and `selectedTabs` on ordinary
+// turns. When the selection is an exact duplicate it carries no information, so
+// the envelope emits [] for it and pays for the list once. A selection that names
+// different tabs (or a different count) is preserved verbatim. Comparison is by
+// stable tab id, which is what distinguishes one tab from another.
+function isSameTabSelection(selected, tabs) {
+  if (!Array.isArray(tabs) || selected.length !== tabs.length) return false;
+  const ids = (list) => list.map((tab) => Number(tab?.id)).filter(Number.isFinite).join(',');
+  return ids(selected) === ids(tabs);
+}
+
 function budgetBrowserPayload(payload, state) {
   const page = payload?.pageContext || {};
   const headings = Array.isArray(page.meta?.headings) ? page.meta.headings : [];
@@ -780,6 +793,12 @@ function budgetBrowserPayload(payload, state) {
     recordTruncation(state, 'browser.headings', headings.length - BROWSER_CONTEXT_TURN_BUDGETS.maxHeadings);
   }
   const transcript = typeof page.youtubeTranscript === 'string' ? page.youtubeTranscript : '';
+  const activeTab = budgetTabs([payload?.activeTab || {}], state, 'browser.active_tab')[0];
+  const tabs = budgetTabs(payload?.tabs, state, 'browser.tabs');
+  const rawSelected = Array.isArray(payload?.selectedTabs) ? payload.selectedTabs : null;
+  const selectedTabs = rawSelected && isSameTabSelection(rawSelected, payload?.tabs)
+    ? []
+    : budgetTabs(payload?.selectedTabs, state, 'browser.selected_tabs');
   return {
     protocol: BROWSER_CONTEXT_PROTOCOL_ID,
     contextScope: {
@@ -797,9 +816,9 @@ function budgetBrowserPayload(payload, state) {
       includeSelectedText: Boolean(payload?.settings?.includeSelectedText),
       maxTabs: Math.min(BROWSER_CONTEXT_TURN_BUDGETS.maxTabs, Number(payload?.settings?.maxTabs) || BROWSER_CONTEXT_TURN_BUDGETS.maxTabs),
     },
-    activeTab: budgetTabs([payload?.activeTab || {}], state, 'browser.active_tab')[0],
-    tabs: budgetTabs(payload?.tabs, state, 'browser.tabs'),
-    selectedTabs: budgetTabs(payload?.selectedTabs, state, 'browser.selected_tabs'),
+    activeTab,
+    tabs,
+    selectedTabs,
     pageContext: {
       restricted: Boolean(page.restricted),
       reason: boundedText(page.reason || '', 300, state, 'browser.reason'),
@@ -902,7 +921,18 @@ function reduceEnvelopeToSerializedBudget(envelope, state) {
   }
   for (const [key, source] of [['youtubeTranscript', 'browser.transcript_total'], ['text', 'browser.page_text_total'], ['selectedText', 'browser.selected_text_total']]) {
     if (size() <= BROWSER_CONTEXT_TURN_BUDGETS.totalSerializedChars) break;
-    clear(page, key, source);
+    const prior = String(page?.[key] || '');
+    let low = 0;
+    let high = prior.length;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      page[key] = prior.slice(0, mid);
+      if (size() <= BROWSER_CONTEXT_TURN_BUDGETS.totalSerializedChars - 1_000) low = mid;
+      else high = mid - 1;
+    }
+    page[key] = prior.slice(0, low);
+    if (key === 'text' && page.extraction) page.extraction.truncated = true;
+    recordTruncation(state, source, prior.length - low);
   }
   if (size() > BROWSER_CONTEXT_TURN_BUDGETS.totalSerializedChars && page?.meta) {
     const count = page.meta.headings?.length || 0;

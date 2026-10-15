@@ -266,7 +266,7 @@ test('explicit Gmail capture falls back to the sender email and tolerates a coll
 
 test('explicit Gmail capture stays inside the shared context budget at message boundaries', () => {
   const url = 'https://mail.google.com/mail/u/0/#inbox/FMfcgzBudget';
-  const bodyFor = (index) => `CAP-${index} ${'x'.repeat(1_800)} CAP-${index}-END`;
+  const bodyFor = (index) => `CAP-${index} ${'x'.repeat(3_600)} CAP-${index}-END`;
   const nodes = Array.from({ length: 12 }, (_, offset) => (
     `<div class="adn ads" data-message-id="cap-${offset + 1}">
       <span class="gD" email="sender${offset + 1}@example.com">Sender ${offset + 1}</span>
@@ -278,18 +278,19 @@ test('explicit Gmail capture stays inside the shared context budget at message b
 
   const explicit = inspectSite(document, { url, explicitCapture: true });
   const text = explicit.context.text;
-  assert.ok(text.length <= 12_000, `capture exceeded the adapter budget: ${text.length}`);
+  assert.ok(text.length <= 30_000, `capture exceeded the adapter budget: ${text.length}`);
   const captured = explicit.context.itemCount;
   assert.ok(captured >= 4 && captured < 12, `expected a bounded partial capture, got ${captured}`);
-  for (let index = 1; index <= captured; index += 1) {
+  for (let index = 13 - captured; index <= 12; index += 1) {
     assert.match(text, new RegExp(`CAP-${index}-END`), `message ${index} should be captured whole`);
   }
-  assert.doesNotMatch(text, new RegExp(`CAP-${captured + 1}-END`), 'messages past the budget must not be half-included');
+  assert.equal(explicit.context.truncated, true);
+  assert.doesNotMatch(text, new RegExp(`CAP-${12 - captured}-END`), 'older messages past the budget must not be half-included');
 });
 
 test('explicit Gmail capture truncates an oversized body and keeps later messages', () => {
   const url = 'https://mail.google.com/mail/u/0/#inbox/FMfcgzLong';
-  const longBody = `HEAD-MARKER ${'y'.repeat(9_000)} TAIL-MARKER`;
+  const longBody = `HEAD-MARKER ${'y'.repeat(40_000)} TAIL-MARKER`;
   const document = doc(`<div role="main"><h2 class="hP">Long message thread</h2>
     <div class="adn ads" data-message-id="long-1">
       <span class="gD" email="ann@example.com">Ann</span><span class="g3" title="Fri, Sep 11, 2026, 9:00 AM">9:00 AM</span>
@@ -317,7 +318,9 @@ test('explicit Gmail capture honors the 60-message ceiling', () => {
   const explicit = inspectSite(document, { url, explicitCapture: true });
   assert.equal(explicit.context.itemCount, 60);
   assert.match(explicit.context.text, /S60: TINY-60/);
-  assert.doesNotMatch(explicit.context.text, /S61: TINY-61/);
+  assert.match(explicit.context.text, /S65: TINY-65/);
+  assert.doesNotMatch(explicit.context.text, /S5: TINY-5/);
+  assert.equal(explicit.context.truncated, true);
 });
 
 test('explicit Gmail capture action is available only for a suppressed thread', () => {

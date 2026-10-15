@@ -95,6 +95,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   includeTabs: false,
   includePageText: true,
   includeSelectedText: true,
+  gmailCaptureEnabled: false,
   browserControlEnabled: false,
   browserControlScope: 'this-tab',
   browserControlViewBehavior: 'stay',

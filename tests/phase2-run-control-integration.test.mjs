@@ -106,6 +106,8 @@ test('new-chat and session switches stay allowed while a run is live (gateway ow
   const functions = [
     [panel, 'beginHermesBrowserDraft'],
     [panel, 'openHermesSession'],
+    [web, 'beginHermesWebDraft'],
+    [web, 'openSession'],
   ];
   for (const [source, functionName] of functions) {
     const start = source.indexOf(`async function ${functionName}`);
@@ -116,17 +118,10 @@ test('new-chat and session switches stay allowed while a run is live (gateway ow
   }
 });
 
-test('the deprecated full-tab retains its existing session-switch writer guard', () => {
-  for (const name of ['beginHermesWebDraft','openSession']) {
-    const start=web.indexOf(`function ${name}(`);
-    const end=web.indexOf('\nfunction ',start+1);
-    assert.match(web.slice(start,end),/canSwitchActiveSession\(\{ sending, runControl: activeRunControl \}\)/);
-  }
-});
-
 test('a finishing run mirrors its reply only into the session it started in', () => {
   assert.match(panel, /const runSessionId = String\(settings\.sessionId \|\| ''\)\.trim\(\);/);
   assert.match(panel, /if \(String\(settings\.sessionId \|\| ''\)\.trim\(\) === runSessionId\) \{\s*messages\.push\(\{ role: 'assistant'/);
+  assert.match(web, /const runIsViewed = \(\) => String\(activeSessionId \|\| ''\)\.trim\(\) === runSessionId;/);
 });
 
 

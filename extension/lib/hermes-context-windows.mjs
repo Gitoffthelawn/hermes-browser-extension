@@ -33,6 +33,15 @@ export const DISPLAY_CONTEXT_ALIASES = Object.freeze({
   'sonnet-4-6': 1_000_000,
   'grok-4.7': 500_000,
   'grok-4-7': 500_000,
+  // StepFun. Hermes Agent's DEFAULT_CONTEXT_LENGTHS has no `step` key at all,
+  // so every stepfun id — including the 1M step-5-preview — resolved to the
+  // 256k fallback. Nous Portal reports 1M for step-5 and 262k for step-3.7.
+  'step-5-preview': 1_000_000,
+  'step-5': 1_000_000,
+  'step-4': 1_000_000,
+  'step-3.7-flash': 262_144,
+  'step-3.5-flash': 262_144,
+  'step-3': 262_144,
   'mimo-v2.6-pro': 1_048_576,
   'mimo-v2.6-flash': 1_048_576,
   'mimo-v2-6-pro': 1_048_576,

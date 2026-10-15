@@ -1,3 +1,6 @@
+import { contextCharLimit } from './browser-context-protocol.mjs';
+import { redactSensitiveText } from './redaction.mjs';
+
 // Original user files live in IndexedDB, never as multi-megabyte transcript
 // strings. Only file.attach acknowledgments authorize agent-visible paths.
 export const FILE_ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
@@ -69,6 +72,19 @@ export async function createUserFileAttachment(file, { store = defaultStore } = 
   };
   await store.putFile(blobId, { blob: file, name, mimeType, size: file.size, createdAt: Date.now() });
   return item;
+}
+
+export async function createPageContextAttachment(pageContext, settings = {}, options = {}) {
+  if (settings.includePageText === false || pageContext?.restricted || pageContext?.ok === false
+    || pageContext?.meta?.siteAdapter?.suppressed === true) return null;
+  const text = redactSensitiveText(String(pageContext?.text || ''));
+  if (text.length <= contextCharLimit(settings.contextDepth)) return null;
+  const partial = Boolean(pageContext?.meta?.extraction?.truncated || pageContext?.extraction?.content?.truncated);
+  const attachment = await createUserFileAttachment(new File([text], 'page-context.txt', { type: 'text/plain' }), options);
+  // Only the gateway-acknowledged path is sent; avoid duplicating a text preview.
+  attachment.text = '';
+  attachment.detail = `${partial ? 'Partial' : 'Complete'} captured page text · ${text.length} chars · read the attached file for content beyond the inline excerpt`;
+  return attachment;
 }
 
 export function normalizeUserFileAttachments(items = []) {

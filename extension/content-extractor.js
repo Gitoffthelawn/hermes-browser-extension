@@ -956,7 +956,7 @@ const APPEARANCE_RUNTIME_API = Object.freeze({
   hermesGlobal.HermesAppearance = APPEARANCE_RUNTIME_API;
 })(globalThis);
 
-/* extension/lib/site-adapters.mjs · SHA-256 25c151d2a977ea62 */
+/* extension/lib/site-adapters.mjs · SHA-256 e53e0fd8eeae4d75 */
 (function hermesSiteAdapterRuntime(hermesGlobal) {
   'use strict';
 
@@ -1087,10 +1087,11 @@ function baseResult(adapterId, label, policy, route, capabilities, actions, cont
     capabilities,
     actions,
     context: {
-      text: bounded(context.text || '', MAX_CONTEXT_CHARS),
+      text: bounded(context.text || '', adapterId === 'gmail' ? Math.max(4_000, Math.min(200_000, Number(context.maxTextChars) || 30_000)) : MAX_CONTEXT_CHARS),
       title: bounded(context.title || '', 500),
       itemCount: Math.max(0, Number(context.itemCount || 0)),
       transcriptFetched: Boolean(context.transcriptFetched),
+      truncated: Boolean(context.truncated),
     },
   };
 }
@@ -1158,7 +1159,7 @@ function xAdapter(document, url) {
 // .a3s / [role="document"] message body is walked, and form-control tags are
 // skipped so draft textareas, inputs, and select values can never leak.
 const GMAIL_MESSAGE_LIMIT = 60;
-const GMAIL_BODY_LIMIT = 8_000;
+const GMAIL_BODY_LIMIT = 200_000;
 const GMAIL_BODY_SELECTOR = '.a3s, [role="document"]';
 const GMAIL_BODY_SKIP_TAGS = new Set([
   'script', 'style', 'noscript', 'template', 'textarea', 'input', 'select',
@@ -1186,7 +1187,8 @@ function gmailBodyText(root, max = GMAIL_BODY_LIMIT) {
     for (const child of Array.from(node.childNodes || [])) visit(child);
   };
   visit(root);
-  return bounded(parts.join(' '), max);
+  const text = parts.join(' ');
+  return text.length > max ? `${text.slice(0, max - 13).trimEnd()} [truncated]` : bounded(text, max);
 }
 
 function gmailSubject(document) {
@@ -1214,27 +1216,49 @@ function gmailMessageDate(message) {
   return bounded(node.getAttribute?.('title') || textOf(node, 200), 200);
 }
 
-function gmail(document, url, explicitCapture) {
-  const route = { kind: /#(?:inbox|all|sent)\//i.test(url.hash) ? 'thread' : 'mailbox' };
+function isGmailThreadUrl(value = '') {
+  const url = parsedUrl(value);
+  if (url?.hostname !== 'mail.google.com') return false;
+  const parts = url.hash.slice(1).split('?')[0].split('/');
+  const [folder] = parts;
+  if (!parts.at(-1) || /^p\d+$/i.test(parts.at(-1))) return false;
+  if (['label', 'search', 'category'].includes(folder)) return parts.length >= 3;
+  return ['inbox', 'all', 'sent', 'starred', 'imp', 'snoozed', 'trash', 'spam'].includes(folder)
+    && parts.length >= 2;
+}
+
+function gmail(document, url, explicitCapture, maxTextChars = 30_000) {
+  const route = { kind: isGmailThreadUrl(url.href) ? 'thread' : 'mailbox' };
+  explicitCapture = explicitCapture && route.kind === 'thread';
   const title = explicitCapture ? gmailSubject(document) : '';
   const messages = [];
+  const limit = Math.max(4_000, Math.min(200_000, Number(maxTextChars) || 30_000));
+  let truncated = false;
   if (explicitCapture) {
-    // Total output stays within the shared adapter budget (MAX_CONTEXT_CHARS);
-    // capture stops at the last message that fully fits, so the result is
-    // truncated at a message boundary instead of mid-sentence when a thread
-    // exceeds the budget.
     let size = title ? title.length + 2 : 0;
-    const messageNodes = Array.from(document.querySelectorAll('[data-message-id]'));
-    for (const message of messageNodes) {
-      if (messages.length >= GMAIL_MESSAGE_LIMIT) break;
-      const body = gmailBodyText(message.querySelector(GMAIL_BODY_SELECTOR));
+    const seenBodies = new Set();
+    let messageNodes = Array.from(document.querySelectorAll('[data-message-id]'));
+    if (!messageNodes.length) messageNodes = Array.from(document.querySelectorAll('[data-legacy-message-id], .adn'));
+    // Keep the latest reply when a thread is larger than the budget, while
+    // preserving chronological order for every message that fits.
+    for (const message of messageNodes.reverse()) {
+      const bodyNode = message.querySelector(GMAIL_BODY_SELECTOR);
+      if (!bodyNode || bodyNode.isContentEditable === true || bodyNode.getAttribute?.('contenteditable') === 'true' || seenBodies.has(bodyNode)) continue;
+      seenBodies.add(bodyNode);
+      if (messages.length >= GMAIL_MESSAGE_LIMIT) { truncated = true; break; }
+      const body = gmailBodyText(bodyNode, limit);
       if (!body) continue;
       const sender = gmailMessageSender(message);
       const date = gmailMessageDate(message);
       const label = [sender, date ? `(${date})` : ''].filter(Boolean).join(' ');
       const line = label ? `${label}: ${body}` : body;
-      if (size + line.length + 2 > MAX_CONTEXT_CHARS) break;
-      messages.push(line);
+      if (size + line.length + 2 > limit) {
+        if (!messages.length || line.length > limit - (title.length + 2)) messages.unshift(`${line.slice(0, Math.max(0, limit - size - 20))} [truncated]`);
+        truncated = true;
+        break;
+      }
+      messages.unshift(line);
+      if (body.endsWith(' [truncated]')) truncated = true;
       size += line.length + 2;
     }
   }
@@ -1243,8 +1267,10 @@ function gmail(document, url, explicitCapture) {
     action('summarize-thread', 'Summarize thread', 'Summarize only after explicit capture.'),
   ], {
     title,
-    text: explicitCapture ? [title, ...messages].filter(Boolean).join('\n\n') : '',
+    text: explicitCapture && messages.length ? [title, ...messages].filter(Boolean).join('\n\n') : '',
     itemCount: messages.length,
+    maxTextChars: limit,
+    truncated,
   });
 }
 
@@ -1669,11 +1695,16 @@ function inspectSite(document, options = {}) {
   if (host === 'github.com' || host.endsWith('.github.com')) return github(document, url);
   if (host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'youtu.be') return youtube(document, url);
   if (host === 'x.com' || host.endsWith('.x.com') || host === 'twitter.com' || host.endsWith('.twitter.com')) return xAdapter(document, url);
-  if (host === 'mail.google.com') return gmail(document, url, Boolean(options.explicitCapture));
+  if (host === 'mail.google.com') return gmail(document, url, Boolean(options.explicitCapture), options.maxTextChars);
   const adapterId = adapterIdForHost(host);
   if (adapterId !== 'generic') {
     const explicitCapture = Boolean(options.explicitCapture);
-    const privateSite = PRIVATE_INLINE_SITES.has(adapterId);
+    const publicArticle = (adapterId === 'medium' && /\/[\w-]+-[a-f0-9]{8,}(?:\/)?$/i.test(url.pathname)
+      && !/^\/(?:me|new-story|settings|draft|edit)(?:\/|$)/i.test(url.pathname))
+      || (adapterId === 'substack' && /^\/p\/[^/]+\/?$/.test(url.pathname));
+    const readingArticle = publicArticle && Boolean(document.querySelector('article, [itemprop="articleBody"]'))
+      && !document.querySelector('article [contenteditable="true"], article textarea');
+    const privateSite = PRIVATE_INLINE_SITES.has(adapterId) && !readingArticle;
     const context = explicitCapture
       ? visibleContextText(document.querySelector('main, [role="main"], body') || document.body, null, MAX_CONTEXT_CHARS)
       : '';
@@ -1707,11 +1738,16 @@ function applySiteAdapterPolicy(pageContext = {}, siteAdapter = {}) {
         capabilities: siteAdapter.capabilities,
         actions: siteAdapter.actions,
         suppressed: shouldSuppress && !adapterText,
+        itemCount: Number(siteAdapter?.context?.itemCount || 0),
+        truncated: Boolean(siteAdapter?.context?.truncated),
       },
     },
   };
   if (shouldSuppress && !adapterText) next.text = '';
   else if (adapterText) next.text = adapterText;
+  if (siteAdapter.adapterId === 'gmail' && adapterText) {
+    next.meta.extraction = { ...(next.meta.extraction || {}), method: 'gmail-thread', confidence: 0.95, wordCount: adapterText.split(/\s+/).length, truncated: Boolean(siteAdapter.context?.truncated) };
+  }
   if (pageContext.extraction) {
     next.extraction = {
       ...pageContext.extraction,
@@ -1743,6 +1779,7 @@ const SITE_ADAPTER_API = Object.freeze({
   inspectInlineSite,
   captureInlineSiteContext,
   normalizeInlineSiteContextPreferences,
+  isGmailThreadUrl,
   applySiteAdapterPolicy,
   explicitSiteCaptureAction,
   safeUrl,

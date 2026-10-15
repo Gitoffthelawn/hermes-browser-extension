@@ -13,7 +13,7 @@ test('production side panel exposes one explicit Gmail thread-capture action', (
   const css = read('extension/sidepanel.css');
 
   assert.match(html, /id="explicitSiteCaptureButton"[\s\S]*?hidden[\s\S]*?Capture visible Gmail thread/);
-  assert.match(source, /import \{ explicitSiteCaptureAction \} from '\.\/lib\/site-adapters\.mjs';/);
+  assert.match(source, /import \{ explicitSiteCaptureAction, isGmailThreadUrl \} from '\.\/lib\/site-adapters\.mjs';/);
   assert.match(source, /function getPageContext\(tab, options = \{\}\)/);
   assert.match(source, /explicitSiteCapture:\s*Boolean\(options\.explicitSiteCapture\)/);
   assert.match(source, /function refreshContext\(options = \{\}\)/);
@@ -22,12 +22,12 @@ test('production side panel exposes one explicit Gmail thread-capture action', (
   assert.match(source, /await refreshContext\(options\)/);
   assert.match(
     source,
-    /els\.explicitSiteCaptureButton\?\.addEventListener\('click',[\s\S]*?refreshContextWithSpin\(\{ explicitSiteCapture: true \}\)/,
+    /els\.explicitSiteCaptureButton\?\.addEventListener\('click',[\s\S]*?await persistGmailCaptureEnabled\(true\);[\s\S]*?refreshContext\(\{ explicitSiteCapture: true \}\)/,
   );
   assert.match(css, /\.context-explicit-capture/);
 });
 
-test('normal context refresh remains metadata-only', () => {
+test('normal context refresh derives approval from settings instead of unconditionally enabling it', () => {
   const source = read('extension/sidepanel.js');
   const handler = source.match(/els\.refreshButton\.addEventListener\('click', \(\) => \{[\s\S]*?\n\x20{2}\}\);/)?.[0] || '';
   assert.match(handler, /refreshContextWithSpin\(\)/);

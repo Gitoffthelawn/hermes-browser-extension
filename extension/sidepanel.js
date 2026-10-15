@@ -224,7 +224,7 @@ import { friendlyModelName } from './lib/model-friendly-name.mjs';
 import { classicThinkingFace, createToolCallGroup, updateToolCallGroup, groupToolHistoryMessages, mergeToolCallActivity } from './lib/tool-call-group.mjs';
 import { sessionIsLiveFromStatus, shouldAttachLiveSession, sessionToolDisplayMessages, sessionLiveRoster } from './lib/live-session-attach.mjs';
 import { appendUserImageAttachments, extractHistoryMediaAttachments, normalizeUserImageAttachments, preserveUserImageAttachments, rawGeneratedImageCandidatesFromResult, resolveImageSource, resolvedGeneratedImageSources, resolvedGeneratedImageSourcesFromMessages } from './lib/image-render.mjs';
-import { createUserFileAttachment, appendUserFileAttachments, stageUserFiles, attachmentFileContext, attachmentSourceKey, rememberUserFileAttachments, restoreUserFileAttachments, openUserFileAttachment, downloadUserFileAttachment } from './lib/user-file-attachments.mjs';
+import { createUserFileAttachment, createPageContextAttachment, appendUserFileAttachments, stageUserFiles, attachmentFileContext, attachmentSourceKey, rememberUserFileAttachments, restoreUserFileAttachments, openUserFileAttachment, downloadUserFileAttachment } from './lib/user-file-attachments.mjs';
 import { mediaDisplayName, mediaSourcePlan, probeArtifactFileSource, resolveArtifactDownloadSource, resolveArtifactFileSource } from './lib/media-source.mjs';
 import { classifyMediaKind, resolveMediaFetchPlan } from './lib/media-persistence.mjs';
 import { artifactActionPlan, artifactFailureNotice } from './lib/artifact-actions.mjs';
@@ -583,7 +583,7 @@ import {
   rebindSurvivorRowIds,
   bindRowIdsFromHistory,
 } from './lib/message-rewind.mjs';
-import { explicitSiteCaptureAction } from './lib/site-adapters.mjs';
+import { explicitSiteCaptureAction, isGmailThreadUrl } from './lib/site-adapters.mjs';
 import {
   SURFACE_KINDS,
   buildFullTabHandoffUrl,
@@ -8763,9 +8763,13 @@ function renderContextWindow(userText = els.input?.value || '') {
   } else {
     if (els.contextChip) els.contextChip.hidden = false;
     const chip = contextChipSummary({ pageContext: pc, activeTab: currentContext.activeTab, parts: stats.parts });
+    if (pc?.meta?.siteAdapter?.id === 'gmail' && pc.meta.siteAdapter.suppressed) {
+      chip.label = translateUiText('Thread context off');
+      chip.title = translateUiText('Page text is not shared. Enable Gmail thread context once in Settings.');
+    }
     els.contextChipLabel.textContent = translateUiText(chip.label);
     // DOM means the page's structure and text; explain it rather than echo the URL the user is already on.
-    els.contextChip.title = (pc && !pc.restricted && pc.ok !== false)
+    els.contextChip.title = (pc && !pc.restricted && pc.ok !== false && !pc.meta?.siteAdapter?.suppressed)
       ? translateUiText('DOM is the page content Hermes reads: the text and structure of the tab you are on. Click to preview exactly what gets sent with your message.')
       : translateUiText(chip.title);
     els.contextPreview.textContent = [
@@ -8780,8 +8784,9 @@ function renderContextWindow(userText = els.input?.value || '') {
     const action = contextScope.mode === CONTEXT_SCOPE_MODES.CHAT_ONLY
       ? null
       : explicitSiteCaptureAction(pc);
-    els.explicitSiteCaptureWrap.hidden = !action || settings.gmailCaptureHidden === true;
-    els.explicitSiteCaptureButton.hidden = !action;
+    const captureEnabled = settings.gmailCaptureEnabled === true;
+    els.explicitSiteCaptureWrap.hidden = !action || captureEnabled || settings.gmailCaptureHidden === true;
+    els.explicitSiteCaptureButton.hidden = !action || captureEnabled;
     if (action) {
       els.explicitSiteCaptureButton.querySelector('strong').textContent = translateUiText(action.label);
       els.explicitSiteCaptureButton.querySelector('span').textContent = translateUiText(action.description);
@@ -18575,9 +18580,9 @@ function syncSettingsForm() {
   if (els.wakeWordPhraseInput) els.wakeWordPhraseInput.value = settings.wakeWordPhrase || DEFAULT_SETTINGS.wakeWordPhrase;
   if (els.wakeWordBrowserFallbackInput) els.wakeWordBrowserFallbackInput.checked = settings.wakeWordBrowserFallback !== false;
   if (els.wakeWordSpeakRepliesInput) els.wakeWordSpeakRepliesInput.checked = settings.wakeWordSpeakReplies !== false;
-  if (els.gmailCaptureEnabledInput) els.gmailCaptureEnabledInput.checked = settings.gmailCaptureHidden !== true;
-  if (els.gmailCaptureToggleTitle) els.gmailCaptureToggleTitle.textContent = translateUiText('Gmail capture button');
-  if (els.gmailCaptureToggleHint) els.gmailCaptureToggleHint.textContent = translateUiText('Show the "Capture visible Gmail thread" button on Gmail threads.');
+  if (els.gmailCaptureEnabledInput) els.gmailCaptureEnabledInput.checked = settings.gmailCaptureEnabled === true;
+  if (els.gmailCaptureToggleTitle) els.gmailCaptureToggleTitle.textContent = translateUiText('Gmail thread context');
+  if (els.gmailCaptureToggleHint) els.gmailCaptureToggleHint.textContent = translateUiText('Share the open Gmail thread with Hermes on every message. Stays on until disabled. Inbox lists, drafts and input values stay excluded.');
   renderWakeState();
   renderCompatibilityPanel();
   renderConnectionSecurity();
@@ -18662,7 +18667,7 @@ async function saveSettingsFromForm() {
     agentPorts: parseAgentPortsInput(els.agentPortsInput?.value || '').length ? parseAgentPortsInput(els.agentPortsInput?.value || '') : getAgentPorts(),
     customModelSources: normalizeExternalModelSourceList(els.customModelSourcesInput?.value?.split(/\n+/) || settings.customModelSources || []),
     transcriptProvider: els.transcriptProviderInput.value.trim() || DEFAULT_SETTINGS.transcriptProvider,
-    gmailCaptureHidden: els.gmailCaptureEnabledInput ? !els.gmailCaptureEnabledInput.checked : settings.gmailCaptureHidden === true,
+    gmailCaptureEnabled: els.gmailCaptureEnabledInput ? els.gmailCaptureEnabledInput.checked : settings.gmailCaptureEnabled === true,
     wakeWordEnabled: els.wakeWordEnabledInput ? els.wakeWordEnabledInput.checked : Boolean(settings.wakeWordEnabled),
     wakeWordPhrase: normalizeWakeWordSettings({ wakeWordPhrase: els.wakeWordPhraseInput?.value }).phrase,
     wakeWordPreferNative: settings.wakeWordPreferNative !== false,
@@ -18833,7 +18838,7 @@ function collectPageContextWithSharedExtractor(options = {}) {
   const depth = options.depth || 'normal';
   const limit = TEXT_LIMITS[depth] || TEXT_LIMITS.normal;
   const pageContext = HermesContentExtractor.collectPageContext(document, {
-    maxTextChars: limit,
+    maxTextChars: Number(options.maxTextChars) > 0 ? Math.min(200_000, Number(options.maxTextChars)) : limit,
     maxSelectedTextChars: Math.min(limit, 8_000),
     selectedText: globalThis.getSelection?.().toString() || '',
     source: 'scripting-fallback',
@@ -18844,6 +18849,7 @@ function collectPageContextWithSharedExtractor(options = {}) {
   const siteAdapter = HermesSiteAdapters.inspectSite(document, {
     url: location.href,
     explicitCapture: Boolean(options.explicitSiteCapture),
+    maxTextChars: options.maxTextChars,
   });
   return HermesSiteAdapters.applySiteAdapterPolicy(pageContext, siteAdapter);
 }
@@ -18889,6 +18895,19 @@ async function getPageContextViaScripting(tabId, options, originalError) {
   };
 }
 
+async function persistGmailCaptureEnabled(enabled) {
+  const desired = enabled === true;
+  const stored = await browserApi.storage.local.get('hermesBrowserSettings');
+  const next = { ...(stored.hermesBrowserSettings || {}), gmailCaptureEnabled: desired };
+  await browserApi.storage.local.set({ hermesBrowserSettings: next });
+  settings = { ...settings, ...next };
+  if (els.gmailCaptureEnabledInput) els.gmailCaptureEnabledInput.checked = desired;
+  // Once capture is on it stays on for every thread send until it is
+  // explicitly turned off again, so hide the one-shot consent affordance.
+  if (els.explicitSiteCaptureWrap) els.explicitSiteCaptureWrap.hidden = desired;
+  if (els.explicitSiteCaptureButton) els.explicitSiteCaptureButton.hidden = !desired;
+}
+
 async function getPageContext(tab, options = {}) {
   const isLocal = isLocalDocumentUrl(tab?.url);
   const allowLocal = isLocal && (options.allowLocalDocuments !== false);
@@ -18905,7 +18924,8 @@ async function getPageContext(tab, options = {}) {
 
   const requestOptions = {
     depth: settings.contextDepth,
-    explicitSiteCapture: Boolean(options.explicitSiteCapture),
+    maxTextChars: usesDashboardWsChatTransport() && settings.includePageText !== false && settings.contextDepth !== 'minimal' ? 200_000 : undefined,
+    explicitSiteCapture: Boolean(options.explicitSiteCapture) || (settings.gmailCaptureEnabled === true && isGmailThreadUrl(tab.url)),
     frameId: Number(options.frameId || 0),
   };
   try {
@@ -18914,7 +18934,9 @@ async function getPageContext(tab, options = {}) {
       { type: 'HERMES_GET_PAGE_CONTEXT', options: requestOptions },
       { frameId: requestOptions.frameId },
     );
-    if (response?.ok && (response.text || response.selectedText || response.meta?.headings?.length)) {
+    if (response?.ok && (requestOptions.explicitSiteCapture && isGmailThreadUrl(tab.url)
+      ? Boolean(response.text)
+      : (response.text || response.selectedText || response.meta?.headings?.length))) {
       return options.selectedTextOverride === undefined
         ? response
         : { ...response, selectedText: String(options.selectedTextOverride || '') };
@@ -21165,6 +21187,17 @@ async function askHermes(userText, turnAttachments = [...attachments], turnOptio
       ? { activeTab: null, tabs: [], pageContext: null, contextScope: turnContextScope }
       : capturedContext;
     if (!runIsViewed()) throw new Error('Session changed before submission. The original draft is held and was not sent.');
+    if (dashboardTransport && turnContextScope.mode !== CONTEXT_SCOPE_MODES.CHAT_ONLY) {
+      const pageFile = await createPageContextAttachment(context.pageContext, turnProtocolSettings);
+      if (pageFile) {
+        const connection = await ensureActiveDashboardWsConnection();
+        const sessionId = await ensureRemoteWsSession(connection);
+        if (!runIsViewed()) throw new Error('Session changed before context upload. The original draft is held.');
+        await stageUserFiles(connection.client, sessionId, [pageFile], { sourceKey: attachmentSourceKey(settings) });
+        preparedAttachments = [pageFile, ...preparedAttachments];
+      }
+    }
+    if (!runIsViewed()) throw new Error('Session changed before submission. The original draft is held and was not sent.');
     const browserControl = await resolveBrowserControlForTurn({ context, scope: turnContextScope });
     if (typeof turnOptions.resolveUserText === 'function') {
       userText = String(await turnOptions.resolveUserText() || '');
@@ -22846,11 +22879,13 @@ function bindEvents() {
   });
   els.explicitSiteCaptureButton?.addEventListener('click', async () => {
     try {
-      const refreshed = await refreshContextWithSpin({ explicitSiteCapture: true });
+      await persistGmailCaptureEnabled(true);
+      const refreshed = await refreshContext({ explicitSiteCapture: true });
+      forceFullContextNextTurn = true;
       const pageContext = refreshed?.pageContext;
       const adapter = pageContext?.meta?.siteAdapter;
       if (adapter?.id === 'gmail' && adapter?.suppressed === false && String(pageContext?.text || '').trim()) {
-        setStatus('ok', 'Gmail thread captured', 'Rendered message bodies will be attached to the next Hermes turn.');
+        setStatus('ok', 'Gmail thread captured', 'Thread context stays enabled for future messages. Disable it in Settings any time.');
         showOperationToast({
           kind: 'ok',
           title: 'Gmail thread captured',
@@ -22868,6 +22903,20 @@ function bindEvents() {
     browserApi.storage.local.set({ hermesBrowserSettings: settings });
     if (els.explicitSiteCaptureWrap) els.explicitSiteCaptureWrap.hidden = true;
     setStatus('ok', 'Gmail capture button hidden', 'Turn it back on any time under Settings → Right-click actions.');
+  });
+  els.gmailCaptureEnabledInput?.addEventListener('change', async () => {
+    // Persist immediately so one enable stays on for every thread send until
+    // it is turned off again here. Doing it live keeps the settings form merge
+    // in sync and stops an unrelated Save from silently re-arming consent.
+    const enabled = els.gmailCaptureEnabledInput.checked === true;
+    await persistGmailCaptureEnabled(enabled).catch(() => undefined);
+    setStatus(
+      enabled ? 'ok' : 'warn',
+      enabled ? 'Gmail thread context on' : 'Gmail thread context off',
+      enabled
+        ? 'The open Gmail thread is shared on every message until you turn this off.'
+        : 'Thread text is no longer shared. Turn it back on to share it again.',
+    );
   });
   if (els.explicitSiteCaptureDismiss) {
     const captureDismissLabel = translateUiText('Hide the Gmail capture button');

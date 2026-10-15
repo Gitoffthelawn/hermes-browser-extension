@@ -1883,6 +1883,20 @@ test('normalizeHermesModels gives Grok 4.6 a 500k window instead of the grok-4 2
   assert.equal(older[0].contextTokens, 256_000);
 });
 
+test('normalizeHermesModels gives StepFun step-5-preview its 1M window instead of the 256k fallback', () => {
+  const live = normalizeHermesModels({ data: [{ id: 'nous::stepfun/step-5-preview', rawModelId: 'stepfun/step-5-preview', label: 'StepFun: Step 5 Preview', provider: 'nous', context_length: 1_000_000 }] }, 'stepfun/step-5-preview');
+  assert.equal(live[0].contextTokens, 1_000_000);
+
+  const free = normalizeHermesModels({ data: [{ id: 'stepfun/step-5-preview:free', rawModelId: 'stepfun/step-5-preview:free', provider: 'nous', context_length: 0 }] }, 'stepfun/step-5-preview:free');
+  assert.equal(free[0].contextTokens, 1_000_000);
+
+  const cached = normalizeHermesModels({ data: [{ id: 'stepfun/step-5-preview', rawModelId: 'stepfun/step-5-preview', provider: 'nous', contextTokens: 0, source: 'cache' }] }, 'stepfun/step-5-preview');
+  assert.equal(cached[0].contextTokens, 1_000_000, 'a stale cache row with no context must still resolve 1M');
+
+  const flash = normalizeHermesModels({ data: [{ id: 'stepfun/step-3.7-flash', rawModelId: 'stepfun/step-3.7-flash', provider: 'nous', context_length: 0 }] }, 'stepfun/step-3.7-flash');
+  assert.equal(flash[0].contextTokens, 262_144, 'step-3.7 flash keeps its own 262k window');
+});
+
 test('normalizeHermesModels applies 1M context fallback for Qwen Token Plan models', () => {
   for (const model of ['qwen3.8-max-preview', 'qwen3.7-max', 'qwen3.7-plus', 'qwen3.6-flash']) {
     const qwenModels = normalizeHermesModels({ data: [{ id: model, rawModelId: model, provider: 'qwen-token-plan', context_length: 0 }] }, model);

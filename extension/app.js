@@ -813,7 +813,7 @@ async function resumeDashboardRecoverySession(connection, storedSessionId = acti
   if (identity.storedId !== durableSessionId) {
     throw new Error('Dashboard resumed a different durable session during run recovery.');
   }
-  dashboardLiveSessionId = identity.liveId;
+  if (String(activeSessionId || '').trim() === durableSessionId && connection === dashboardConnection) dashboardLiveSessionId = identity.liveId;
   return identity;
 }
 
@@ -3267,7 +3267,7 @@ async function executeNativeBrowserCommand(parsedCommand) {
     if (!sending) els.composerStatus.textContent = translateUiText('Hermes is not running · send the message normally');
     else if (!userInput) els.composerStatus.textContent = translateUiText('Add a message after /queue');
     else {
-      queuedTurn = { text: userInput, attachments: [...attachments] };
+      queuedTurn = { text: userInput, attachments: [...attachments], sessionId: String(activeSessionId || '').trim() };
       els.prompt.value = '';
       attachments = [];
       renderAttachments();
@@ -3288,8 +3288,7 @@ async function executeNativeBrowserCommand(parsedCommand) {
     return true;
   }
   if (action === 'new-session' || action === 'reset-session') {
-    if (sending) els.composerStatus.textContent = translateUiText('Stop the active run before starting a clean session');
-    else await beginHermesWebDraft();
+    await beginHermesWebDraft();
     return true;
   }
   if (action === 'retry-last') {
@@ -4546,17 +4545,23 @@ async function consumePendingWakeTurn() {
   return consumeWakeTurn(stored?.[WAKE_STORAGE_KEYS.turn]);
 }
 
+function webRunIsViewed() {
+  return Boolean(activeRunControl?.sessionId && activeRunControl.sessionId === String(activeSessionId || '').trim());
+}
+
 function updateBusyControls() {
   renderWebRunControlRecovery();
   const hasDraft = Boolean(els.prompt.value.trim() || attachments.length);
-  els.queueDraft.hidden = !(sending && hasDraft);
-  els.steerDraft.hidden = !(sending && hasDraft && activeRunId);
+  const ownRun = sending && webRunIsViewed();
+  els.queueDraft.hidden = !(ownRun && hasDraft);
+  els.steerDraft.hidden = !(ownRun && hasDraft && activeRunId);
+  els.stopRun.hidden = !ownRun;
 }
 
 function queueCurrentDraft() {
   const text = els.prompt.value.trim();
   if (!text && !attachments.length) return;
-  queuedTurn = { text, attachments: [...attachments] };
+  queuedTurn = { text, attachments: [...attachments], sessionId: String(activeSessionId || '').trim() };
   els.prompt.value = '';
   attachments = [];
   renderAttachments();
@@ -4568,11 +4573,14 @@ function queueCurrentDraft() {
 async function sendWebSteerText(text) {
   const steerText = String(text || '').trim();
   if (!steerText) return false;
-  if (!sending) throw new Error('Hermes is not currently running. Send or queue the message instead.');
+  if (!sending || !webRunIsViewed()) throw new Error('This session does not own the running turn. Return to its session to steer it.');
   if (usesDashboardTicketTransport()) {
+    const ownedSessionId = String(dashboardLiveSessionId || '').trim();
+    const ownedStoredId = String(activeRunControl.sessionId || '').trim();
     const connection = await ensureDashboardConnection();
-    const sessionId = String(dashboardLiveSessionId || '').trim()
-      || (await resumeDashboardRecoverySession(connection)).liveId;
+    if (!webRunIsViewed()) return false;
+    const sessionId = ownedSessionId || (await resumeDashboardRecoverySession(connection, ownedStoredId)).liveId;
+    if (!webRunIsViewed()) return false;
     if (!sessionId) throw new Error('The active Dashboard session is not available yet.');
     await connection.client.request(WS_METHODS.sessionSteer, { session_id: sessionId, text: steerText });
     return true;
@@ -4600,9 +4608,12 @@ async function sendWebSteerText(text) {
 async function steerCurrentDraft() {
   const text = els.prompt.value.trim();
   if (!text) return false;
+  const owner = String(activeSessionId || '').trim();
   try {
-    await sendWebSteerText(text);
-    els.prompt.value = '';
+    const sent = await sendWebSteerText(text);
+    if (!sent) return false;
+    if (owner !== String(activeSessionId || '').trim()) return true;
+    if (els.prompt.value.trim() === text) els.prompt.value = '';
     els.composerStatus.textContent = translateUiText('Steer sent');
     updateBusyControls();
     return true;
@@ -4749,14 +4760,16 @@ async function settleWebRunTerminal() {
   renderMessages(activeMessages);
   if (!shouldAutoFlushQueuedTurn(queuedTurn, settledRunControl)) return true;
   const next = queuedTurn;
-  queuedTurn = null;
+  if (next.sessionId !== settledRunControl.sessionId || next.sessionId !== String(activeSessionId || '').trim()) { next.autoSend = false; return true; }
+  next.autoSend = false;
   attachments = next.attachments || [];
-  await sendPrompt(next.text || 'Please review the attached files.');
+  const accepted = await sendPrompt(next.text || 'Please review the attached files.');
+  if (queuedTurn === next && accepted !== false) queuedTurn = null;
   return true;
 }
 
 async function stopActiveRun() {
-  if (!sending) {
+  if (!sending || !webRunIsViewed()) {
     els.composerStatus.textContent = translateUiText('Hermes is not currently running');
     return false;
   }
@@ -4766,16 +4779,17 @@ async function stopActiveRun() {
   activeRunControl = requestRunStop(activeRunControl);
   const stopGeneration = runControlGeneration;
   const stopRunId = String(activeRunId || '');
+  const ownedDashboardSessionId = String(dashboardLiveSessionId || '').trim();
+  const ownedStoredId = String(activeRunControl.sessionId || '').trim();
   els.composerStatus.textContent = translateUiText('Stopping Hermes…');
   let dashboardSessionId = '';
   try {
     if (usesDashboardTicketTransport()) {
       const connection = await ensureDashboardConnection();
       if (!runControlGenerationMatches(stopGeneration, runControlGeneration)) return false;
-      dashboardSessionId = String(dashboardLiveSessionId || '').trim();
-      if (!dashboardSessionId) {
-        dashboardSessionId = (await resumeDashboardRecoverySession(connection)).liveId;
-      }
+      if (!webRunIsViewed()) return false;
+      dashboardSessionId = ownedDashboardSessionId || (await resumeDashboardRecoverySession(connection, ownedStoredId)).liveId;
+      if (!webRunIsViewed()) return false;
       if (!dashboardSessionId) throw new Error('The active Dashboard session is not available yet.');
       await runControlRequestWithTimeout(
         () => connection.client.request(WS_METHODS.sessionInterrupt, { session_id: dashboardSessionId }),
@@ -5077,10 +5091,8 @@ async function submitWebSessionRename(session = {}, rawTitle = '') {
 }
 
 async function beginHermesWebDraft({ focus = true, keepLoading = false } = {}) {
-  if (!canSwitchActiveSession({ sending, runControl: activeRunControl })) {
-    els.composerStatus.textContent = translateUiText('Stop the active run before switching sessions.');
-    return false;
-  }
+  // A live run is owned by the gateway. Leaving it never stops it, so a new
+  // draft is always allowed; the reply is kept with its own session.
   activeGroupAbortController?.abort?.();
   activeGroupAbortController = null;
   activeGroupProjection = null;
@@ -5287,6 +5299,12 @@ async function sendPrompt(text) {
     throw error;
   }
   setSending(true);
+  // The run is bound to the session it started in. Its live bubble and saved
+  // reply only paint while that session is still the one on screen.
+  const runSessionId = String(activeSessionId || '').trim();
+  activeRunControl = {...activeRunControl,sessionId:runSessionId};
+  updateBusyControls();
+  const runIsViewed = () => String(activeSessionId || '').trim() === runSessionId;
   const turnAttachments = [...attachments];
   const browserCommand = parseBrowserCommand(text);
   const helperCommand = browserCommand?.kind === 'helper'
@@ -5322,11 +5340,12 @@ async function sendPrompt(text) {
         attachments: turnAttachments,
         onDelta: (content) => {
           assistant.content = content;
+          if (!runIsViewed()) return;
           if (isRenderableAssistantMessage(assistant) && !activeMessages.includes(assistant)) activeMessages = [...activeMessages, assistant];
           clearLiveRun();
           renderMessages(activeMessages);
         },
-        onTool: renderToolEvent,
+        onTool: (tool) => { if (runIsViewed()) renderToolEvent(tool); },
         onRun: (runId) => {
           dashboardTurnSessionId = String(runId || '');
           activeRunId = String(runId || '');
@@ -5342,7 +5361,7 @@ async function sendPrompt(text) {
       const connection = await ensureDashboardConnection();
       const history = await connection.client.request(WS_METHODS.sessionHistory, { session_id: dashboardTurnSessionId }).catch(() => null);
       const refreshed = dashboardHistoryMessages(history);
-      if (refreshed.length) {
+      if (refreshed.length && runIsViewed()) {
         activeMessages = preserveUserImageAttachments(refreshed, activeMessages);
         renderMessages(activeMessages);
       }
@@ -5356,7 +5375,7 @@ async function sendPrompt(text) {
       }
       return;
     }
-    const response = await client.fetch(`/api/sessions/${encodeURIComponent(activeSessionId)}/chat/stream`, {
+    const response = await client.fetch(`/api/sessions/${encodeURIComponent(runSessionId)}/chat/stream`, {
       method: 'POST',
       signal: activeAbortController.signal,
       body: JSON.stringify({
@@ -5383,6 +5402,7 @@ async function sendPrompt(text) {
       onAssistant: (content) => {
         if (!runControlGenerationMatches(turnRunControlGeneration, runControlGeneration)) return;
         assistant.content = content;
+        if (!runIsViewed()) return;
         if (isRenderableAssistantMessage(assistant)) {
           if (!activeMessages.includes(assistant)) activeMessages = [...activeMessages, assistant];
           const imageSources = resolvedGeneratedImageSources(content);
@@ -5401,6 +5421,7 @@ async function sendPrompt(text) {
       },
       onTool: (tool) => {
         if (!runControlGenerationMatches(turnRunControlGeneration, runControlGeneration)) return;
+        if (!runIsViewed()) return;
         renderToolEvent(tool);
       },
       onRun: (runId) => {
@@ -5411,15 +5432,16 @@ async function sendPrompt(text) {
         updateBusyControls();
       },
       onSubagent: (event) => {
-        const mapped = subagentGatewayEventFromSse(event, activeSessionId);
+        const mapped = subagentGatewayEventFromSse(event, runSessionId);
         if (mapped) ingestSubagentGatewayEvent(mapped);
       },
       onRuntime: (runtime) => {
         if (!runControlGenerationMatches(turnRunControlGeneration, runControlGeneration)) return;
-        captureDelegationRuntimePayload(runtime);
+        if (runIsViewed()) captureDelegationRuntimePayload(runtime);
         const actual = runtime?.runtime || runtime;
         const status = String(actual?.status || runtime?.status || '').trim().toLowerCase();
         if (['completed', 'failed', 'cancelled'].includes(status)) streamTerminalStatus = status;
+        if (!runIsViewed()) return;
         latestRuntime = actual || {};
         if (actual?.model) els.modelLabel.textContent = actual.model;
         activeRunId = String(actual?.run_id || actual?.runId || activeRunId || '');
@@ -5433,8 +5455,8 @@ async function sendPrompt(text) {
       contextError.requestAccepted = true;
       throw contextError;
     }
-    const refreshed = await client.getSessionMessages(activeSessionId).catch(() => null);
-    if (refreshed?.length) {
+    const refreshed = await client.getSessionMessages(runSessionId).catch(() => null);
+    if (refreshed?.length && runIsViewed()) {
       activeMessages = preserveUserImageAttachments(refreshed, activeMessages);
       if (!liveRun?.revealPending) renderMessages(activeMessages);
     }
@@ -5448,6 +5470,10 @@ async function sendPrompt(text) {
       activeRunControl = markRunTerminal(activeRunControl, streamTerminalStatus || 'completed');
     }
   } catch (error) {
+    if (!runIsViewed()) {
+      activeRunControl = error?.requestAccepted === true ? markRunStreamClosed(activeRunControl) : markRunTerminal(activeRunControl, 'failed');
+      return false;
+    }
     if (error?.attachmentFailure) {
       if (!els.prompt.value.trim()) els.prompt.value = text;
       attachments = [...turnAttachments];
@@ -5635,10 +5661,7 @@ function revealWebCompletionReply(node, fullText) {
 }
 
 async function openSession(sessionId, { keepLoading = false } = {}) {
-  if (!canSwitchActiveSession({ sending, runControl: activeRunControl })) {
-    els.composerStatus.textContent = translateUiText('Stop the active run before switching sessions.');
-    return false;
-  }
+  // Leaving a live run is allowed: the gateway keeps running it.
   activeGroupAbortController?.abort?.();
   activeGroupAbortController = null;
   activeGroupProjection = null;

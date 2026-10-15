@@ -209,7 +209,7 @@
     const depth = options.depth || 'normal';
     const limit = TEXT_LIMITS[depth] || TEXT_LIMITS.normal;
     const pageContext = HermesContentExtractor.collectPageContext(document, {
-      maxTextChars: limit,
+      maxTextChars: Number(options.maxTextChars) > 0 ? Math.min(200_000, Number(options.maxTextChars)) : limit,
       maxSelectedTextChars: Math.min(limit, 8_000),
       selectedText: globalThis.getSelection?.().toString() || '',
       source: 'content-script',
@@ -219,6 +219,7 @@
     const siteAdapter = HermesSiteAdapters.inspectSite(document, {
       url: location.href,
       explicitCapture: Boolean(options.explicitSiteCapture),
+      maxTextChars: options.maxTextChars,
     });
     return HermesSiteAdapters.applySiteAdapterPolicy(pageContext, siteAdapter);
   }
