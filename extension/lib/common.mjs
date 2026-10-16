@@ -246,6 +246,18 @@ export function messageDisplayText(role = '', content = '') {
   return current;
 }
 
+// Gateways from Oct 2026 admit a REST/SSE turn only for sessions stored as
+// api_server or bot_room; any other stored source answers permission_denied.
+// Older gateways accept every source, so repairing is always safe to attempt.
+export const REST_TURN_SOURCES = Object.freeze(['api_server', 'bot_room']);
+
+export function restTurnSourceRepair(session = {}) {
+  const row = session?.session && typeof session.session === 'object' ? session.session : session;
+  const source = String(row?.source || '').trim().toLowerCase();
+  if (!source || REST_TURN_SOURCES.includes(source)) return null;
+  return { source: 'api_server' };
+}
+
 export function isHermesBrowserOwnedSession(session = {}) {
   const sessionId = String(session?.id || '').trim().toLowerCase();
   const source = String(session?.source || '').trim().toLowerCase();
@@ -2568,8 +2580,20 @@ export function buildAudioTranscriptionBody(dataUrl = '', mimeType = 'audio/webm
   };
 }
 
+// 0 = the dashboard never answered (not running, wrong port, network); 401/403 =
+// it answered but will not hand a session token to an extension. None of those
+// can transcribe, so dictation falls back to on-device speech instead of
+// dropping the recording.
 export function shouldFallbackToWebSpeechForTranscription(status = 0) {
-  return new Set([404, 405, 501]).has(Number(status));
+  return new Set([0, 401, 403, 404, 405, 501]).has(Number(status) || 0);
+}
+
+export function dashboardVoiceFailureMessage(result = {}) {
+  const status = Number(result?.status || 0);
+  if (!status || status === 401 || status === 403) {
+    return 'Hermes speech-to-text is unavailable: the Desktop dashboard did not respond.';
+  }
+  return String(result?.error || '') || 'Hermes Dashboard voice transcription failed.';
 }
 
 export function shouldUseLocalDashboardAudioTranscription({
@@ -2586,11 +2610,24 @@ export function onDeviceSpeechRecognitionAction(availability = '') {
   return 'start-cloud';
 }
 
+// A browser without its speech language pack can leave available()/install()
+// pending for minutes, which made the mic click look dead. Bound both so the
+// caller moves on to cloud speech or the visible voice tab instead.
+function withSpeechTimeout(promise, ms) {
+  let timer;
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('on-device-speech-timeout')), ms); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 export async function prepareOnDeviceSpeechRecognition({
   Recognition = null,
   recognition = null,
   language = 'en-US',
   onStatus = null,
+  availableTimeoutMs = 2500,
+  installTimeoutMs = 6000,
 } = {}) {
   const supportsLocal = Boolean(
     Recognition
@@ -2603,7 +2640,7 @@ export async function prepareOnDeviceSpeechRecognition({
 
   const options = { langs: [String(language || 'en-US')], processLocally: true };
   try {
-    const availability = await Recognition.available(options);
+    const availability = await withSpeechTimeout(Recognition.available(options), availableTimeoutMs);
     const action = onDeviceSpeechRecognitionAction(availability);
     if (action === 'start-local') {
       recognition.processLocally = true;
@@ -2611,7 +2648,7 @@ export async function prepareOnDeviceSpeechRecognition({
     }
     if (action === 'install-local') {
       onStatus?.('installing');
-      const installed = await Recognition.install(options);
+      const installed = await withSpeechTimeout(Recognition.install(options), installTimeoutMs);
       if (installed) {
         recognition.processLocally = true;
         return { mode: 'local', availability: 'available', installed: true };
@@ -2929,10 +2966,12 @@ export function isNamedHermesProfileName(profileName = '') {
   return Boolean(normalized && normalized !== 'default');
 }
 
-export function restSkillsFallbackAllowed({ profileName = '', dashboardReady = false } = {}) {
-  if (dashboardReady) return false;
-  if (isNamedHermesProfileName(profileName)) return false;
-  return true;
+// The gateway serves each profile's own catalog at /p/<profile>/v1/skills and the
+// Hermes client routes there for the active profile, so a named profile no longer
+// inherits the default catalog. A gateway without that route 404s and the caller
+// falls through to the dashboard recovery, so named profiles are safe to try.
+export function restSkillsFallbackAllowed({ dashboardReady = false } = {}) {
+  return !dashboardReady;
 }
 
 export function shouldRecoverSkillsFromDashboard({ restOutcome = 'skipped' } = {}) {

@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import { installGroupLifecycleHarness } from './helpers/group-lifecycle-harness.mjs';
 
 const source = await readFile(new URL('../extension/sidepanel.js', import.meta.url), 'utf8');
-const loadSource = source.slice(source.indexOf('async function loadProfiles('), source.indexOf('\nfunction profileSwitchDisplayName('));
+const loadSource = source.slice(source.indexOf('async function loadProfilesFromGatewayRoutes('), source.indexOf('\nfunction profileSwitchDisplayName('));
 function harness({ fail = false, profiles = [{ name: 'default' }], previous = [], availableProfiles = [], groupChats = [{ id: 'existing-room' }], gatewayMode = 'local-api', activeGroupState = null, settingsOverrides = {} } = {}) {
   const writes = [];
   const statuses = [];
@@ -76,6 +76,7 @@ function harness({ fail = false, profiles = [{ name: 'default' }], previous = []
     scheduleRosterRetry() {}, isRemoteMode: () => currentGatewayMode !== 'local-api', isRemoteWsMode: () => currentGatewayMode === 'remote-dashboard',
     activeRunControl: null, sending: false, BOT_HISTORY_PAGE_SIZE: 40,
     markRunTerminal: (control) => control,
+    releaseBackgroundLocalRun: () => false, localTurnBlocksNavigation: () => false,
     groupProjectionMessagesForDisplay: (row) => row.messages || [],
     groupRuntimeMembers: (row) => row.members || [],
     groupProjectionEntryFromDisplayMessage: (message) => message,
@@ -474,6 +475,7 @@ test('an in-place roster sync keeps the open room runtime callbacks live', async
     sending: false,
     activeRunControl: null,
     markRunTerminal: (control) => control,
+    releaseBackgroundLocalRun: () => false, localTurnBlocksNavigation: () => false,
     activeGroupGeneration: 0,
     activeGroupProjection: null,
     activeGroupRuntime: null,

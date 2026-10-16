@@ -12,6 +12,12 @@ hermes computer-use doctor
 
 That diagnostic belongs to the Hermes runtime/tool layer, not to Browser extension packaging or Chrome permissions.
 
+### Profiles, skills, or voice dictation fail after a Hermes update
+
+Current Hermes can serve profiles and skills through API routes when no dashboard is available. If those routes are missing, the extension keeps the last loaded profile details and tries the older dashboard path. It does not clear a working roster because one discovery route changed.
+
+Voice dictation uses the API transcription route first, then the dashboard route, then browser speech. A dashboard that does not provide its session token is skipped. Browser speech can still fail independently when the browser has not finished installing its language pack or does not support the requested recognition mode.
+
 ### Native Hermes computer use is not working
 
 Hermes Browser Extension does not request browser-control permissions and does not drive pages itself. Native desktop control comes from Hermes Agent's `computer_use` toolset via `cua-driver`.

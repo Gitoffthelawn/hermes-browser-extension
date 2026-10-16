@@ -1,3 +1,4 @@
+export const SESSION_LIST_TIMEOUT_MS = 15_000;
 const DEFAULT_SESSION_LIMIT = 200;
 const DEFAULT_MAX_PAGES = 10;
 const MAX_ERROR_BODY = 500;
@@ -72,18 +73,38 @@ export function createHermesClient({ fetchImpl = globalThis.fetch, getConnection
     });
   }
 
-  async function listSessions({ limit = DEFAULT_SESSION_LIMIT, maxPages = DEFAULT_MAX_PAGES } = {}) {
+  async function listSessions({
+    limit = DEFAULT_SESSION_LIMIT,
+    maxPages = DEFAULT_MAX_PAGES,
+    requestTimeoutMs = SESSION_LIST_TIMEOUT_MS,
+  } = {}) {
     const cleanLimit = Math.max(1, Math.min(500, Number(limit) || DEFAULT_SESSION_LIMIT));
     const cleanMaxPages = Math.max(1, Math.min(20, Number(maxPages) || DEFAULT_MAX_PAGES));
     const merged = [];
+    const seen = new Set();
     let offset = 0;
     for (let page = 0; page < cleanMaxPages; page += 1) {
-      const response = await request(`/api/sessions?limit=${cleanLimit}&offset=${offset}&include_children=true&order=recent`, { method: 'GET' });
+      const response = await request(`/api/sessions?limit=${cleanLimit}&offset=${offset}&include_children=true&order=recent`, {
+        method: 'GET',
+        signal: typeof AbortSignal?.timeout === 'function'
+          ? AbortSignal.timeout(Math.max(1, Number(requestTimeoutMs) || SESSION_LIST_TIMEOUT_MS))
+          : undefined,
+      });
       const payload = await readJson(response);
       if (!response.ok) throw httpError('Session list', response, payload);
       const rows = normalizedRows(payload);
-      merged.push(...rows);
-      offset += rows.length;
+      for (const row of rows) {
+        const id = String(row?.id || row?.session_id || '');
+        if (id && seen.has(id)) continue;
+        if (id) seen.add(id);
+        merged.push(row);
+      }
+      // Pins are back-filled outside the server's recency window, and the
+      // server may cap the requested limit. Neither changes its next offset.
+      const pageLimit = Number(payload.limit ?? payload.pagination?.limit);
+      const pageOffset = Number(payload.offset ?? payload.pagination?.offset);
+      offset = (Number.isFinite(pageOffset) && pageOffset >= 0 ? pageOffset : offset)
+        + (Number.isFinite(pageLimit) && pageLimit > 0 ? pageLimit : rows.length);
       const hasMore = Boolean(payload.has_more ?? payload.hasMore ?? payload.pagination?.hasMore);
       const total = Number(payload.total || payload.pagination?.total || 0);
       if (!rows.length || (!hasMore && (!total || offset >= total))) break;
