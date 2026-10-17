@@ -496,15 +496,26 @@ async function applyPanelResidencyMode(mode = cachedPanelResidencyMode, { tabId 
   if (!browserApi.sidePanel?.setOptions) return;
 
   if (panelResidencyMode === PANEL_RESIDENCY_MODES.TAB_ATTACHED) {
-    await browserApi.sidePanel.setOptions({ enabled: false });
+    // Disable the shared default only when it is still on. Doing it on every
+    // tab switch toggles the panel off and on, which closes an open panel when
+    // a helper tab (such as Voice Dictation) closes and focus returns.
+    const sharedOptions = await browserApi.sidePanel.getOptions?.({}).catch?.(() => null);
+    if (sharedOptions?.enabled !== false) {
+      await browserApi.sidePanel.setOptions({ enabled: false });
+    }
     if (useTabAttached) {
+      const tabPath = buildSidePanelPath({
+        mode: panelResidencyMode,
+        tabId: cleanTabId,
+        defaultPath: defaultPanelPath,
+      });
+      // A tab that already has this exact panel enabled is left untouched, so
+      // returning to it never recreates or closes its open panel.
+      const tabOptions = await browserApi.sidePanel.getOptions?.({ tabId: cleanTabId }).catch?.(() => null);
+      if (tabOptions?.enabled === true && String(tabOptions.path || '').endsWith(tabPath)) return;
       await browserApi.sidePanel.setOptions({
         tabId: cleanTabId,
-        path: buildSidePanelPath({
-          mode: panelResidencyMode,
-          tabId: cleanTabId,
-          defaultPath: defaultPanelPath,
-        }),
+        path: tabPath,
         enabled: true,
       });
     }

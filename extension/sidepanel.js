@@ -230,6 +230,7 @@ import { friendlyModelName } from './lib/model-friendly-name.mjs';
 import { classicThinkingFace, createToolCallGroup, updateToolCallGroup, groupToolHistoryMessages, mergeToolCallActivity } from './lib/tool-call-group.mjs';
 import { sessionIsLiveFromStatus, shouldAttachLiveSession, sessionToolDisplayMessages, sessionLiveRoster } from './lib/live-session-attach.mjs';
 import { appendUserImageAttachments, extractHistoryMediaAttachments, normalizeUserImageAttachments, preserveUserImageAttachments, rawGeneratedImageCandidatesFromResult, resolveImageSource, resolvedGeneratedImageSources, resolvedGeneratedImageSourcesFromMessages } from './lib/image-render.mjs';
+import { createRestFollowState, messageCountFromSessionPayload, restFollowDue, restFollowStep } from './lib/session-follow.mjs';
 import { createUserFileAttachment, createPageContextAttachment, appendUserFileAttachments, stageUserFiles, attachmentFileContext, attachmentSourceKey, rememberUserFileAttachments, restoreUserFileAttachments, openUserFileAttachment, downloadUserFileAttachment } from './lib/user-file-attachments.mjs';
 import { mediaDisplayName, mediaSourcePlan, probeArtifactFileSource, resolveArtifactDownloadSource, resolveArtifactFileSource } from './lib/media-source.mjs';
 import { classifyMediaKind, resolveMediaFetchPlan } from './lib/media-persistence.mjs';
@@ -15592,6 +15593,42 @@ function liveSessionScopeKey() {
   return JSON.stringify([settings.gatewayUrl, desktopDashboardUrl, safeActiveProfile()]);
 }
 
+// A plain API connection has no dashboard socket to announce a running chat, so a
+// reply that outlives the panel's own stream (or a run started elsewhere) never
+// repainted until the session was reopened. Watch the session's message count
+// instead, and re-read the transcript only when it moves.
+let restFollow = createRestFollowState();
+let restFollowInFlight = false;
+
+async function followRestSessionTick() {
+  if (restFollowInFlight || document.hidden) return;
+  if (activeConversationTransport === 'dashboard-ws' || isRemoteWsMode()) return;
+  if (!settings.apiKey || activeGroupProjection) return;
+  const sessionId = String(settings.sessionId || '').trim();
+  if (!sessionId || isUnsavedBrowserDraftSession({ sessionId, sessions: availableSessions })) return;
+  if (sending) {
+    // The panel's own stream owns the transcript; start from a fresh baseline after it.
+    restFollow = createRestFollowState();
+    return;
+  }
+  if (!restFollowDue(restFollow, sessionId)) return;
+  restFollowInFlight = true;
+  try {
+    const response = await apiFetch(`/api/sessions/${encodeSessionId(sessionId)}`, { method: 'GET' });
+    if (!response.ok) return;
+    const count = messageCountFromSessionPayload(await readJsonResponse(response));
+    const step = restFollowStep(restFollow, sessionId, count);
+    restFollow = step.state;
+    if (step.refresh && !sending && String(settings.sessionId || '').trim() === sessionId) {
+      await refreshActiveSessionHistoryQuietly();
+    }
+  } catch {
+    // Following is best-effort; the next tick tries again.
+  } finally {
+    restFollowInFlight = false;
+  }
+}
+
 function scheduleLiveSessionPoll() {
   if (liveSessionPollTimer || document.hidden) return;
   liveSessionPollTimer = setTimeout(() => {
@@ -15602,6 +15639,7 @@ function scheduleLiveSessionPoll() {
 
 async function refreshLiveSessionRoster() {
   if (liveSessionPollInFlight || document.hidden) return;
+  void followRestSessionTick();
   const scopeKey = liveSessionScopeKey();
   if (scopeKey !== liveSessionRosterScope) liveSessionRows = new Map();
   // A local REST connection can observe the authenticated local Dashboard
@@ -16715,9 +16753,25 @@ async function resolveDashboardMediaBaseUrl() {
   });
 }
 
+// Stored images live on the Hermes machine. A gateway that advertises media_api
+// serves them over the API credential this panel already holds; older gateways
+// fall through to the Desktop dashboard route below. A miss never throws.
+async function fetchGatewayMediaDataUrl(filePath = '') {
+  if (!gatewayCapabilities.mediaRead || !settings.apiKey || !filePath) return '';
+  try {
+    const response = await apiFetch(`/api/media?path=${encodeURIComponent(filePath)}`, { method: 'GET' });
+    if (!response.ok) return '';
+    const payload = await readJsonResponse(response);
+    const dataUrl = String(payload?.data_url || '').trim();
+    return dataUrl.startsWith('data:image/') ? dataUrl : '';
+  } catch {
+    return '';
+  }
+}
+
 async function hydrateSessionMedia(messageList = []) {
   const rows = Array.isArray(messageList) ? messageList : [];
-  const pending = [];
+  let pending = [];
   for (const message of rows) {
     const extracted = extractHistoryMediaAttachments(message);
     if (extracted.length && !normalizeUserImageAttachments(message.attachments).length) {
@@ -16732,6 +16786,14 @@ async function hydrateSessionMedia(messageList = []) {
     }
   }
   if (!pending.length) return;
+  if (gatewayCapabilities.mediaRead) {
+    await Promise.all(pending.map(async (attachment) => {
+      const dataUrl = await fetchGatewayMediaDataUrl(attachment.pathRef);
+      if (dataUrl) attachment.dataUrl = dataUrl;
+    }));
+    pending = pending.filter((attachment) => !attachment.dataUrl);
+    if (!pending.length) return;
+  }
   const baseUrl = await resolveDashboardMediaBaseUrl();
   if (!baseUrl) return;
   let token = '';
@@ -16754,6 +16816,28 @@ async function hydrateSessionMediaInElement(element) {
   if (!element?.querySelectorAll) return;
   const nodes = [...element.querySelectorAll('[data-session-media][data-media-path]')];
   if (!nodes.length) return;
+  if (gatewayCapabilities.mediaRead) {
+    const doc = element.ownerDocument || document;
+    await Promise.all(nodes.map(async (node) => {
+      const filePath = node.getAttribute('data-media-path') || '';
+      const kind = node.getAttribute('data-session-media') || classifyMediaKind(filePath);
+      if (kind !== 'image' || !node.isConnected) return;
+      const dataUrl = await fetchGatewayMediaDataUrl(filePath);
+      if (!dataUrl || !node.isConnected) return;
+      const figure = doc.createElement('figure');
+      figure.className = 'generated-image';
+      figure.dataset.slot = 'aui_generated-image';
+      const image = doc.createElement('img');
+      image.src = dataUrl;
+      image.alt = filePath.split(/[\\/]/).pop() || 'Image';
+      image.loading = 'lazy';
+      image.dataset.slot = 'aui_generated-image';
+      figure.append(image);
+      node.replaceWith(figure);
+      wrapGeneratedImagesForInspection(figure.parentElement || figure);
+    }));
+    if (!element.querySelectorAll('[data-session-media][data-media-path]').length) return;
+  }
   const baseUrl = await resolveDashboardMediaBaseUrl();
   if (!baseUrl) {
     for (const node of nodes) node.classList.add('unavailable');
@@ -17133,6 +17217,7 @@ async function loadSessionMessages(sessionId = settings.sessionId, {
   try {
     const result = await fetchSessionMessagesQuietly(sessionId, { transport, connection: activeDashboardWsConnection || connection });
     if (!isCurrentRequest()) return false;
+    scheduleLiveSessionPoll();
     return commitFetchedSessionMessages(result, { sessionId: expectedSessionId, requestId, scopeRevisionId });
   } catch (error) {
     if (!isCurrentRequest()) return false;

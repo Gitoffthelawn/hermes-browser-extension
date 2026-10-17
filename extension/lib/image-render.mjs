@@ -245,6 +245,41 @@ function visitHistoryMedia(value, found, seen) {
   visitHistoryMedia(value.image_url, found, seen);
 }
 
+// Current Hermes stores a browser turn as the JSON envelope followed by plain
+// "[Image attached at: <path>]" lines, so the whole string is not valid JSON.
+// Read the leading envelope object and leave the trailing lines to the callers.
+export function parseTurnEnvelope(content = '') {
+  const raw = String(content ?? '');
+  if (!raw.trimStart().startsWith('{')) return null;
+  try {
+    const whole = JSON.parse(raw);
+    return whole && typeof whole === 'object' ? whole : null;
+  } catch {
+    // Fall through to the first-line form.
+  }
+  const firstLine = raw.split(/\r?\n/, 1)[0];
+  try {
+    const head = JSON.parse(firstLine);
+    return head && typeof head === 'object' ? head : null;
+  } catch {
+    return null;
+  }
+}
+
+const ATTACHED_IMAGE_LINE_RE = /^\s*\[Image attached at:\s*(.+?)\s*\]\s*$/gim;
+
+function pushAttachedImageLines(found, seen, text = '') {
+  const raw = String(text || '');
+  let match;
+  ATTACHED_IMAGE_LINE_RE.lastIndex = 0;
+  while ((match = ATTACHED_IMAGE_LINE_RE.exec(raw)) !== null) {
+    const filePath = stripWrappingQuotes(match[1]);
+    if (!filePath || seen.has(`path:${filePath}`) || classifyMediaKind(filePath) !== 'image') continue;
+    seen.add(`path:${filePath}`);
+    found.push({ kind: 'image', name: mediaFileName(filePath), pathRef: filePath });
+  }
+}
+
 export function extractHistoryMediaAttachments(message = {}) {
   const found = [];
   const seen = new Set();
@@ -252,17 +287,14 @@ export function extractHistoryMediaAttachments(message = {}) {
   visitHistoryMedia(message?.parts, found, seen);
   visitHistoryMedia(message?.attachments, found, seen);
   visitHistoryMedia(message?.attachment_context, found, seen);
-  if (typeof message?.content === 'string') pushExtractedPathRefs(found, seen, message.content);
   if (typeof message?.content === 'string') {
-    try {
-      const envelope = JSON.parse(message.content);
-      if (envelope && typeof envelope === 'object') {
-        visitHistoryMedia(envelope.attachment_context, found, seen);
-        visitHistoryMedia(envelope.attachments, found, seen);
-        visitHistoryMedia(envelope.human_input?.attachments, found, seen);
-      }
-    } catch {
-      // Content is not a turn envelope.
+    pushExtractedPathRefs(found, seen, message.content);
+    pushAttachedImageLines(found, seen, message.content);
+    const envelope = parseTurnEnvelope(message.content);
+    if (envelope) {
+      visitHistoryMedia(envelope.attachment_context, found, seen);
+      visitHistoryMedia(envelope.attachments, found, seen);
+      visitHistoryMedia(envelope.human_input?.attachments, found, seen);
     }
   }
   return found.slice(0, 8);
@@ -270,14 +302,10 @@ export function extractHistoryMediaAttachments(message = {}) {
 
 function userMessageMatchText(content = '') {
   const raw = String(content ?? '');
-  try {
-    const envelope = JSON.parse(raw);
-    const text = envelope?.human_input?.text;
-    if (envelope?.protocol && String(envelope.protocol).startsWith('hermes.browser.turn') && typeof text === 'string') {
-      return String(text).replace(/\r\n/g, '\n').replace(/[\t ]+/g, ' ').trim();
-    }
-  } catch {
-    // Plain composer text.
+  const envelope = parseTurnEnvelope(raw);
+  const text = envelope?.human_input?.text;
+  if (envelope?.protocol && String(envelope.protocol).startsWith('hermes.browser.turn') && typeof text === 'string') {
+    return String(text).replace(/\r\n/g, '\n').replace(/[\t ]+/g, ' ').trim();
   }
   return raw
     .replace(/\r\n/g, '\n')

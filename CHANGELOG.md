@@ -26,7 +26,11 @@
 
 ### Fixed
 
-- Current Hermes connections load profiles, avatars, group chats, and saved bot history through the API routes the unified gateway exposes. When the dashboard is unavailable, existing profile details stay visible and named profiles still try their own skill catalogs.
+- Current Hermes connections load profiles, avatars, group chats, and saved bot history through the API routes the unified gateway exposes. When the dashboard is unavailable, existing profile details stay visible and named profiles still try their own skill catalogs. A gateway that does not advertise a route keeps the last loaded details instead of clearing them.
+- Images attached to an earlier message show again when a session is reopened, including turns stored as a JSON envelope followed by attached-image lines. On a gateway that serves stored files, the pictures load through the API credential the panel already holds; otherwise the panel keeps the previews it still has and shows the file names.
+- An open session keeps updating while a reply is running, even on a plain API connection with no dashboard socket. The panel checks the session's message count and re-reads the chat when it changes, instead of waiting for the session to be reopened.
+- Closing the Voice Dictation tab no longer closes the side panel on the tab you return to.
+- The Voice Dictation tab's microphone settings and start buttons sit side by side on one row.
 - Older chats can be continued after current Hermes accepts API turns only for supported session sources. The panel keeps the composer available when another session is running, and explains a long wait instead of leaving it looking stalled.
 - Voice dictation checks the available transcription route before recording and falls back when the dashboard route cannot be used. A slow browser speech download no longer leaves the microphone click waiting indefinitely.
 - Session lists follow the gateway's page boundaries and no longer repeat pinned sessions.
