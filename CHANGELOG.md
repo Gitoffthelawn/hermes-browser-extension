@@ -26,6 +26,10 @@
 
 ### Fixed
 
+- Current Hermes connections load profiles, avatars, group chats, and saved bot history through the API routes the unified gateway exposes. When the dashboard is unavailable, existing profile details stay visible and named profiles still try their own skill catalogs.
+- Older chats can be continued after current Hermes accepts API turns only for supported session sources. The panel keeps the composer available when another session is running, and explains a long wait instead of leaving it looking stalled.
+- Voice dictation checks the available transcription route before recording and falls back when the dashboard route cannot be used. A slow browser speech download no longer leaves the microphone click waiting indefinitely.
+- Session lists follow the gateway's page boundaries and no longer repeat pinned sessions.
 - Reopening a working session restores streamed text and tool activity instead of leaving an empty or detached view. Followed live sessions offer Steer, Queue, and Stop, with controls aimed at that session.
 - Expanded tool lists use the themed scrollbar with room between the scrollbar and completion labels.
 - Live history refreshes keep the same assistant card without restarting its fade-in, and a completion wait no longer adds a duplicate thinking card. Steers sent from another client appear in the followed transcript.

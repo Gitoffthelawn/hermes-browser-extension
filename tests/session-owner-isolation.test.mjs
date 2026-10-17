@@ -47,3 +47,21 @@ test('Web deltas for A cannot append an assistant to B',()=>{
  vm.runInContext(`(${callback})('A reply')`,ctx);
  assert.equal(ctx.activeMessages.length,1);
 });
+
+test('a run in session A never locks a new session B: releaseBackgroundLocalRun frees the composer',()=>{
+ const ctx=vm.createContext({sending:true,settings:{sessionId:'B'},activeGroupProjection:null,activeAbortController:{},activeRunId:'rA',
+  activeRunControl:{phase:'running',sessionId:'A',scopeRevisionId:1},RUN_CONTROL_PHASES:{TERMINAL:'terminal'},
+  markRunTerminal:(state,status)=>({...state,phase:'terminal',writerLease:'released',terminalStatus:status}),
+  localRunIsViewed:()=>false,updateComposerBusyState:()=>{}});
+ const src=`${fn(panel,'localTurnBlocksNavigation')};${fn(panel,'releaseBackgroundLocalRun')};`;
+ assert.equal(vm.runInContext(`${src}localTurnBlocksNavigation()`,ctx),false);
+ assert.equal(vm.runInContext(`${src}releaseBackgroundLocalRun()`,ctx),true);
+ assert.equal(ctx.sending,false); assert.equal(ctx.activeRunControl.phase,'terminal'); assert.equal(ctx.activeRunControl.writerLease,'released');
+});
+test('a run in the session you are viewing still holds the composer',()=>{
+ const ctx=vm.createContext({sending:true,settings:{sessionId:'A'},activeGroupProjection:null,activeRunControl:{phase:'running'},RUN_CONTROL_PHASES:{TERMINAL:'terminal'},localRunIsViewed:()=>true,updateComposerBusyState:()=>{}});
+ const src=`${fn(panel,'localTurnBlocksNavigation')};${fn(panel,'releaseBackgroundLocalRun')};`;
+ assert.equal(vm.runInContext(`${src}localTurnBlocksNavigation()`,ctx),true);
+ assert.equal(vm.runInContext(`${src}releaseBackgroundLocalRun()`,ctx),false);
+ assert.equal(ctx.sending,true);
+});

@@ -147,6 +147,7 @@ test('reopening a room merges durable display rows back into the transcript', as
     sending: false,
     activeRunControl: null,
     markRunTerminal: (control) => control,
+    releaseBackgroundLocalRun: () => false, localTurnBlocksNavigation: () => false,
     activeGroupGeneration: 0,
     activeGroupProjection: null,
     activeGroupRuntime: null,

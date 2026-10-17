@@ -1410,6 +1410,13 @@ test('voice dictation targets the Desktop-compatible Hermes audio transcription 
   assert.equal(shouldFallbackToWebSpeechForTranscription(404), true);
   assert.equal(shouldFallbackToWebSpeechForTranscription(405), true);
   assert.equal(shouldFallbackToWebSpeechForTranscription(500), false);
+  // Dashboard never answered (0) or refuses the extension a token (401/403): fall back too.
+  assert.equal(shouldFallbackToWebSpeechForTranscription(0), true);
+  assert.equal(shouldFallbackToWebSpeechForTranscription(401), true);
+  assert.equal(shouldFallbackToWebSpeechForTranscription(403), true);
+  assert.equal(common.dashboardVoiceFailureMessage({ status: 0, error: 'Failed to fetch' }), 'Hermes speech-to-text is unavailable: the Desktop dashboard did not respond.');
+  assert.equal(common.dashboardVoiceFailureMessage({ status: 500, error: 'boom' }), 'boom');
+  assert.equal(common.dashboardVoiceFailureMessage({ status: 500 }), 'Hermes Dashboard voice transcription failed.');
 });
 
 test('voice dictation uses the authenticated local Dashboard transcription route when the API server omits audio', async () => {
@@ -1516,6 +1523,19 @@ test('voice dictation prefers on-device speech and installs a language pack when
   });
   assert.equal(cloud.mode, 'cloud');
   assert.equal(cloudRecognition.processLocally, false);
+
+  // A language pack that never finishes installing must not freeze the mic click.
+  const stuckRecognition = { processLocally: false };
+  const started = Date.now();
+  const stuck = await common.prepareOnDeviceSpeechRecognition({
+    Recognition: { available: async () => 'downloadable', install: () => new Promise(() => {}) },
+    recognition: stuckRecognition,
+    language: 'en-US',
+    installTimeoutMs: 40,
+  });
+  assert.equal(stuck.mode, 'cloud');
+  assert.equal(stuck.availability, 'error');
+  assert.ok(Date.now() - started < 2000);
 
   const sidepanelJs = readFileSync(new URL('../extension/sidepanel.js', import.meta.url), 'utf8');
   const voiceJs = readFileSync(new URL('../extension/voice-dictation.js', import.meta.url), 'utf8');
@@ -1652,7 +1672,7 @@ test('connect and startup sync Hermes models, sessions, skills, and profiles fro
   assert.match(source, /apiFetch\('\/v1\/skills'/);
   assert.match(source, /request\(WS_METHODS\.profilesList, \{ include_sessions: true \}\)/);
   assert.doesNotMatch(source, /fetchRosterFromDashboard\(\{/);
-  assert.match(source, /apiFetch\(`\/api\/sessions\?limit=\$\{limit\}&offset=\$\{offset\}&include_children=true&order=recent`/);
+  assert.match(source, /hermesClient\.listSessions\(\{ limit: 200, maxPages: 1 \}\)/);
   assert.match(source, /els\.refreshModelsButton\.addEventListener\('click', refreshModelsFromMenu\)/);
 });
 
@@ -2639,12 +2659,12 @@ test('skill helpers normalize slash commands and suggest matches from / or @ inp
   assert.deepEqual(skillSuggestionsForInput('normal message', skills), []);
 });
 
-test('named profiles never inherit the default REST skills catalog', () => {
+test('named profiles load their own REST skills catalog through the profile route', () => {
   assert.equal(isNamedHermesProfileName('default'), false);
   assert.equal(isNamedHermesProfileName(''), false);
   assert.equal(isNamedHermesProfileName('research'), true);
   assert.equal(restSkillsFallbackAllowed({ profileName: 'default', dashboardReady: false }), true);
-  assert.equal(restSkillsFallbackAllowed({ profileName: 'research', dashboardReady: false }), false);
+  assert.equal(restSkillsFallbackAllowed({ profileName: 'research', dashboardReady: false }), true);
   assert.equal(restSkillsFallbackAllowed({ profileName: 'default', dashboardReady: true }), false);
 });
 
@@ -4381,4 +4401,14 @@ test('Connected agent section copy clarifies the scan is remote-dashboard-inappl
   assert.match(html, /id="agentList"/);
   assert.match(html, /Scans a trusted Hermes API host for running sidecar gateways on/i);
   assert.match(html, /Remote[\s\S]*?dashboard mode Dashboard Attach connects over the dashboard[\s\S]*?WebSocket/i);
+});
+
+test('restTurnSourceRepair relabels sessions the gateway would refuse to run a REST turn on', async () => {
+  const { restTurnSourceRepair } = await import('../extension/lib/common.mjs');
+  assert.deepEqual(restTurnSourceRepair({ id: 'a', source: 'hermes_browser' }), { source: 'api_server' });
+  assert.deepEqual(restTurnSourceRepair({ session: { id: 'a', source: 'desktop' } }), { source: 'api_server' });
+  assert.equal(restTurnSourceRepair({ id: 'a', source: 'api_server' }), null);
+  assert.equal(restTurnSourceRepair({ id: 'a', source: 'bot_room' }), null);
+  assert.equal(restTurnSourceRepair({}), null);
+  assert.equal(restTurnSourceRepair(null), null);
 });

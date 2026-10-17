@@ -189,9 +189,13 @@ Fix:
 
 ### Skills or profiles do not load
 
-Startup shows Skills and Profiles separately. If either catalog stalls, the panel reports a fallback instead of waiting indefinitely; chat still requires a working connection and session binding. A connected gateway does not guarantee that its catalog routes are working.
+Startup shows Skills and Profiles separately. A current Hermes connection can load profiles and skills through its API routes when no dashboard is available. Older connections keep the dashboard path, and a missing route preserves the last loaded details instead of clearing them. A connected gateway does not guarantee that every catalog route is available.
 
 After the Hermes backend is responding again, reopen the panel or use **Test connection** to retry. Existing skills and profiles are not deleted by a catalog timeout.
+
+### Voice dictation records but no text appears
+
+Hermes transcription needs an advertised API transcription route or a reachable dashboard transcription route. If neither is available, the panel uses browser speech when that browser supports it. A slow or unavailable browser speech download now falls through instead of leaving the click waiting, but browser speech itself depends on the browser.
 
 ### Filing a support issue
 

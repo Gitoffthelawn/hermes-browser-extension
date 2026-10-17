@@ -35,6 +35,8 @@ import {
   groupSessionsForMenu,
   isDefaultBrowserSessionTitle,
   isUnsavedBrowserDraftSession,
+  restTurnSourceRepair,
+  dashboardVoiceFailureMessage,
   isMicrophonePermissionError,
   isModelRuntimeSelectable,
   isRestrictedUrl,
@@ -131,6 +133,10 @@ import {
   writeCachedRosterUrl,
   clearCachedRosterUrl,
   writeLastKnownRoster,
+  readLastKnownRoster,
+  fetchRosterFromGateway,
+  fetchRosterFromGatewayApi,
+  fetchGatewayProfileAvatar,
 } from './lib/desktop-roster.mjs';
 import { createBackgroundLoopbackFetch } from './lib/loopback-cors.mjs';
 import {
@@ -4588,6 +4594,30 @@ function localRunIsViewed() {
     && (activeRunControl?.scopeRevisionId == null || scopeRevision.isCurrent(activeRunControl.scopeRevisionId)));
 }
 
+// A turn the panel started in another session is owned by the gateway: it keeps
+// running and saves its reply to that session. It must never lock this session's
+// composer, new sessions, or bot switching, whatever surface or model it is on.
+// Only a turn in the session you are looking at (or a live group turn) holds the
+// composer.
+function localTurnBlocksNavigation() {
+  return sending && (localRunIsViewed() || Boolean(activeGroupProjection));
+}
+
+function releaseBackgroundLocalRun() {
+  if (!sending || localRunIsViewed() || activeGroupProjection) return false;
+  // Marking the local control terminal bumps nothing on the gateway: the run keeps
+  // going. The turn's own finally block is skipped by the generation check once
+  // the next turn starts, so it cannot reset this session's state.
+  if (activeRunControl && activeRunControl.phase !== RUN_CONTROL_PHASES.TERMINAL) {
+    activeRunControl = markRunTerminal(activeRunControl, 'failed');
+  }
+  activeAbortController = null;
+  activeRunId = '';
+  sending = false;
+  updateComposerBusyState();
+  return true;
+}
+
 function canSteerActiveRun() {
   return Boolean(liveAttach?.sessionId === String(settings.sessionId || '').trim()
     || (localRunIsViewed() && (usesDashboardWsChatTransport() || gatewayCapabilities.runSteer)));
@@ -4606,10 +4636,6 @@ function currentComposerDraftState() {
     attachmentCount: attachments.length,
     canSteer: canSteerActiveRun(),
   });
-  if (sending && !localRunIsViewed() && !viewedSessionIsRunning()) {
-    state.mainButton.disabled = true;
-    state.controls.inlineSend.disabled = true;
-  }
   return state;
 }
 
@@ -4636,7 +4662,6 @@ function updateComposerBusyState() {
         els.sendButton.textContent = botName ? `${botName} running` : translateUiText('Hermes running');
       } else {
         updateComposerActionLabels();
-        if (sending && !localRunIsViewed()) els.sendButton.textContent = translateUiText('Another session is running');
       }
     }
   }
@@ -6244,6 +6269,33 @@ function cleanupVoiceRecorder() {
   voiceRecorderChunks = [];
 }
 
+// The Desktop dashboard is the only speech-to-text route a gateway without
+// /api/audio/transcribe has. Probe it before recording so dictation never
+// records audio it cannot transcribe; when it is unreachable the mic goes
+// straight to on-device speech.
+let dashboardVoiceProbe = { at: 0, ok: false };
+const DASHBOARD_VOICE_PROBE_TTL_MS = 30_000;
+
+async function dashboardVoiceTranscriptionReachable() {
+  if (canUseHermesVoiceTranscription()) return true;
+  if (!canUseLocalDashboardVoiceTranscription()) return false;
+  if (Date.now() - dashboardVoiceProbe.at < DASHBOARD_VOICE_PROBE_TTL_MS) return dashboardVoiceProbe.ok;
+  let ok = false;
+  try {
+    const baseUrl = await resolveDashboardTranscriptionBaseUrl({
+      desktopDashboardUrl,
+      gatewayMode: normalizeGatewayMode(settings.gatewayMode),
+      gatewayUrl: settings.gatewayUrl,
+      discover: () => ensureDesktopDashboardUrl({ timeoutMs: 1_500 }),
+    });
+    ok = Boolean(baseUrl) && Boolean(await fetchDashboardSessionToken({ baseUrl, timeoutMs: 1_500 }));
+  } catch {
+    ok = false;
+  }
+  dashboardVoiceProbe = { at: Date.now(), ok };
+  return ok;
+}
+
 async function transcribeVoiceRecording(blob) {
   const canUseApiTranscription = canUseHermesVoiceTranscription();
   const canUseDashboardTranscription = canUseLocalDashboardVoiceTranscription();
@@ -6269,7 +6321,7 @@ async function transcribeVoiceRecording(blob) {
       mimeType: blob.type || 'audio/webm',
     });
     if (!result.ok) {
-      const error = new Error(result.error || 'Hermes Dashboard voice transcription failed.');
+      const error = new Error(dashboardVoiceFailureMessage(result));
       error.status = result.status;
       error.fallbackToWebSpeech = shouldFallbackToWebSpeechForTranscription(result.status);
       throw error;
@@ -6680,7 +6732,7 @@ async function toggleVoiceDictation() {
     const captureRoute = voiceDictationCaptureRoute({
       canRecord: canRecordVoiceAudio(),
       canUseApiTranscription: canUseHermesVoiceTranscription(),
-      canUseDashboardTranscription: canUseLocalDashboardVoiceTranscription(),
+      canUseDashboardTranscription: await dashboardVoiceTranscriptionReachable(),
       browserSpeech: browserSpeechAvailable(),
     });
     if (captureRoute !== 'recorder') {
@@ -10388,8 +10440,18 @@ async function fetchBotModeRemoteAvatar(row) {
   const pending = (async () => {
     let dataUrl = '';
     try {
-      const connection = await ensureProfileWsConnection({ readyTimeoutMs: 5_000 }).catch(() => null);
-      if (connection?.client?.readyState === 1) {
+      // With no Desktop dashboard, the gateway serves the image itself.
+      if (!desktopDashboardUrl && !isRemoteWsMode() && settings.apiKey) {
+        dataUrl = await fetchGatewayProfileAvatar({
+          gatewayUrl: normalizeGatewayUrl(settings.gatewayUrl),
+          apiKey: settings.apiKey,
+          profileName: row.profileName,
+        });
+      }
+      const connection = dataUrl ? null : await ensureProfileWsConnection({ readyTimeoutMs: 5_000 }).catch(() => null);
+      if (dataUrl) {
+        // Already resolved from the gateway.
+      } else if (connection?.client?.readyState === 1) {
         const asset = await connection.client.request(WS_METHODS.profilesGetAsset, { name: row.profileName, asset: 'avatar' });
         dataUrl = botModeAvatarDataUrlFromAsset(asset);
       } else if (isRemoteWsMode()) {
@@ -12154,7 +12216,8 @@ async function openBotGroupChat(row) {
     setStatus('ok', 'Group chat still running', `${row.displayName || 'This room'} kept replying in the background.`, { translateDetail: false });
     return true;
   }
-  if (sending) {
+  releaseBackgroundLocalRun();
+  if (localTurnBlocksNavigation()) {
     setStatus('warn', 'Hermes is working…', 'Stop the active run before opening a group chat.');
     return false;
   }
@@ -12328,6 +12391,117 @@ function scheduleRosterRetry({ force = false } = {}) {
   }, delayMs);
 }
 
+// Profile list straight from the gateway's /p/<name>/ routes. Names come from
+// what the gateway confirms plus what this browser already knew (saved roster,
+// current selection). Rich Bot Mode rows stay dashboard-owned and untouched.
+async function loadProfilesFromGatewayRoutes({ quiet = false, generation = 0, gatewayUrl = '' } = {}) {
+  try {
+    const previous = await readLastKnownRoster().catch(() => ({ agents: [] }));
+    const known = [
+      settings.activeProfile,
+      ...botModeRoster.map((row) => row?.profileName),
+      ...availableProfiles.map((row) => row?.name),
+      ...(previous.agents || []).map((row) => row?.profileName),
+    ].map((name) => String(name || '').trim()).filter(Boolean);
+    // Preferred: the gateway's own authenticated roster carries bot titles,
+    // shapes, colours and avatar flags, so Bot Mode can draw real rows.
+    try {
+      const rosterPayload = await fetchRosterFromGatewayApi({ gatewayUrl, apiKey: settings.apiKey });
+      if (generation !== botModeRosterGeneration || gatewayUrl !== normalizeGatewayUrl(settings.gatewayUrl)) {
+        return { status: 'skipped', detail: 'Profile sync was superseded.' };
+      }
+      // Each bot's own Bot Chat, so rows verify and open their real session.
+      await attachBotChatSessionsToRoster(rosterPayload.profiles);
+      if (generation !== botModeRosterGeneration || gatewayUrl !== normalizeGatewayUrl(settings.gatewayUrl)) {
+        return { status: 'skipped', detail: 'Profile sync was superseded.' };
+      }
+      const split = splitBotRosterRows(rosterPayload, { sourceId: gatewayUrl });
+      if (split.agents.length) {
+        availableProfiles = botProfileRowsToHermesProfiles(split.agents, settings.activeProfile);
+        botModeRoster = split.agents;
+        botModeRosterNote = '';
+        rosterRetryCount = 0;
+        // Rooms ride on the default profile's ui_meta; the Group Chats tab reads this list.
+        adoptSyncedGroupChats(split.groupChats, { allowCanonicalFallback: false });
+        await writeLastKnownRoster({ agents: split.agents, groupChats: botModeGroupChats, sourceId: gatewayUrl });
+        renderProfiles();
+        renderBotModeRoster(els.botModeSearch?.value);
+        renderActiveProfileIndicator();
+        const count = split.agents.length;
+        if (!quiet) setStatus('ok', 'Hermes profiles synced', `${count} profile${count === 1 ? '' : 's'} available`);
+        return { status: 'ready', detail: count === 1 ? '1 PROFILE LOADED.' : `${count} PROFILES LOADED.` };
+      }
+    } catch {
+      // Older gateways have no /v1/profiles; fall through to confirmed names.
+    }
+    let names = [];
+    try {
+      await fetchRosterFromGateway({
+        gatewayUrl,
+        apiKey: settings.apiKey,
+        knownProfileNames: [...new Set(known)],
+      });
+    } catch (error) {
+      names = Array.isArray(error?.metadata?.profileNames) ? error.metadata.profileNames : [];
+    }
+    if (!names.length) return null;
+    if (generation !== botModeRosterGeneration || gatewayUrl !== normalizeGatewayUrl(settings.gatewayUrl)) {
+      return { status: 'skipped', detail: 'Profile sync was superseded.' };
+    }
+    const richByName = new Map([...botModeRoster, ...(previous.agents || [])].map((row) => [String(row?.profileName || ''), row]));
+    const rows = names.map((name) => richByName.get(name) || { profileName: name });
+    availableProfiles = botProfileRowsToHermesProfiles(rows, settings.activeProfile);
+    botModeRosterNote = '';
+    rosterRetryCount = 0;
+    renderProfiles();
+    renderActiveProfileIndicator();
+    if (!quiet) setStatus('ok', 'Hermes profiles synced', `${names.length} profile${names.length === 1 ? '' : 's'} available`);
+    return { status: 'ready', detail: names.length === 1 ? '1 PROFILE LOADED.' : `${names.length} PROFILES LOADED.` };
+  } catch {
+    return null;
+  }
+}
+
+// A profile's Bot Chat rows straight from the gateway's /p/<name>/ session list.
+// Exact-title lookup with hidden rows included, the same query Bot Mode has
+// always used to find a bot's single canonical chat.
+async function listBotChatRowsViaGateway(profileName, { timeoutMs = 8_000 } = {}) {
+  const name = String(profileName || '').trim();
+  if (!name) return [];
+  const response = await hermesClient.fetch(
+    `/p/${encodeURIComponent(name)}/api/sessions?title=${encodeURIComponent(BOT_CHAT_TITLE)}&include_hidden=true&limit=5`,
+    {
+      method: 'GET',
+      signal: typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(timeoutMs) : undefined,
+    },
+  );
+  const payload = await hermesClient.readJson(response);
+  if (!response.ok) throw new Error(payload?.error?.message || payload?.error || `Bot Chat lookup failed (${response.status})`);
+  return Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload?.sessions) ? payload.sessions : []);
+}
+
+async function attachBotChatSessionsToRoster(rows = []) {
+  await Promise.all((Array.isArray(rows) ? rows : []).map(async (row) => {
+    if (!row || row.canonical_session) return;
+    try {
+      const found = (await listBotChatRowsViaGateway(row.name, { timeoutMs: 4_000 }))
+        .find((entry) => String(entry?.title || '').trim() === BOT_CHAT_TITLE);
+      if (!found) return;
+      row.canonical_session = {
+        id: found.id,
+        resolved_id: found.id,
+        title: BOT_CHAT_TITLE,
+        preview: found.preview || '',
+        started_at: found.started_at || 0,
+        last_active: found.last_active || found.started_at || 0,
+        message_count: found.message_count || 0,
+      };
+    } catch {
+      // A bot whose lookup fails stays unverified rather than inventing a chat.
+    }
+  }));
+}
+
 async function loadProfiles({ quiet = false, allowDashboardTrust = !quiet } = {}) {
   // Profiles load regardless of Bot Mode. Only the authenticated profiles.list
   // contract owns bot names, assets, activity, canonical sessions and groups.
@@ -12375,6 +12549,16 @@ async function loadProfiles({ quiet = false, allowDashboardTrust = !quiet } = {}
     return { status: 'degraded', detail: botModeRosterNote };
   }
   try {
+    // The unified gateway no longer spawns a Desktop dashboard on a random
+    // port. Look for one briefly; when none answers, list the profiles the
+    // gateway itself serves instead of waiting out the dashboard handshake.
+    if (!desktopDashboardUrl) {
+      await ensureDesktopDashboardUrl({ timeoutMs: 2_500 }).catch(() => '');
+    }
+    if (!desktopDashboardUrl) {
+      const served = await loadProfilesFromGatewayRoutes({ quiet, generation, gatewayUrl });
+      if (served) return served;
+    }
     const connection = await ensureProfileWsConnection({ readyTimeoutMs: 8_000, allowDashboardTrust });
     const payload = await connection.client.request(WS_METHODS.profilesList, { include_sessions: true });
     if (generation !== botModeRosterGeneration || gatewayUrl !== normalizeGatewayUrl(settings.gatewayUrl)) {
@@ -12613,7 +12797,8 @@ function adoptSyncedGroupChats(syncedRows = [], { authoritative = false, allowCa
 }
 
 async function applySelectedProfile(profileName = '', { quiet = false, viaBotMode = false } = {}) {
-  if (sending) {
+  releaseBackgroundLocalRun();
+  if (localTurnBlocksNavigation()) {
     setStatus('warn', 'Profile switch blocked', 'Stop the active Hermes turn before selecting another profile.');
     return false;
   }
@@ -12870,7 +13055,8 @@ async function openBotProfile(row) {
   if (!sending && activeRunControl && activeRunControl.phase !== 'terminal') {
     activeRunControl = markRunTerminal(activeRunControl, 'failed');
   }
-  const decision = canSwitchBotProfile({ running: sending, currentProfile: settings.activeProfile, selectedProfile: row?.profileName });
+  releaseBackgroundLocalRun();
+  const decision = canSwitchBotProfile({ running: localTurnBlocksNavigation(), currentProfile: settings.activeProfile, selectedProfile: row?.profileName });
   if (!decision.allowed) {
     setStatus('warn', 'Profile switch blocked', 'Stop the active Hermes turn before opening another agent.');
     return false;
@@ -12944,19 +13130,42 @@ async function openBotProfile(row) {
   // only create a fresh one when the bot has never chatted.
   // The user stays on the sleek centered botModeLoadingOverlay until the session is ready!
   try {
-    const connection = await ensureActiveDashboardWsConnection();
-    const canonical = await resolveCanonicalBotSession(row, (params) => connection.client.request('session.list', { ...params, limit: 200 }));
+    // The unified gateway has no Desktop dashboard socket for a client that only
+    // holds the API credential. Without one, the bot's own gateway routes carry
+    // the same canonical lookup, history and chat.
+    // ensureDesktopDashboardUrl re-pings a remembered URL, so a dashboard that
+    // has since gone away is dropped instead of trusted. If the socket still
+    // cannot be opened, fall back to REST rather than opening an empty chat.
+    let dashboardUp = isRemoteWsMode()
+      || Boolean(await ensureDesktopDashboardUrl({ timeoutMs: 2_500 }).catch(() => ''));
+    let connection = null;
+    if (dashboardUp) {
+      try {
+        connection = await ensureActiveDashboardWsConnection();
+      } catch (socketError) {
+        if (isRemoteWsMode()) throw socketError;
+        dashboardUp = false;
+      }
+    }
+    const transport = dashboardUp ? 'dashboard-ws' : 'rest';
+    if (!dashboardUp) {
+      activeConversationTransport = 'rest';
+      activeDashboardWsConnection = null;
+    }
+    const canonical = await resolveCanonicalBotSession(row, (params) => (dashboardUp
+      ? connection.client.request('session.list', { ...params, limit: 200 })
+      : listBotChatRowsViaGateway(params.profile)));
     if (canonical) {
       const opened = await openHermesSession({
         id: canonical.durableId,
         title: BOT_CHAT_TITLE,
         source: 'hermes_bot_mode',
         profile: row.profileName,
-        transport: 'dashboard-ws',
+        transport,
       });
       if (opened !== true) throw new Error('Could not resume the existing Bot Chat. No replacement was created.');
     } else {
-      const created = await createHermesBrowserSession({ title: BOT_CHAT_TITLE, hidden: true, focus: true, transport: 'dashboard-ws', source: 'hermes_bot_mode' });
+      const created = await createHermesBrowserSession({ title: BOT_CHAT_TITLE, hidden: true, focus: true, transport, source: 'hermes_bot_mode' });
       if (!created) throw new Error('Bot Chat creation did not complete.');
     }
     return true;
@@ -15506,30 +15715,11 @@ async function reconcileAttachedLiveSession() {
 }
 
 async function loadAllHermesSessions() {
-  const limit = 500;
-  let offset = 0;
-  const merged = [];
-  for (let page = 0; page < 10; page += 1) {
-    const response = await apiFetch(`/api/sessions?limit=${limit}&offset=${offset}&include_children=true&order=recent`, {
-      method: 'GET',
-      signal: typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(3_000) : undefined,
-    });
-    const payload = await readJsonResponse(response);
-    if (!response.ok) throw new Error(payload?.error?.message || payload?.error || `Session list failed (${response.status})`);
-    const rows = Array.isArray(payload.data)
-      ? payload.data
-      : Array.isArray(payload.sessions)
-        ? payload.sessions
-        : Array.isArray(payload.results)
-          ? payload.results
-          : [];
-    merged.push(...rows);
-    const hasMore = Boolean(payload.has_more ?? payload.hasMore ?? payload.pagination?.hasMore);
-    const total = Number(payload.total || payload.pagination?.total || 0);
-    offset += rows.length;
-    if (shouldStopSessionPaging({ rowCount: rows.length, offset, total, hasMore })) break;
-  }
-  return { data: merged };
+  // One page of the most recent sessions (plus pins). The server caps a page at
+  // 200 rows and keeps reporting more, so crawling every page took 25-35 s on a
+  // large history and held the startup gate. The full-tab view still pages
+  // deeper on its own.
+  return { data: await hermesClient.listSessions({ limit: 200, maxPages: 1 }) };
 }
 
 // Dashboard REST session read with ?profile= scoping (session-token auth).
@@ -16008,8 +16198,9 @@ async function createHermesBrowserSession({ title = makeBrowserSessionTitle(), f
   const preferredModel = modelForBinding(preferredBinding);
   const requestModel = preferredModel?.rawModelId || preferredBinding?.rawModelId || preferredBinding?.modelId || settings.model || DEFAULT_SETTINGS.model;
   const requestProvider = preferredModel?.provider || preferredBinding?.provider || '';
-  const dashboardTransport = activeConversationTransport === 'dashboard-ws'
-    || shouldUseBotDashboardTransport({ gatewayMode: settings.gatewayMode, transport });
+  const forceRestTransport = transport === 'rest' && !isRemoteWsMode();
+  const dashboardTransport = !forceRestTransport && (activeConversationTransport === 'dashboard-ws'
+    || shouldUseBotDashboardTransport({ gatewayMode: settings.gatewayMode, transport }));
   let connection = null;
   if (dashboardTransport) {
     activeConversationTransport = 'dashboard-ws';
@@ -16208,13 +16399,15 @@ async function openHermesSession(selectedSession) {
   const requestedSessionId = session.id;
   let liveSessionId = session.id;
   const sessionTransport = session.transport || (isNamedHermesProfile(session.profile) ? 'dashboard-ws' : '');
-  const dashboardTransport = activeConversationTransport === 'dashboard-ws'
+  // A caller that found no dashboard asks for the gateway's REST routes explicitly.
+  const forceRestTransport = session.transport === 'rest' && !isRemoteWsMode();
+  const dashboardTransport = !forceRestTransport && (activeConversationTransport === 'dashboard-ws'
     || (liveSessionRosterScope === liveSessionScopeKey() && liveSessionRows.get(session.id)?.live === true)
     || shouldUseBotDashboardTransport({
       gatewayMode: settings.gatewayMode,
       source: session.source,
       transport: sessionTransport,
-    });
+    }));
   activeConversationTransport = dashboardTransport ? 'dashboard-ws' : 'rest';
   if (!dashboardTransport) activeDashboardWsConnection = null;
   if (dashboardTransport) {
@@ -16268,6 +16461,14 @@ async function openHermesSession(selectedSession) {
       setStatus('error', 'Could not open session', error?.message || String(error), { translateDetail: false });
       return false;
     }
+  } else {
+    // A gateway session opened over REST is not in the picker list yet. List it,
+    // or the unsaved-draft guard in loadSessionMessages mistakes an id shaped
+    // like hermes-browser-extension-<ts>-<hex> for a local draft and shows an
+    // empty chat instead of fetching its saved history.
+    availableSessions = normalizeHermesSessions({
+      sessions: [session, ...availableSessions.filter((item) => item.id !== session.id)],
+    });
   }
   if (!isCurrentRequest()) return false;
   const inheritedModelBinding = settings.sessionModelBindings?.[requestedSessionId];
@@ -16533,7 +16734,12 @@ async function hydrateSessionMedia(messageList = []) {
   if (!pending.length) return;
   const baseUrl = await resolveDashboardMediaBaseUrl();
   if (!baseUrl) return;
-  const token = await fetchDashboardSessionToken({ baseUrl });
+  let token = '';
+  try {
+    token = await fetchDashboardSessionToken({ baseUrl });
+  } catch {
+    return;
+  }
   await Promise.all(pending.map(async (attachment) => {
     const dataUrl = await fetchDashboardMediaDataUrl({
       baseUrl,
@@ -16553,7 +16759,14 @@ async function hydrateSessionMediaInElement(element) {
     for (const node of nodes) node.classList.add('unavailable');
     return;
   }
-  const token = await fetchDashboardSessionToken({ baseUrl });
+  let token = '';
+  try {
+    token = await fetchDashboardSessionToken({ baseUrl });
+  } catch {
+    // No reachable dashboard: leave the media as references, never throw into the transcript.
+    for (const node of nodes) node.classList.add('unavailable');
+    return;
+  }
   const doc = element.ownerDocument || document;
   await Promise.all(nodes.map(async (node) => {
     if (!node.isConnected) return;
@@ -16844,7 +17057,13 @@ async function commitFetchedSessionMessages(result, { sessionId, requestId = nul
   if (!scopeRevision.isCurrent(scopeRevisionId)) return false;
   if (requestId != null && requestId !== sessionLoadRequestId) return false;
   if (String(settings.sessionId || '').trim() !== String(sessionId || '').trim()) return false;
-  await hydrateSessionMedia(messages);
+  // Inline media needs the Desktop dashboard. Without it the transcript must
+  // still paint; the images simply stay as references.
+  try {
+    await hydrateSessionMedia(messages);
+  } catch {
+    // Media is best-effort.
+  }
   renderMessagesFromStorage();
   return true;
 }
@@ -17103,6 +17322,8 @@ async function ensureDefaultBrowserSession({ focus = false, scopeRevisionId = sc
 }
 
 const THINKING_PLACEHOLDER = 'Hermes is thinking...';
+const SLOW_REPLY_NOTICE_MS = 30_000;
+const SLOW_REPLY_DETAIL = 'No reply yet. The model may be rate-limited or at capacity (free models often are), and Hermes keeps retrying. You can stop this run and switch models, or wait.';
 const THINKING_STATUSES = ['thinking', 'brainstorming', 'contemplating', 'reasoning', 'processing', 'analyzing', 'reflecting', 'pondering', 'deliberating', 'formulating'];
 
 let thinkingFaceStep = 0;
@@ -19842,6 +20063,17 @@ async function ensureHermesSession() {
   const getResponse = await apiFetch(sessionPath, { method: 'GET' });
   if (getResponse.ok) {
     sessionRoutesAvailable = true;
+    // Newer gateways refuse a REST turn on a session stored under any source
+    // other than api_server/bot_room ("permission denied"). Re-label it once
+    // before sending; the Browser still recognises its sessions by id prefix.
+    const repair = restTurnSourceRepair(await readJsonResponse(getResponse).catch(() => ({})));
+    if (repair) {
+      try {
+        await apiFetch(sessionPath, { method: 'PATCH', body: JSON.stringify(repair) });
+      } catch {
+        // Best effort: the send below still reports the gateway's own answer.
+      }
+    }
     return true;
   }
   if (getResponse.status !== 404) {
@@ -21042,7 +21274,7 @@ async function askHermes(userText, turnAttachments = [...attachments], turnOptio
   }
 
   const dashboardTransport = usesDashboardWsChatTransport();
-  if (sending && !localRunIsViewed()) setStatus('warn', 'Another session is running', 'Return to that session to steer or stop it. This draft has not been sent.');
+  releaseBackgroundLocalRun();
   if (sending) return false;
   if (viewedSessionIsRunning()) {
     setStatus('warn', 'Hermes is still working', 'Steer or queue your draft while this session is running.');
@@ -21143,6 +21375,18 @@ async function askHermes(userText, turnAttachments = [...attachments], turnOptio
   // Declared outside the turn's try block so the terminal error paths can also
   // drain whatever the reveal still holds before the bubble is disposed.
   let streamPacer = null;
+  // The gateway silently retries a rate-limited or at-capacity model, so the
+  // stream just sits on the thinking bubble. After a while with no reply or tool
+  // activity, tell the user it is the model, not the extension.
+  let slowReplyTimer = null;
+  let sawReplyActivity = false;
+  let slowNoticeShown = false;
+  const noteReplyActivity = () => {
+    if (sawReplyActivity) return;
+    sawReplyActivity = true;
+    clearTimeout(slowReplyTimer);
+    if (slowNoticeShown) setStatus('ok', 'Model responding', 'Hermes is replying now.', { translateDetail: false });
+  };
   try {
     let preparedAttachments = await saveImageAttachmentsForTurn(turnAttachments);
     if (!runIsViewed()) throw new Error('Session changed before submission. The original draft is held and was not sent.');
@@ -21326,12 +21570,18 @@ async function askHermes(userText, turnAttachments = [...attachments], turnOptio
     });
     let recoveredImageSources = [];
     let turnImageSources = [];
+    slowReplyTimer = setTimeout(() => {
+      if (sawReplyActivity || !runIsViewed()) return;
+      slowNoticeShown = true;
+      setStatus('warn', 'Still waiting on the model', SLOW_REPLY_DETAIL, { translateDetail: false });
+    }, SLOW_REPLY_NOTICE_MS);
     try {
       answer = await streamSessionChat(
         prompt,
         (partial) => {
           if (!runControlGenerationMatches(turnRunControlGeneration, runControlGeneration)) return;
           liveText = partial || '';
+          if (liveText) noteReplyActivity();
           if (liveText.length < pushedLive) {
             // The stream rewrote its cumulative text (retry/reattach): restart
             // the reveal instead of duplicating what already painted.
@@ -21344,6 +21594,7 @@ async function askHermes(userText, turnAttachments = [...attachments], turnOptio
         },
         (tool) => {
           if (!runControlGenerationMatches(turnRunControlGeneration, runControlGeneration)) return;
+          noteReplyActivity();
           if (runIsViewed()) captureTaskToolEvent(tool).catch((error) => console.warn('[Hermes Browser] Task event persistence failed:', error));
           const activity = normalizeToolActivity(tool);
           const sources = rawGeneratedImageCandidatesFromResult(activity.result);
@@ -21617,6 +21868,7 @@ ${streamError.message}`);
       addMessage('system', `Hermes Browser Extension error: ${error?.message || String(error)}`);
     }
   } finally {
+    clearTimeout(slowReplyTimer);
     if (localSessionStream?.view === streamView) localSessionStream = null;
     if (turnRunControlGeneration === runControlGeneration) {
       activeRunControl = markRunStreamClosed(activeRunControl);
