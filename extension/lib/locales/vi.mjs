@@ -447,6 +447,7 @@ export default Object.freeze({
   "session.opening": "Đang mở {title}",
   "session.origin_refused_title": "Hermes refused this browser origin",
   "session.origin_refused": "Hermes refused this browser origin, {origin}, on a session request and returned no error body. Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
+  "session.long_shared_notice": "This session has {count} messages. Long shared sessions can fall out of sync with other Hermes clients, such as the desktop app, the CLI, or Hermes Web, that write to the same session, so replies can arrive late or out of order. Start a new chat when you can.",
   "session.rail_save_failed": "Không thể lưu đường ray phiên: {error}",
   "session.rename_named": "Đổi tên phiên {title}",
   "settings.language.description": "Chọn ngôn ngữ giao diện.",

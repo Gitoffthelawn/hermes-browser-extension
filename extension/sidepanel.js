@@ -509,6 +509,7 @@ import {
   requiresSessionOwnershipConfirmation,
   sessionOwnershipNotice,
 } from './lib/session-ownership.mjs';
+import { longSessionNoticeDue, rememberLongSessionNotice, LONG_SESSION_NOTICE_THRESHOLD } from './lib/long-session-notice.mjs';
 import {
   RUN_CONTROL_PHASES,
   RUN_CONTROL_REQUEST_TIMEOUT_MS,
@@ -1288,6 +1289,10 @@ let sessionRoutesAvailable = null;
 let sessionLoadRequestId = 0;
 let bottomDockResizeObserver = null;
 const HERMES_BROWSER_INTRO_SEEN_STORAGE_KEY = 'hermesBrowserIntroSeen';
+const LONG_SESSION_NOTICE_STORAGE_KEY = 'hermesBrowserLongSessionNoticeSeen';
+// The session whose long-session notice was already handled in this panel, so
+// frequent saves do not re-read storage once the answer is known.
+let longSessionNoticeHandledId = '';
 let browserIntroSeen = false;
 let browserIntroDismissedForPanel = false;
 let operationToastTimer = null;
@@ -17311,6 +17316,7 @@ async function commitFetchedSessionMessages(result, { sessionId, requestId = nul
     // Media is best-effort.
   }
   renderMessagesFromStorage();
+  void noteLongSharedSessionIfDue();
   return true;
 }
 
@@ -18760,6 +18766,32 @@ async function persistInlineSessionState() {
 async function trimAndSaveMessages() {
   await saveMessagesForActiveScope();
   await persistInlineSessionState();
+  void noteLongSharedSessionIfDue();
+}
+
+// Issues #69, #70 and #76: a long session that other Hermes clients also write
+// to can fall out of sync. Once per session, when the open transcript passes the
+// threshold, add a short note to the transcript that says so.
+async function noteLongSharedSessionIfDue() {
+  const sessionId = String(settings.sessionId || '').trim();
+  if (!sessionId || activeGroupProjection || longSessionNoticeHandledId === sessionId) return;
+  const messageCount = messages.filter((message) => ['user', 'assistant'].includes(message?.role)).length;
+  if (messageCount <= LONG_SESSION_NOTICE_THRESHOLD) return;
+  try {
+    const stored = await browserApi.storage.local.get(LONG_SESSION_NOTICE_STORAGE_KEY);
+    const seen = Array.isArray(stored[LONG_SESSION_NOTICE_STORAGE_KEY]) ? stored[LONG_SESSION_NOTICE_STORAGE_KEY] : [];
+    if (!longSessionNoticeDue({ sessionId, messageCount, seenSessionIds: seen })) {
+      longSessionNoticeHandledId = sessionId;
+      return;
+    }
+    // The user may have switched sessions while storage was answering.
+    if (String(settings.sessionId || '').trim() !== sessionId) return;
+    longSessionNoticeHandledId = sessionId;
+    await browserApi.storage.local.set({ [LONG_SESSION_NOTICE_STORAGE_KEY]: rememberLongSessionNotice(seen, sessionId) });
+    addMessage('system', t('session.long_shared_notice', { count: messageCount.toLocaleString() }), { persist: false });
+  } catch {
+    // Best effort: the note is informational and must never break a save.
+  }
 }
 
 async function loadSettings({ restoreMessages = false } = {}) {
