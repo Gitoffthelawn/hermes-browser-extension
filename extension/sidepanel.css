@@ -4387,6 +4387,14 @@ textarea::-webkit-scrollbar-track { background: transparent; }
   background: rgba(var(--hermes-ink-rgb),0.05);
 }
 .attachment-pill span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-excerpt-notice {
+  flex: 0 0 100%;
+  margin: 0;
+  color: var(--hermes-muted);
+  font-size: calc(11px * var(--hermes-text-zoom, 1));
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
 .attachment-pill button { border: 0; background: transparent; color: var(--hermes-ink); padding: 0 2px; min-width: 16px; }
 textarea, input, select {
   width: 100%;

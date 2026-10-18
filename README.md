@@ -129,6 +129,8 @@ API_SERVER_KEY=<your-api-server-key>
 API_SERVER_CORS_ORIGINS=chrome-extension://<your-extension-id>
 ```
 
+On Firefox the extension origin is `moz-extension://<extension-uuid>`, not `chrome-extension://<id>`. Use that form in `API_SERVER_CORS_ORIGINS` instead. Copy the exact value from Settings → Support diagnostics (**Extension origin**). Firefox assigns the UUID when the extension is installed, so copy it again after a reinstall.
+
 Start or restart the gateway:
 
 ```bash
@@ -224,7 +226,7 @@ curl http://127.0.0.1:8642/health
 curl http://<trusted-remote-host>:8642/health
 ```
 
-If `/v1/models` fails, check `API_SERVER_KEY`, the extension's stored API key/browser token, and `API_SERVER_CORS_ORIGINS`. For remote mode, the browser extension origin (`chrome-extension://<id>`) must be allowlisted on the Hermes machine.
+If `/v1/models` fails, check `API_SERVER_KEY`, the extension's stored API key/browser token, and `API_SERVER_CORS_ORIGINS`. For remote mode, the browser extension origin (`chrome-extension://<id>`, or `moz-extension://<extension-uuid>` on Firefox) must be allowlisted on the Hermes machine. A session request that fails with HTTP 403 and no error body is the same CORS gate. The side panel then names the exact origin and the `API_SERVER_CORS_ORIGINS=` line to add to the Hermes `.env`, and your draft stays in the composer.
 
 If the browser only reports a failed fetch, it cannot prove whether the gateway refused the connection, blocked the request, or received a turn before the response was lost. The side panel keeps the draft and offers **Check connection**. It never resends automatically. Check the session history before manually sending again, since a dropped response can leave delivery unconfirmed and a second send could duplicate the turn. An answered `/health` probe confirms reachability at probe time, not that the earlier turn failed because of CORS.
 

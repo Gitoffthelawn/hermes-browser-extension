@@ -14,6 +14,7 @@ import {
   pasteArtifactBaseName,
   pasteArtifactExceedsLocalLimit,
   pasteArtifactExcerpt,
+  pasteArtifactShortening,
 } from '../extension/lib/paste-artifact.mjs';
 
 test('classifyPastedText flags pastes over the character threshold', () => {
@@ -92,4 +93,26 @@ test('pasteArtifactExceedsLocalLimit bounds local preservation at the ceiling', 
   assert.equal(pasteArtifactExceedsLocalLimit('a'.repeat(PASTE_ARTIFACT_MAX_CHARS + 1), { maxChars: PASTE_ARTIFACT_MAX_CHARS + 10 }), false);
   assert.equal(pasteArtifactExceedsLocalLimit(''), false);
   assert.equal(pasteArtifactExceedsLocalLimit(null), false);
+});
+
+test('pasteArtifactShortening names the omitted middle only when the excerpt really shortens the paste', () => {
+  const longText = 'H'.repeat(2_500) + 'M'.repeat(50_000) + 'T'.repeat(2_000);
+  const artifact = { ...buildPasteArtifact(longText), id: 'a1' };
+  const shortening = pasteArtifactShortening(artifact);
+  assert.equal(shortening.head, PASTE_ARTIFACT_EXCERPT_HEAD_CHARS);
+  assert.equal(shortening.tail, PASTE_ARTIFACT_EXCERPT_TAIL_CHARS);
+  assert.equal(shortening.total, longText.length);
+  assert.equal(shortening.omitted, longText.length - PASTE_ARTIFACT_EXCERPT_HEAD_CHARS - PASTE_ARTIFACT_EXCERPT_TAIL_CHARS);
+});
+
+test('pasteArtifactShortening stays silent for pastes the excerpt sends whole', () => {
+  const fits = buildPasteArtifact('x'.repeat(PASTE_ARTIFACT_EXCERPT_HEAD_CHARS + PASTE_ARTIFACT_EXCERPT_TAIL_CHARS));
+  assert.equal(pasteArtifactShortening(fits), null);
+  const mediumPaste = buildPasteArtifact('y'.repeat(3_000));
+  assert.equal(pasteArtifactShortening(mediumPaste), null, 'a paste under the excerpt budget is sent in full');
+});
+
+test('pasteArtifactShortening ignores attachments that are not paste artifacts', () => {
+  assert.equal(pasteArtifactShortening({ kind: 'file', source: 'picker', text: 'z'.repeat(50_000) }), null);
+  assert.equal(pasteArtifactShortening(null), null);
 });

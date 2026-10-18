@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 
 const sidepanel = readFileSync(new URL('../extension/sidepanel.js', import.meta.url), 'utf8');
 const composerDraft = readFileSync(new URL('../extension/lib/composer-draft.mjs', import.meta.url), 'utf8');
+const sidepanelCss = readFileSync(new URL('../extension/sidepanel.css', import.meta.url), 'utf8');
 
 test('composer paste listener routes non-image pastes through handlePasteText', () => {
   const listener = sidepanel.match(/els\.input\.addEventListener\('paste',[\s\S]*?\n {2}\}\);/)?.[0] || '';
@@ -66,4 +67,13 @@ test('the paste status says only an excerpt is sent and the full text stays loca
   assert.match(fn, /excerpt/i);
   assert.match(fn, /stays on this device|remains local|stays local/i);
   assert.doesNotMatch(fn, /full text is kept and travels/);
+});
+
+test('the composer shows a visible notice for every paste that is sent as a shortened excerpt', () => {
+  const fn = sidepanel.match(/function renderAttachments\(\) \{[\s\S]*?\n\}\n/)?.[0] || '';
+  assert.match(fn, /pasteArtifactShortening\(attachment\)/);
+  assert.match(fn, /attachments\.paste_excerpt_notice/);
+  assert.match(fn, /setAttribute\('role', 'note'\)/);
+  assert.match(fn, /attachment-excerpt-notice/);
+  assert.match(sidepanelCss, /\.attachment-excerpt-notice \{/);
 });

@@ -187,8 +187,13 @@ test('creating the browser session never reuses the colliding default title', ()
   const ensureBody = sidepanelSource.match(/async function ensureHermesSession\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
   assert.match(ensureBody, /isDefaultBrowserSessionTitle\(settings\.sessionTitle\)/, 'the default title must be detected before the create');
   assert.match(ensureBody, /makeBrowserSessionTitle\(\)/);
+  // The GET/POST sequence is shared with session-materialization.mjs. The side
+  // panel mints the unique title in its pre-create hook, and the module runs
+  // that hook after the lookup and before the create POST.
+  assert.match(ensureBody, /beforeCreate:\s*async \(\) => \{[\s\S]*?makeBrowserSessionTitle\(\)/);
+  const materialization = readFileSync(new URL('../extension/lib/session-materialization.mjs', import.meta.url), 'utf8');
   assert.ok(
-    ensureBody.indexOf('makeBrowserSessionTitle()') < ensureBody.indexOf("apiFetch('/api/sessions'"),
+    materialization.indexOf('await beforeCreate()') < materialization.indexOf("apiFetch('/api/sessions'"),
     'a unique title must be minted before the create POST',
   );
 });

@@ -1065,10 +1065,15 @@ test('remote session route 403s classify as API authorization failures', () => {
 test('sidepanel routes session creation failures through remote setup diagnostics', () => {
   const source = readFileSync(new URL('../extension/sidepanel.js', import.meta.url), 'utf8');
 
+  // The GET/POST sequence lives in session-materialization.mjs; the side panel
+  // passes createSessionRouteError as its failure handler.
+  const materialization = readFileSync(new URL('../extension/lib/session-materialization.mjs', import.meta.url), 'utf8');
+
   assert.match(source, /function createSessionRouteError\(/);
   assert.match(source, /classifyRemoteGatewaySetup\(\{[\s\S]*?healthOk:\s*true[\s\S]*?status[\s\S]*?body/s);
-  assert.match(source, /throw createSessionRouteError\(\{[\s\S]*?Inspect Hermes Browser Extension session[\s\S]*?response:\s*getResponse/s);
-  assert.match(source, /throw createSessionRouteError\(\{[\s\S]*?Create Hermes Browser Extension session[\s\S]*?response:\s*createResponse/s);
+  assert.match(source, /materializeSessionRoute\(\{[\s\S]*?failure:\s*createSessionRouteError/s);
+  assert.match(materialization, /throw failure\(failureDetails\(\{[\s\S]*?Inspect Hermes Browser Extension session[\s\S]*?response:\s*lookup/s);
+  assert.match(materialization, /throw failure\(failureDetails\(\{[\s\S]*?Create Hermes Browser Extension session[\s\S]*?response:\s*created/s);
   assert.doesNotMatch(source, /Could not create Hermes Browser Extension session \(\$\{createResponse\.status\}\):/);
 });
 

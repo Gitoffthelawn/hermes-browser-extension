@@ -32,6 +32,8 @@ API_SERVER_KEY=<your-api-server-key>
 API_SERVER_CORS_ORIGINS=chrome-extension://<your-extension-id>
 ```
 
+On Firefox the extension origin is `moz-extension://<extension-uuid>`, not `chrome-extension://<id>`. Set `API_SERVER_CORS_ORIGINS=moz-extension://<extension-uuid>` with the exact value shown as **Extension origin** in Settings → Support diagnostics. Firefox assigns the UUID when the extension is installed, so copy it again after a reinstall. If a session request fails with HTTP 403 and no error body, this origin is missing from the list; the side panel shows the exact line to add.
+
 Use a private same-LAN/Tailscale/VPN host with HTTP, or put the API server behind a trusted HTTPS reverse proxy for public/proxied access. Do **not** expose the Hermes API server naked to the public internet. The Hermes API server can access the real Hermes runtime and tools.
 
 Examples:

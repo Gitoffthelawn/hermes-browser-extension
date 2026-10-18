@@ -77,7 +77,6 @@ import {
   sanitizeGatewayDiagnosticText,
   shouldRequireModelLock,
   shouldReuseImageGenerationActivity,
-  shouldStopSessionPaging,
   shouldFallbackToWebSpeechForTranscription,
   shouldOpenVoiceDictationPageForSpeechError,
   shouldUseLocalDashboardAudioTranscription,
@@ -184,6 +183,7 @@ import {
   isPasteArtifact,
   pasteArtifactExceedsLocalLimit,
   pasteArtifactExcerpt,
+  pasteArtifactShortening,
 } from './lib/paste-artifact.mjs';
 import {
   APPEARANCE_THEMES,
@@ -235,6 +235,8 @@ import { classicThinkingFace, createToolCallGroup, updateToolCallGroup, groupToo
 import { sessionIsLiveFromStatus, shouldAttachLiveSession, sessionToolDisplayMessages, sessionLiveRoster } from './lib/live-session-attach.mjs';
 import { appendUserImageAttachments, extractHistoryMediaAttachments, normalizeUserImageAttachments, preserveUserImageAttachments, rawGeneratedImageCandidatesFromResult, resolveImageSource, resolvedGeneratedImageSources, resolvedGeneratedImageSourcesFromMessages } from './lib/image-render.mjs';
 import { createRestFollowState, messageCountFromSessionPayload, restFollowDue, restFollowStep } from './lib/session-follow.mjs';
+import { collectSessionPages, DASHBOARD_SESSION_MAX_PAGES, DASHBOARD_SESSION_PAGE_LIMIT } from './lib/session-paging.mjs';
+import { materializeSessionRoute, sessionRouteError } from './lib/session-materialization.mjs';
 import { createUserFileAttachment, createPageContextAttachment, appendUserFileAttachments, stageUserFiles, attachmentFileContext, attachmentSourceKey, rememberUserFileAttachments, restoreUserFileAttachments, openUserFileAttachment, downloadUserFileAttachment } from './lib/user-file-attachments.mjs';
 import { mediaDisplayName, mediaSourcePlan, probeArtifactFileSource, resolveArtifactDownloadSource, resolveArtifactFileSource } from './lib/media-source.mjs';
 import { classifyMediaKind, resolveMediaFetchPlan } from './lib/media-persistence.mjs';
@@ -511,6 +513,7 @@ import {
   requiresSessionOwnershipConfirmation,
   sessionOwnershipNotice,
 } from './lib/session-ownership.mjs';
+import { longSessionNoticeDue, rememberLongSessionNotice, LONG_SESSION_NOTICE_THRESHOLD } from './lib/long-session-notice.mjs';
 import {
   RUN_CONTROL_PHASES,
   RUN_CONTROL_REQUEST_TIMEOUT_MS,
@@ -584,7 +587,7 @@ import {
   transportRequiresApiKey,
   transportUsesDashboardTicket,
 } from './lib/connection-modes.mjs';
-import { CONNECTION_ACTIONS, connectionActionForSettings } from './lib/connection-dispatch.mjs';
+import { CONNECTION_ACTIONS, connectionActionForSettings, unsavedGatewayUrlForConnect } from './lib/connection-dispatch.mjs';
 import { assertCloudAgentTabStillMatches, resolveActiveCloudAgentTab } from './lib/cloud-agent-tab.mjs';
 import {
   CONNECTION_STATES,
@@ -1294,6 +1297,10 @@ let sessionRoutesAvailable = null;
 let sessionLoadRequestId = 0;
 let bottomDockResizeObserver = null;
 const HERMES_BROWSER_INTRO_SEEN_STORAGE_KEY = 'hermesBrowserIntroSeen';
+const LONG_SESSION_NOTICE_STORAGE_KEY = 'hermesBrowserLongSessionNoticeSeen';
+// The session whose long-session notice was already handled in this panel, so
+// frequent saves do not re-read storage once the answer is known.
+let longSessionNoticeHandledId = '';
 let browserIntroSeen = false;
 let browserIntroDismissedForPanel = false;
 let operationToastTimer = null;
@@ -7833,6 +7840,23 @@ function renderAttachments() {
 
     pill.append(icon, label, close);
     els.attachmentList.appendChild(pill);
+  }
+  // Issue #94: a long paste is sent as a head and tail excerpt. Say so in the
+  // composer for as long as the paste is attached, not only in a status line
+  // that disappears, so the user knows what Hermes will receive.
+  for (const attachment of attachments) {
+    const shortening = pasteArtifactShortening(attachment);
+    if (!shortening) continue;
+    const note = document.createElement('p');
+    note.className = 'attachment-excerpt-notice';
+    note.setAttribute('role', 'note');
+    note.textContent = `${attachment.label}: ${t('attachments.paste_excerpt_notice', {
+      head: shortening.head.toLocaleString(),
+      tail: shortening.tail.toLocaleString(),
+      total: shortening.total.toLocaleString(),
+      omitted: shortening.omitted.toLocaleString(),
+    })}`;
+    els.attachmentList.appendChild(note);
   }
   updateComposerBusyState();
 }
@@ -15973,38 +15997,41 @@ async function loadDashboardSessionsForProfile(profile = '') {
   });
   const token = extractDashboardSessionToken(await rootResponse.text());
   if (!token) throw Object.assign(new Error('no-dashboard-session-token'), { status: rootResponse.status || 0 });
-  const limit = 100;
-  let offset = 0;
-  const merged = [];
-  for (let page = 0; page < 5; page += 1) {
-    const url = `${base}/api/sessions?limit=${limit}&offset=${offset}&order=recent${profile ? `&profile=${encodeURIComponent(profile)}` : ''}`;
-    const response = await fetch(url, {
-      headers: { Accept: 'application/json', 'X-Hermes-Session-Token': token },
-      credentials: 'include',
-      cache: 'no-store',
-      signal: typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(3_000) : undefined,
-    });
-    if (!response.ok) {
-      if (page === 0) throw Object.assign(new Error(`dashboard-sessions-${response.status}`), { status: response.status });
-      break;
-    }
-    const payload = await response.json().catch(() => null);
-    const rows = Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload?.sessions)
-        ? payload.sessions
-        : Array.isArray(payload?.data)
-          ? payload.data
-          : Array.isArray(payload?.results)
-            ? payload.results
-            : [];
-    merged.push(...rows);
-    const hasMore = Boolean(payload?.has_more ?? payload?.hasMore ?? payload?.pagination?.hasMore);
-    const total = Number(payload?.total || payload?.pagination?.total || 0);
-    offset += rows.length;
-    if (shouldStopSessionPaging({ rowCount: rows.length, offset, total, hasMore }) || rows.length < limit) break;
-  }
-  return merged;
+  // Paging follows the server's has_more/total answer. A short page is not the
+  // end of the list; collectSessionPages stops at the page cap or on a page that
+  // adds nothing new.
+  return collectSessionPages({
+    limit: DASHBOARD_SESSION_PAGE_LIMIT,
+    maxPages: DASHBOARD_SESSION_MAX_PAGES,
+    fetchPage: async ({ offset, limit, page }) => {
+      const url = `${base}/api/sessions?limit=${limit}&offset=${offset}&order=recent${profile ? `&profile=${encodeURIComponent(profile)}` : ''}`;
+      const response = await fetch(url, {
+        headers: { Accept: 'application/json', 'X-Hermes-Session-Token': token },
+        credentials: 'include',
+        cache: 'no-store',
+        signal: typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(3_000) : undefined,
+      });
+      if (!response.ok) {
+        if (page === 0) throw Object.assign(new Error(`dashboard-sessions-${response.status}`), { status: response.status });
+        return null;
+      }
+      const payload = await response.json().catch(() => null);
+      const rows = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.sessions)
+          ? payload.sessions
+          : Array.isArray(payload?.data)
+            ? payload.data
+            : Array.isArray(payload?.results)
+              ? payload.results
+              : [];
+      return {
+        rows,
+        hasMore: Boolean(payload?.has_more ?? payload?.hasMore ?? payload?.pagination?.hasMore),
+        total: Number(payload?.total || payload?.pagination?.total || 0),
+      };
+    },
+  });
 }
 
 async function loadSessions({ quiet = false } = {}) {
@@ -17362,6 +17389,7 @@ async function commitFetchedSessionMessages(result, { sessionId, requestId = nul
     // Media is best-effort.
   }
   renderMessagesFromStorage();
+  void noteLongSharedSessionIfDue();
   return true;
 }
 
@@ -18831,6 +18859,35 @@ async function persistInlineSessionState() {
 async function trimAndSaveMessages() {
   await saveMessagesForActiveScope();
   await persistInlineSessionState();
+  void noteLongSharedSessionIfDue();
+}
+
+// Issues #69, #70 and #76: a long session that other Hermes clients also write
+// to can fall out of sync. Once per session, when the open transcript passes the
+// threshold, add a short note to the transcript that says so.
+async function noteLongSharedSessionIfDue() {
+  const sessionId = String(settings.sessionId || '').trim();
+  if (!sessionId || activeGroupProjection || longSessionNoticeHandledId === sessionId) return;
+  // The open transcript only describes this session once it was loaded for it.
+  // During a session switch the old transcript can still be in memory.
+  if (loadedSessionContextEstimate?.sessionId !== sessionId) return;
+  const messageCount = messages.filter((message) => ['user', 'assistant'].includes(message?.role)).length;
+  if (messageCount <= LONG_SESSION_NOTICE_THRESHOLD) return;
+  try {
+    const stored = await browserApi.storage.local.get(LONG_SESSION_NOTICE_STORAGE_KEY);
+    const seen = Array.isArray(stored[LONG_SESSION_NOTICE_STORAGE_KEY]) ? stored[LONG_SESSION_NOTICE_STORAGE_KEY] : [];
+    if (!longSessionNoticeDue({ sessionId, messageCount, seenSessionIds: seen })) {
+      longSessionNoticeHandledId = sessionId;
+      return;
+    }
+    // The user may have switched sessions while storage was answering.
+    if (String(settings.sessionId || '').trim() !== sessionId) return;
+    longSessionNoticeHandledId = sessionId;
+    await browserApi.storage.local.set({ [LONG_SESSION_NOTICE_STORAGE_KEY]: rememberLongSessionNotice(seen, sessionId) });
+    addMessage('system', t('session.long_shared_notice', { count: messageCount.toLocaleString() }), { persist: false });
+  } catch {
+    // Best effort: the note is informational and must never break a save.
+  }
 }
 
 async function loadSettings({ restoreMessages = false } = {}) {
@@ -20376,9 +20433,20 @@ function safeHttpBodySnippet(text = '', limit = 500) {
     .trim();
 }
 
-function createSessionRouteError({ action, response, body = '' } = {}) {
+function createSessionRouteError({ action, response, body = '', originRefusal = null } = {}) {
   const status = response?.status || 0;
   const actionText = action || 'Hermes session request';
+  if (originRefusal) {
+    // The API server refused this extension origin before any chat request was
+    // sent. Name the origin and the exact .env line; never reclassify it as a
+    // remote setup or authorization problem.
+    return sessionRouteError({
+      action: actionText,
+      status,
+      message: t('session.origin_refused', { origin: originRefusal.origin, envLine: originRefusal.envLine }),
+      originRefusal,
+    });
+  }
   const diagnostic = isRemoteMode()
     ? classifyRemoteGatewaySetup({
         url: settings.gatewayUrl,
@@ -20392,16 +20460,21 @@ function createSessionRouteError({ action, response, body = '' } = {}) {
   const message = knownRemoteDiagnostic
     ? `${knownRemoteDiagnostic.title}: ${knownRemoteDiagnostic.detail}`
     : `${actionText} failed (${status}): ${fallbackDetail}`;
-  const error = new Error(message);
-  error.name = 'HermesSessionRouteError';
-  error.httpStatus = status;
-  error.sessionRouteAction = actionText;
-  error.remoteDiagnostic = knownRemoteDiagnostic;
-  error.hermesSetupFailure = Boolean(knownRemoteDiagnostic)
-    || status === 401
-    || status === 403
-    || status === 0;
-  return error;
+  return sessionRouteError({
+    action: actionText,
+    status,
+    message,
+    remoteDiagnostic: knownRemoteDiagnostic,
+  });
+}
+
+// A session route refused by the API server's CORS gate (issue #89). This is a
+// setup note for this session only: it does not touch the connection state or
+// the composer draft, and it is not stored in the transcript.
+function reportSessionOriginRefusal(error) {
+  const detail = String(error?.message || '');
+  setStatus('warn', t('session.origin_refused_title'), detail, { translateTitle: false, translateDetail: false });
+  addMessage('system', detail, { persist: false });
 }
 
 async function ensureHermesSession() {
@@ -20417,13 +20490,40 @@ async function ensureHermesSession() {
     await browserApi.storage.local.set({ hermesBrowserSettings: settings });
   }
   const sessionPath = `/api/sessions/${encodeSessionId(settings.sessionId)}`;
-  const getResponse = await apiFetch(sessionPath, { method: 'GET' });
-  if (getResponse.ok) {
-    sessionRoutesAvailable = true;
+  const route = await materializeSessionRoute({
+    apiFetch,
+    sessionPath,
+    extensionOrigin: currentExtensionOrigin(),
+    failure: createSessionRouteError,
+    // Session titles are unique on the gateway, and the bare default title is
+    // already owned by this extension's long-lived session: creating a new session
+    // with it is refused (invalid_title) and the chat never starts. Mint a unique
+    // title first — auto-naming still treats the stamped title as a default.
+    beforeCreate: async () => {
+      if (!String(settings.sessionTitle || '').trim() || isDefaultBrowserSessionTitle(settings.sessionTitle)) {
+        settings = { ...settings, sessionTitle: makeBrowserSessionTitle() };
+        await browserApi.storage.local.set({ hermesBrowserSettings: settings });
+      }
+    },
+    createBody: () => ({
+      id: settings.sessionId,
+      title: settings.sessionTitle,
+      source: settings.sessionSource || DEFAULT_SETTINGS.sessionSource,
+      model: currentModelRequestId(),
+      provider: currentModelProviderSlug() || undefined,
+      system_prompt: currentHermesBrowserSystemPrompt(),
+    }),
+  });
+  if (route.outcome === 'unavailable') {
+    sessionRoutesAvailable = false;
+    return false;
+  }
+  sessionRoutesAvailable = true;
+  if (route.outcome === 'present') {
     // Newer gateways refuse a REST turn on a session stored under any source
     // other than api_server/bot_room ("permission denied"). Re-label it once
     // before sending; the Browser still recognises its sessions by id prefix.
-    const repair = restTurnSourceRepair(await readJsonResponse(getResponse).catch(() => ({})));
+    const repair = restTurnSourceRepair(await readJsonResponse(route.response).catch(() => ({})));
     await gatewayQuirks.load();
     const repairGatewayUrl = settings.gatewayUrl;
     if (repair && gatewayQuirks.beginProbe(repairGatewayUrl, GATEWAY_QUIRK.SESSION_SOURCE_PATCH)) {
@@ -20441,49 +20541,7 @@ async function ensureHermesSession() {
         gatewayQuirks.endProbe(repairGatewayUrl, GATEWAY_QUIRK.SESSION_SOURCE_PATCH);
       }
     }
-    return true;
   }
-  if (getResponse.status !== 404) {
-    const text = await getResponse.text();
-    throw createSessionRouteError({
-      action: 'Inspect Hermes Browser Extension session',
-      response: getResponse,
-      body: text,
-    });
-  }
-
-  // Session titles are unique on the gateway, and the bare default title is
-  // already owned by this extension's long-lived session: creating a new session
-  // with it is refused (invalid_title) and the chat never starts. Mint a unique
-  // title first — auto-naming still treats the stamped title as a default.
-  if (!String(settings.sessionTitle || '').trim() || isDefaultBrowserSessionTitle(settings.sessionTitle)) {
-    settings = { ...settings, sessionTitle: makeBrowserSessionTitle() };
-    await browserApi.storage.local.set({ hermesBrowserSettings: settings });
-  }
-  const createResponse = await apiFetch('/api/sessions', {
-    method: 'POST',
-    body: JSON.stringify({
-      id: settings.sessionId,
-      title: settings.sessionTitle,
-      source: settings.sessionSource || DEFAULT_SETTINGS.sessionSource,
-      model: currentModelRequestId(),
-      provider: currentModelProviderSlug() || undefined,
-      system_prompt: currentHermesBrowserSystemPrompt(),
-    }),
-  });
-  if (createResponse.status === 404 || createResponse.status === 405) {
-    sessionRoutesAvailable = false;
-    return false;
-  }
-  if (!createResponse.ok && createResponse.status !== 409) {
-    const text = await createResponse.text();
-    throw createSessionRouteError({
-      action: 'Create Hermes Browser Extension session',
-      response: createResponse,
-      body: text,
-    });
-  }
-  sessionRoutesAvailable = true;
   return true;
 }
 
@@ -21546,8 +21604,43 @@ async function connectTicketTransport({ cloud = false } = {}) {
   }
 }
 
+// Connect to Hermes must use the gateway URL the panel shows. Test connection
+// saves the form before it runs, but Connect did not, so a URL typed into the
+// settings form was ignored until Save. Adopt that URL in memory for this
+// attempt; it is written to storage only when the connection succeeds, as before.
+function adoptUnsavedGatewayUrlForConnect() {
+  const nextUrl = unsavedGatewayUrlForConnect({
+    savedUrl: settings.gatewayUrl,
+    typedUrl: els.gatewayUrlInput?.value,
+    savedConnectionMode: settings.connectionMode,
+    formConnectionMode: els.connectionModeInput?.value || settings.connectionMode,
+    savedGatewayMode: settings.gatewayMode,
+    formGatewayMode: els.gatewayModeInput?.value || settings.gatewayMode,
+  });
+  if (!nextUrl) return;
+  settings = {
+    ...settings,
+    gatewayUrl: nextUrl,
+    trustedDashboardOrigin: isTrustedDashboardOrigin(nextUrl, settings.trustedDashboardOrigin)
+      ? settings.trustedDashboardOrigin
+      : '',
+  };
+  // A live socket and any in-flight attempt belong to the previous URL.
+  connectionController.cancel('connection settings changed');
+  try {
+    remoteWsConnection?.client?.close();
+  } catch {
+    /* ignore */
+  }
+  remoteWsConnection = null;
+  profileWsConnection?.client?.close?.();
+  profileWsConnection = null;
+  if (!settings.trustedDashboardOrigin) trustedDashboardTabId = null;
+}
+
 async function connectToHermes() {
   settings = migrateConnectionSettings(settings);
+  adoptUnsavedGatewayUrlForConnect();
   const action = connectionActionForSettings(settings);
   if (action === CONNECTION_ACTIONS.CLOUD_ACTIVE_TAB_ATTACH) return connectTicketTransport({ cloud: true });
   if (action === CONNECTION_ACTIONS.REMOTE_DASHBOARD_ATTACH) return connectTicketTransport({ cloud: false });
@@ -21792,6 +21885,12 @@ async function askHermes(userText, turnAttachments = [...attachments], turnOptio
     activeRunControl = markRunTerminal(activeRunControl, 'failed');
     sending = false;
     updateComposerBusyState();
+    if (error?.originRefused) {
+      // Refused before the turn was sent: the composer still holds the draft
+      // (it is cleared only after this step) and the connection stays as it was.
+      reportSessionOriginRefusal(error);
+      return false;
+    }
     setStatus('error', 'Could not start Hermes session', error?.message || String(error), { translateDetail: false });
     return false;
   }
@@ -22320,6 +22419,22 @@ ${streamError.message}`);
           ? 'Hermes compacted the session and Browser adopted the acknowledged successor when provided.'
           : 'This runtime could not recover the session automatically. Start a new session, then resend the preserved draft.';
         addMessage('system', `Session context reached its compression ceiling. ${recoveryDetail} ${replayDetail}`);
+        return didSend;
+      }
+      if (error?.originRefused) {
+        // The session route was refused before the chat request, so the turn
+        // was not delivered: restore the draft and leave the connection alone.
+        if (!turnOptions.preserveComposer && !els.input.value.trim() && !attachments.length) {
+          els.input.value = commentPack.consumed ? (commentPack.displayUserText || '') : userText;
+          attachments = commentPack.consumed
+            ? [...turnAttachments].filter((item) => item?.source !== 'page-annotations')
+            : [...turnAttachments];
+          renderAttachments();
+          renderSkillSuggestions();
+          renderContextWindow('');
+          persistCurrentComposerDraft({ immediate: true });
+        }
+        reportSessionOriginRefusal(error);
         return didSend;
       }
       if (error?.remoteDiagnostic && applyRemoteDiagnostic(error.remoteDiagnostic, { statusKind: 'error' })) {
