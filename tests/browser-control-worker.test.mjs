@@ -456,6 +456,144 @@ test('Phase 6 approval grants require a trusted extension sender and bind exact 
   });
 });
 
+test('a tab switch waits for approval and is granted through the worker even though it names another tab', async () => {
+  const storage = memoryStorage({ hermesBrowserSettings: settings() });
+  const transport = connector();
+  const approvals = createBrowserControlApprovalStore();
+  const switched = [];
+  const executor = createBrowserControlExecutor({
+    adapter: {
+      contract: { enabled: true, actions: ['browser_tab_activate'] },
+      async execute(action, args) {
+        switched.push(Number(args.tab_id));
+        return { status: 'tab-activated' };
+      },
+    },
+    approvals,
+    refs: createBrowserControlRefStore(),
+  });
+  const worker = createControllerServiceWorker({
+    storageArea: storage.area,
+    connector: transport,
+    product: PRODUCT,
+    randomUUID: uuids(),
+    extensionOrigin: 'chrome-extension://fixture',
+    approvalStore: approvals,
+    executeBrowserCommand: (frame, context) => executor.execute(frame, context),
+  });
+  await worker.boot();
+  const ready = await ownedReady(worker, 81);
+  const leased = await worker.handleMessage({
+    type: CONTROLLER_WORKER_MESSAGES.leaseAcquire,
+    kind: TAB_LEASE_KINDS.THIS_TAB,
+    ownership: TAB_LEASE_OWNERSHIPS.OWNED,
+    ownerId: worker.status().controllerId,
+    tabIds: [82],
+  }, extensionSender());
+  assert.equal(leased.ok, true, JSON.stringify(leased));
+  await transport.connections[0].emit({
+    method: 'browser.controller.command',
+    params: {
+      command_id: 'switch-82',
+      action: 'browser_tab_activate',
+      arguments: { tab_id: 82 },
+      tab_id: 81,
+      document_generation: ready.documentGeneration,
+    },
+  });
+  await settle();
+  const pending = worker.status().pendingApproval;
+  assert.equal(pending?.action, 'browser_tab_activate', JSON.stringify(worker.status()));
+  assert.equal(pending.reason, 'Switch your view to this tab?');
+  // The request is bound to the tab the command ran on, which is the tab the worker's lease check covers,
+  // and to the tab it switches to, so the grant cannot be spent on another one.
+  assert.equal(pending.tabId, 81);
+  assert.equal(pending.binding, 'tab:82');
+  assert.deepEqual(switched, []);
+  assert.equal((await worker.handleMessage({
+    type: CONTROLLER_WORKER_MESSAGES.approvalGrant,
+    ...pending,
+  }, extensionSender())).ok, true);
+  await settle();
+  assert.deepEqual(switched, [82]);
+  assert.deepEqual(transport.connections[0].sent.at(-1).params, {
+    command_id: 'switch-82',
+    tab_id: 81,
+    ok: true,
+    result: { status: 'tab-activated' },
+  });
+});
+
+async function waitForPendingApproval(worker, attempts = 200) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const pending = worker.status().pendingApproval;
+    if (pending) return pending;
+    await settle();
+  }
+  assert.fail(`no approval was requested: ${JSON.stringify(worker.status())}`);
+  return null;
+}
+
+test('a batch click that needs approval after its own navigation is granted through the worker under the new document generation', async () => {
+  const storage = memoryStorage({ hermesBrowserSettings: settings() });
+  const transport = connector();
+  const approvals = createBrowserControlApprovalStore();
+  const clicked = [];
+  let workerRef = null;
+  const adapter = {
+    contract: { enabled: true, actions: ['browser_batch', 'browser_navigate', 'browser_click', 'browser_snapshot'] },
+    inspect: async () => ({ currentUrl: 'https://example.test/start', hasUnsavedContent: false }),
+    settle: async () => ({ navigated: true, url: 'https://example.test/next', title: 'Next', timedOut: false }),
+    async execute(action, args) {
+      if (action === 'browser_navigate') {
+        // Chrome reports the navigation, then the new document's content script announces itself.
+        await workerRef.handleTabUpdated(81, { status: 'loading' });
+        await workerRef.handleMessage({ type: CONTROLLER_WORKER_MESSAGES.documentReady }, extensionSender({ tabId: 81 }));
+        return { navigated: true, url: 'https://example.test/next', title: 'Next' };
+      }
+      if (action === 'browser_click') {
+        clicked.push({ x: args.x, y: args.y });
+        return { status: 'clicked' };
+      }
+      return { title: 'Next', url: 'https://example.test/next', text: '', nodes: [] };
+    },
+  };
+  const executor = createBrowserControlExecutor({ adapter, approvals, refs: createBrowserControlRefStore() });
+  const worker = createControllerServiceWorker({
+    storageArea: storage.area,
+    connector: transport,
+    product: PRODUCT,
+    randomUUID: uuids(),
+    extensionOrigin: 'chrome-extension://fixture',
+    approvalStore: approvals,
+    executeBrowserCommand: (frame, context) => executor.execute(frame, context),
+  });
+  workerRef = worker;
+  await worker.boot();
+  const ready = await ownedReady(worker, 81);
+  const connection = transport.connections[0];
+  await connection.emit({
+    method: 'browser.controller.command',
+    params: {
+      command_id: 'batch-nav-click',
+      action: 'browser_batch',
+      arguments: { actions: [{ action: 'navigate', url: 'https://example.test/next' }, { action: 'click', x: 10, y: 20 }] },
+    },
+  });
+  const pending = await waitForPendingApproval(worker);
+  assert.equal(pending.commandId, 'batch-nav-click');
+  assert.equal(pending.action, 'browser_click');
+  // The click runs on the document the navigation produced, so the request names that one.
+  assert.ok(pending.documentGeneration > ready.documentGeneration, JSON.stringify(pending));
+  const granted = await worker.handleMessage({ type: CONTROLLER_WORKER_MESSAGES.approvalGrant, ...pending }, extensionSender());
+  assert.equal(granted.ok, true, JSON.stringify(granted));
+  const terminal = await waitForTerminal(connection, 'batch-nav-click');
+  assert.equal(terminal.ok, true, JSON.stringify(terminal));
+  assert.equal(terminal.result.status, 'completed');
+  assert.equal(terminal.result.completed, 2);
+  assert.deepEqual(clicked, [{ x: 10, y: 20 }]);
+});
+
 test('recoverable reconnect preserves a paused approval without auto-approving it', async () => {
   const fixture = await waitingApprovalWorker();
   fixture.transport.connections[0].disconnect('recoverable approval reconnect');
@@ -625,6 +763,46 @@ test('Phase 6 worker adopts created tabs and releases closed tabs under controll
   await settle();
   assert.deepEqual(worker.status().leasedTabIds, [911]);
   assert.deepEqual(calls[1].context.ownedTabIds, [911, 912]);
+});
+
+test('a tab Hermes opens becomes the Show tab target, is persisted, and survives a restart', async () => {
+  const storage = memoryStorage({ hermesBrowserSettings: settings() });
+  const createWorker = (transport) => createControllerServiceWorker({
+    storageArea: storage.area,
+    connector: transport,
+    product: PRODUCT,
+    randomUUID: uuids(),
+    extensionOrigin: 'chrome-extension://fixture',
+    executeBrowserCommand: async (frame) => ({
+      ok: true,
+      result: frame.action === 'browser_tab_create'
+        ? { tab: { id: 912, windowId: 2, active: false, url: 'https://example.test/new' } }
+        : { status: 'ok' },
+    }),
+  });
+  const transport = connector();
+  const worker = createWorker(transport);
+  await worker.boot();
+  const ready = await ownedReady(worker, 911, { windowId: 2 });
+  await transport.connections[0].emit({
+    method: 'browser.controller.command',
+    params: {
+      command_id: 'create-background',
+      action: 'browser_tab_create',
+      arguments: { url: 'https://example.test/new', active: true, lease_kind: TAB_LEASE_KINDS.TASK_SET, task_set_id: 'task-912' },
+      tab_id: 911,
+      document_generation: ready.documentGeneration,
+    },
+  });
+  await settle();
+  assert.equal(transport.connections[0].sent.at(-1).params.ok, true, JSON.stringify(transport.connections[0].sent.at(-1)));
+  assert.deepEqual(worker.status().leasedTabIds, [911, 912]);
+  assert.equal(worker.status().lastActionTabId, 912);
+  assert.equal(storage.state.hermesBrowserControllerWorker.lastActionTabId, 912);
+
+  const restarted = createWorker(connector());
+  await restarted.boot();
+  assert.equal(restarted.status().lastActionTabId, 912);
 });
 
 test('broker-v1 commands without target metadata resolve only one exact owned tab', async () => {

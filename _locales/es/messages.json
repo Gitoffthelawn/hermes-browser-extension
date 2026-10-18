@@ -931,10 +931,6 @@
     "message": "Inicia o selecciona una sesión de Hermes antes de activar Hermes Control.",
     "description": "Runtime interface message browser_control.error_session_enable"
   },
-  "runtime_browser_control_follow": {
-    "message": "Seguir a Hermes",
-    "description": "Runtime interface message browser_control.follow"
-  },
   "runtime_browser_control_help_attach": {
     "message": "Permite que Hermes controle esta pestaña en lugar de la pestaña vinculada anteriormente.",
     "description": "Runtime interface message browser_control.help_attach"
@@ -942,10 +938,6 @@
   "runtime_browser_control_help_close": {
     "message": "Cierra este panel sin pausar ni desactivar el control.",
     "description": "Runtime interface message browser_control.help_close"
-  },
-  "runtime_browser_control_help_follow": {
-    "message": "Muestra la pestaña vinculada que usa Hermes sin traer la ventana del navegador al frente.",
-    "description": "Runtime interface message browser_control.help_follow"
   },
   "runtime_browser_control_help_off": {
     "message": "Desactiva Hermes Control y cierra este panel. Vuelve a activarlo en Ajustes.",
@@ -971,9 +963,9 @@
     "message": "Controla solo la pestaña actual. Las demás pestañas no se incluyen.",
     "description": "Runtime interface message browser_control.help_scope_this_tab"
   },
-  "runtime_browser_control_help_stay": {
-    "message": "Permanece en tu pestaña mientras Hermes trabaja en las pestañas vinculadas en segundo plano.",
-    "description": "Runtime interface message browser_control.help_stay"
+  "runtime_browser_control_help_show_tab": {
+    "message": "Cambia a la pestaña que usa Hermes. Hermes nunca cambia tu pestaña por su cuenta.",
+    "description": "Runtime interface message browser_control.help_show_tab"
   },
   "runtime_browser_control_help_stop": {
     "message": "Detén las acciones actuales y pendientes del navegador sin desactivar el control.",
@@ -1039,6 +1031,14 @@
     "message": "Pestañas seleccionadas",
     "description": "Runtime interface message browser_control.selected_tabs"
   },
+  "runtime_browser_control_show_tab": {
+    "message": "Mostrar pestaña",
+    "description": "Runtime interface message browser_control.show_tab"
+  },
+  "runtime_browser_control_show_tab_aria": {
+    "message": "Mostrar la pestaña que usa Hermes",
+    "description": "Runtime interface message browser_control.show_tab_aria"
+  },
   "runtime_browser_control_state_active": {
     "message": "Activo",
     "description": "Runtime interface message browser_control.state_active"
@@ -1054,10 +1054,6 @@
   "runtime_browser_control_state_ready": {
     "message": "Listo",
     "description": "Runtime interface message browser_control.state_ready"
-  },
-  "runtime_browser_control_stay": {
-    "message": "Permanecer en mi pestaña",
-    "description": "Runtime interface message browser_control.stay"
   },
   "runtime_browser_control_stop": {
     "message": "Detener",
@@ -1111,6 +1107,10 @@
     "message": "Pestañas de control sin cambios",
     "description": "Runtime interface message browser_control.toast_scope_unchanged"
   },
+  "runtime_browser_control_toast_show_tab_failed": {
+    "message": "No se pudo mostrar esa pestaña",
+    "description": "Runtime interface message browser_control.toast_show_tab_failed"
+  },
   "runtime_browser_control_toast_state_unchanged": {
     "message": "Estado de Hermes Control sin cambios",
     "description": "Runtime interface message browser_control.toast_state_unchanged"
@@ -1119,10 +1119,6 @@
     "message": "No se pudieron detener las acciones del navegador",
     "description": "Runtime interface message browser_control.toast_stop_failed"
   },
-  "runtime_browser_control_toast_view_unchanged": {
-    "message": "Ajuste de vista sin cambios",
-    "description": "Runtime interface message browser_control.toast_view_unchanged"
-  },
   "runtime_browser_control_turn_off": {
     "message": "Desactivar",
     "description": "Runtime interface message browser_control.turn_off"
@@ -1130,10 +1126,6 @@
   "runtime_browser_control_waiting": {
     "message": "Esperando a Hermes.",
     "description": "Runtime interface message browser_control.waiting"
-  },
-  "runtime_browser_control_while_working": {
-    "message": "Mientras Hermes trabaja",
-    "description": "Runtime interface message browser_control.while_working"
   },
   "runtime_clarify_expired": {
     "message": "This question was already answered or expired.",

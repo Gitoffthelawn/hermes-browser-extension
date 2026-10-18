@@ -931,10 +931,6 @@
     "message": "Hermes Kontrolü'nü açmadan önce bir Hermes oturumu başlatın veya seçin.",
     "description": "Runtime interface message browser_control.error_session_enable"
   },
-  "runtime_browser_control_follow": {
-    "message": "Hermes'i takip et",
-    "description": "Runtime interface message browser_control.follow"
-  },
   "runtime_browser_control_help_attach": {
     "message": "Hermes’in önceki bağlı sekme yerine bu sekmeyi kontrol etmesine izin verin.",
     "description": "Runtime interface message browser_control.help_attach"
@@ -942,10 +938,6 @@
   "runtime_browser_control_help_close": {
     "message": "Kontrolü duraklatmadan veya kapatmadan bu paneli kapatın.",
     "description": "Runtime interface message browser_control.help_close"
-  },
-  "runtime_browser_control_help_follow": {
-    "message": "Tarayıcı penceresini öne getirmeden Hermes’in kullandığı bağlı sekmeyi gösterin.",
-    "description": "Runtime interface message browser_control.help_follow"
   },
   "runtime_browser_control_help_off": {
     "message": "Hermes Kontrolü'nü kapatın ve bu paneli kapatın. Ayarlar'dan yeniden açabilirsiniz.",
@@ -971,9 +963,9 @@
     "message": "Yalnızca geçerli sekmeyi kontrol edin. Diğer sekmeler dahil değildir.",
     "description": "Runtime interface message browser_control.help_scope_this_tab"
   },
-  "runtime_browser_control_help_stay": {
-    "message": "Hermes bağlı sekmelerde arka planda çalışırken kendi sekmenizde kalın.",
-    "description": "Runtime interface message browser_control.help_stay"
+  "runtime_browser_control_help_show_tab": {
+    "message": "Hermes'in kullandığı sekmeye geç. Hermes sekmenizi asla kendiliğinden değiştirmez.",
+    "description": "Runtime interface message browser_control.help_show_tab"
   },
   "runtime_browser_control_help_stop": {
     "message": "Kontrolü kapatmadan mevcut ve sıradaki tarayıcı işlemlerini durdurun.",
@@ -1039,6 +1031,14 @@
     "message": "Seçili sekmeler",
     "description": "Runtime interface message browser_control.selected_tabs"
   },
+  "runtime_browser_control_show_tab": {
+    "message": "Sekmeyi göster",
+    "description": "Runtime interface message browser_control.show_tab"
+  },
+  "runtime_browser_control_show_tab_aria": {
+    "message": "Hermes'in kullandığı sekmeyi göster",
+    "description": "Runtime interface message browser_control.show_tab_aria"
+  },
   "runtime_browser_control_state_active": {
     "message": "Etkin",
     "description": "Runtime interface message browser_control.state_active"
@@ -1054,10 +1054,6 @@
   "runtime_browser_control_state_ready": {
     "message": "Hazır",
     "description": "Runtime interface message browser_control.state_ready"
-  },
-  "runtime_browser_control_stay": {
-    "message": "Sekmemde kal",
-    "description": "Runtime interface message browser_control.stay"
   },
   "runtime_browser_control_stop": {
     "message": "Durdur",
@@ -1111,6 +1107,10 @@
     "message": "Kontrol sekmeleri değişmedi",
     "description": "Runtime interface message browser_control.toast_scope_unchanged"
   },
+  "runtime_browser_control_toast_show_tab_failed": {
+    "message": "Bu sekme gösterilemedi",
+    "description": "Runtime interface message browser_control.toast_show_tab_failed"
+  },
   "runtime_browser_control_toast_state_unchanged": {
     "message": "Hermes Kontrolü durumu değişmedi",
     "description": "Runtime interface message browser_control.toast_state_unchanged"
@@ -1119,10 +1119,6 @@
     "message": "Tarayıcı işlemleri durdurulamadı",
     "description": "Runtime interface message browser_control.toast_stop_failed"
   },
-  "runtime_browser_control_toast_view_unchanged": {
-    "message": "Görünüm ayarı değişmedi",
-    "description": "Runtime interface message browser_control.toast_view_unchanged"
-  },
   "runtime_browser_control_turn_off": {
     "message": "Kapat",
     "description": "Runtime interface message browser_control.turn_off"
@@ -1130,10 +1126,6 @@
   "runtime_browser_control_waiting": {
     "message": "Hermes bekleniyor.",
     "description": "Runtime interface message browser_control.waiting"
-  },
-  "runtime_browser_control_while_working": {
-    "message": "Hermes çalışırken",
-    "description": "Runtime interface message browser_control.while_working"
   },
   "runtime_clarify_expired": {
     "message": "This question was already answered or expired.",

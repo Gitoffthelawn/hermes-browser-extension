@@ -92,7 +92,6 @@ async function main() {
           browserControlEnabled: true,
           browserControlPaused: false,
           browserControlScope: 'this-tab',
-          browserControlViewBehavior: 'stay'
         },
         hermesBrowserIntroSeen: true
       });

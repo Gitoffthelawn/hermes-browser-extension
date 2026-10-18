@@ -280,6 +280,7 @@ test('Phase 6 lifecycle terminal receipts never echo command arguments or typed 
 test('Phase 6 advertised screenshot and tab actions stay inside worker-owned leased tabs', async () => {
   const { createBrowserControlExecutor } = await executorModule();
   const calls = [];
+  const approvals = createBrowserControlApprovalStore();
   const executor = createBrowserControlExecutor({
     adapter: fullAdapter(async (action, args, context) => {
       calls.push({ action, args, scope: context.scope, leasedTabIds: context.leasedTabIds });
@@ -287,7 +288,7 @@ test('Phase 6 advertised screenshot and tab actions stay inside worker-owned lea
       if (action === 'browser_screenshot') return { dataUrl: 'data:image/png;base64,fixture' };
       return { status: 'tab-activated' };
     }),
-    approvals: createBrowserControlApprovalStore(),
+    approvals,
     refs: createBrowserControlRefStore(),
     now: () => 5_000,
   });
@@ -297,12 +298,105 @@ test('Phase 6 advertised screenshot and tab actions stay inside worker-owned lea
   const screenshot = await executor.execute(frame('browser_screenshot'), { scope, leasedTabIds: [7, 8] });
   assert.equal(screenshot.ok, true);
   assert.equal((await executor.execute(frame('browser_tab_activate', { tab_id: 99 }), { scope, leasedTabIds: [7, 8] })).error.code, 'lease_required');
-  assert.equal((await executor.execute(frame('browser_tab_activate', { tab_id: 8 }), { scope, leasedTabIds: [7, 8] })).ok, true);
+  // Switching the person's tab waits for their approval; nothing moves before it is granted.
+  const activating = executor.execute(frame('browser_tab_activate', { tab_id: 8 }, { command_id: 'activate-8' }), { scope, leasedTabIds: [7, 8] });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // This fake tab has no title, so the card names its host.
+  assert.deepEqual(approvals.pending().map((item) => [item.action, item.reason]), [['browser_tab_activate', 'Switch your view to "example.test"?']]);
+  // The approval belongs to the command's own tab and lease, which the worker checks on the grant.
+  assert.equal(approvals.pending()[0].tabId, 7);
+  assert.equal(approvals.pending()[0].leaseId, 'lease-1');
+  assert.equal(calls.some((call) => call.action === 'browser_tab_activate'), false);
+  approvals.grant(approvals.pending()[0]);
+  assert.equal((await activating).ok, true);
   assert.deepEqual(calls.map((call) => [call.action, call.scope.tabId, call.args.tab_id ?? null]), [
     ['browser_tabs', 7, null],
     ['browser_screenshot', 7, null],
     ['browser_tab_activate', 8, 8],
   ]);
+});
+
+test('a tab switch names the tab it switches to, and its approval cannot be spent on a different tab', async () => {
+  const { createBrowserControlExecutor } = await executorModule();
+  const calls = [];
+  const approvals = createBrowserControlApprovalStore();
+  const titles = new Map([
+    [7, 'Command tab'],
+    [8, 'Quarterly planning for the whole product team and every partner who uses it'],
+  ]);
+  const adapter = fullAdapter(async (action, args) => {
+    calls.push({ action, tabId: args.tab_id ?? null });
+    return { status: 'tab-activated' };
+  });
+  adapter.inspect = async ({ tabId }) => ({ currentUrl: 'https://example.test/start', hasUnsavedContent: false, title: titles.get(tabId) || '' });
+  const executor = createBrowserControlExecutor({ adapter, approvals, refs: createBrowserControlRefStore(), now: () => 5_000 });
+
+  // The command runs on tab 7 and asks to switch the person to tab 8.
+  const activating = executor.execute(frame('browser_tab_activate', { tab_id: 8 }, { command_id: 'activate-8' }), { scope, leasedTabIds: [7, 8] });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const [pending] = approvals.pending();
+  // The card names the target (cut to 60 characters), and the request is bound to it.
+  assert.equal(pending.reason, 'Switch your view to "Quarterly planning for the whole product team and every par…"?');
+  assert.equal(pending.binding, 'tab:8');
+  // The approval still belongs to the command's own tab and lease, which the worker checks on the grant.
+  assert.equal(pending.tabId, 7);
+  assert.equal(pending.leaseId, 'lease-1');
+  assert.deepEqual(calls, [], 'nothing moves before the grant');
+
+  // A grant that names another tab does not release this request.
+  assert.equal(approvals.grant({ ...pending, binding: 'tab:9' }).ok, false);
+  assert.equal(approvals.grant(pending).ok, true);
+  // Once granted, the approval matches tab 8 only.
+  assert.equal(approvals.consume({ ...pending, binding: 'tab:9' }).error, 'approval_mismatch');
+  assert.equal((await activating).ok, true);
+  assert.deepEqual(calls, [{ action: 'browser_tab_activate', tabId: 8 }]);
+});
+
+// Starts a tab switch to tab 8, whose inspect answers with the given tab facts, and returns the approval card's reason.
+async function tabSwitchReasonFor(info) {
+  const { createBrowserControlExecutor } = await executorModule();
+  const approvals = createBrowserControlApprovalStore();
+  const adapter = fullAdapter(async () => ({ status: 'tab-activated' }));
+  adapter.inspect = async () => info;
+  const executor = createBrowserControlExecutor({ adapter, approvals, refs: createBrowserControlRefStore(), now: () => 5_000 });
+  const activating = executor.execute(frame('browser_tab_activate', { tab_id: 8 }, { command_id: 'activate-8' }), { scope, leasedTabIds: [7, 8] });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const [pending] = approvals.pending();
+  assert.equal(approvals.grant(pending).ok, true);
+  assert.equal((await activating).ok, true);
+  return pending.reason;
+}
+
+test('a page title cannot reorder or hide part of the tab-switch approval: control and format characters are removed', async () => {
+  // A right-to-left override (U+202E) would print the rest of the title backwards; a zero-width space hides a character.
+  assert.equal(
+    await tabSwitchReasonFor({ currentUrl: 'https://example.test/start', title: 'Report \u202Egnp.exe \u200BApproved' }),
+    'Switch your view to "Report gnp.exe Approved"?',
+  );
+  const reason = await tabSwitchReasonFor({ currentUrl: 'https://example.test/start', title: 'Q3 \u2066plan\u2069 \u202Atotals\u0007' });
+  assert.equal(reason, 'Switch your view to "Q3 plan totals"?');
+  assert.doesNotMatch(reason, /[\p{Cc}\p{Cf}]/u);
+  // A line break or tab is whitespace, so the words on either side stay apart.
+  assert.equal(
+    await tabSwitchReasonFor({ currentUrl: 'https://example.test/start', title: 'Quarterly\nReport\tDraft' }),
+    'Switch your view to "Quarterly Report Draft"?',
+  );
+});
+
+test('a tab-switch approval names the host when the tab has no title or its title only repeats the URL', async () => {
+  const url = 'https://plan.example.test/q3?token=secret';
+  const named = 'Switch your view to "plan.example.test"?';
+  // An empty title, and a loading tab whose title is its URL with or without the scheme: the host stands in.
+  assert.equal(await tabSwitchReasonFor({ title: '', currentUrl: url }), named);
+  assert.equal(await tabSwitchReasonFor({ title: url, currentUrl: url }), named);
+  assert.equal(await tabSwitchReasonFor({ title: 'plan.example.test/q3?token=secret', currentUrl: url }), named);
+  assert.equal(await tabSwitchReasonFor({ title: 'plan.example.test/', currentUrl: 'https://plan.example.test/' }), named);
+  // The port stays, so two local apps can be told apart.
+  assert.equal(await tabSwitchReasonFor({ title: '', currentUrl: 'http://localhost:3000/app' }), 'Switch your view to "localhost:3000"?');
+  // A real title is still the name, and the generic wording stands without a URL or a title.
+  assert.equal(await tabSwitchReasonFor({ title: 'Q3 plan', currentUrl: url }), 'Switch your view to "Q3 plan"?');
+  assert.equal(await tabSwitchReasonFor({ title: '' }), 'Switch your view to this tab?');
+  assert.equal(await tabSwitchReasonFor({ title: 'about:blank', currentUrl: 'about:blank' }), 'Switch your view to this tab?');
 });
 
 test('Phase 6 tab mutations require exact owned tabs and return sanitized metadata', async () => {
@@ -378,10 +472,10 @@ test('Phase 6 keeps the stale_ref, navigation_failed and tab_hidden codes adapte
   const navigation = await executor.execute(frame('browser_navigate', { url: 'https://nope.invalid/' }), { scope });
   assert.equal(navigation.error.code, 'navigation_failed');
 
-  failure = coded('tab_hidden', 'browser_hover needs the tab to be showing, but it is in the background. Use browser_tab_activate to bring it forward, then try again.');
+  failure = coded('tab_hidden', "This tab is in the background, so hover and drag can't run there. Ask the user to bring it to the front with Show tab in Hermes Control, or use click, type or scroll, which work in background tabs.");
   const hidden = await executor.execute(frame('browser_click', { ref: '@e1' }), { scope });
   assert.equal(hidden.error.code, 'tab_hidden');
-  assert.match(hidden.error.message, /browser_tab_activate/);
+  assert.match(hidden.error.message, /Show tab in Hermes Control/);
 
   failure = coded('debugger_conflict', 'Another debugger controls this tab: x');
   assert.equal((await executor.execute(frame('browser_click', { ref: '@e1' }), { scope })).error.code, 'command_error');

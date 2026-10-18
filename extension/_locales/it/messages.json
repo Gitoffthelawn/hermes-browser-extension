@@ -931,10 +931,6 @@
     "message": "Avvia o seleziona una sessione Hermes prima di attivare Hermes Control.",
     "description": "Runtime interface message browser_control.error_session_enable"
   },
-  "runtime_browser_control_follow": {
-    "message": "Segui Hermes",
-    "description": "Runtime interface message browser_control.follow"
-  },
   "runtime_browser_control_help_attach": {
     "message": "Consenti a Hermes di controllare questa scheda al posto di quella collegata in precedenza.",
     "description": "Runtime interface message browser_control.help_attach"
@@ -942,10 +938,6 @@
   "runtime_browser_control_help_close": {
     "message": "Chiudi questo pannello senza mettere in pausa o disattivare il controllo.",
     "description": "Runtime interface message browser_control.help_close"
-  },
-  "runtime_browser_control_help_follow": {
-    "message": "Mostra la scheda collegata usata da Hermes senza portare la finestra del browser in primo piano.",
-    "description": "Runtime interface message browser_control.help_follow"
   },
   "runtime_browser_control_help_off": {
     "message": "Disattiva Hermes Control e chiudi questo pannello. Riattivalo nelle Impostazioni.",
@@ -971,9 +963,9 @@
     "message": "Controlla solo la scheda corrente. Le altre schede non sono incluse.",
     "description": "Runtime interface message browser_control.help_scope_this_tab"
   },
-  "runtime_browser_control_help_stay": {
-    "message": "Resta sulla tua scheda mentre Hermes lavora sulle schede collegate in background.",
-    "description": "Runtime interface message browser_control.help_stay"
+  "runtime_browser_control_help_show_tab": {
+    "message": "Passa alla scheda che Hermes sta usando. Hermes non cambia mai la tua scheda da solo.",
+    "description": "Runtime interface message browser_control.help_show_tab"
   },
   "runtime_browser_control_help_stop": {
     "message": "Interrompi le azioni del browser in corso e in coda senza disattivare il controllo.",
@@ -1039,6 +1031,14 @@
     "message": "Schede selezionate",
     "description": "Runtime interface message browser_control.selected_tabs"
   },
+  "runtime_browser_control_show_tab": {
+    "message": "Mostra scheda",
+    "description": "Runtime interface message browser_control.show_tab"
+  },
+  "runtime_browser_control_show_tab_aria": {
+    "message": "Mostra la scheda che Hermes sta usando",
+    "description": "Runtime interface message browser_control.show_tab_aria"
+  },
   "runtime_browser_control_state_active": {
     "message": "Attivo",
     "description": "Runtime interface message browser_control.state_active"
@@ -1054,10 +1054,6 @@
   "runtime_browser_control_state_ready": {
     "message": "Pronto",
     "description": "Runtime interface message browser_control.state_ready"
-  },
-  "runtime_browser_control_stay": {
-    "message": "Resta sulla mia scheda",
-    "description": "Runtime interface message browser_control.stay"
   },
   "runtime_browser_control_stop": {
     "message": "Ferma",
@@ -1111,6 +1107,10 @@
     "message": "Schede di controllo invariate",
     "description": "Runtime interface message browser_control.toast_scope_unchanged"
   },
+  "runtime_browser_control_toast_show_tab_failed": {
+    "message": "Impossibile mostrare quella scheda",
+    "description": "Runtime interface message browser_control.toast_show_tab_failed"
+  },
   "runtime_browser_control_toast_state_unchanged": {
     "message": "Stato di Hermes Control invariato",
     "description": "Runtime interface message browser_control.toast_state_unchanged"
@@ -1119,10 +1119,6 @@
     "message": "Impossibile interrompere le azioni del browser",
     "description": "Runtime interface message browser_control.toast_stop_failed"
   },
-  "runtime_browser_control_toast_view_unchanged": {
-    "message": "Impostazione di visualizzazione invariata",
-    "description": "Runtime interface message browser_control.toast_view_unchanged"
-  },
   "runtime_browser_control_turn_off": {
     "message": "Disattiva",
     "description": "Runtime interface message browser_control.turn_off"
@@ -1130,10 +1126,6 @@
   "runtime_browser_control_waiting": {
     "message": "In attesa di Hermes.",
     "description": "Runtime interface message browser_control.waiting"
-  },
-  "runtime_browser_control_while_working": {
-    "message": "Mentre Hermes lavora",
-    "description": "Runtime interface message browser_control.while_working"
   },
   "runtime_clarify_expired": {
     "message": "This question was already answered or expired.",

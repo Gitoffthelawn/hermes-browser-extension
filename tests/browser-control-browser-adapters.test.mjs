@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import vm from 'node:vm';
 
 import { CONTROLLER_ADAPTER_IDS } from '../extension/lib/browser-controller-adapter.mjs';
 
@@ -130,6 +131,10 @@ const commandMethods = (calls) => calls.filter((call) => call[0] === 'command').
 const countCalls = (calls, name) => calls.filter((call) => call[0] === name).length;
 const openSignal = () => new AbortController().signal;
 const clickTarget = { backendDOMNodeId: 44 };
+// The model-facing advice for a background tab. Hover and drag are the only input
+// that cannot run there; a screenshot of a background tab can still succeed.
+const HIDDEN_TAB_MESSAGE = "This tab is in the background, so hover and drag can't run there. Ask the user to bring it to the front with Show tab in Hermes Control, or use click, type or scroll, which work in background tabs.";
+const HIDDEN_SCREENSHOT_MESSAGE = 'This tab is in the background, so the screenshot did not finish. Ask the user to bring it to the front with Show tab in Hermes Control, then try again.';
 
 function firefoxApis() {
   const calls = [];
@@ -225,7 +230,7 @@ test('Chromium Phase 6 adapter emits trusted click, type, press, scroll, navigat
   const screenshot = await adapter.execute('browser_screenshot', {}, { scope, signal });
 
   assert.deepEqual(commandMethods(calls), [
-    'DOM.enable', 'DOM.scrollIntoViewIfNeeded', 'DOM.getBoxModel', 'DOM.getNodeForLocation',
+    'DOM.enable', 'DOM.scrollIntoViewIfNeeded', 'DOM.getBoxModel', 'DOM.getNodeForLocation', 'DOM.resolveNode',
     'Runtime.evaluate', 'Input.dispatchMouseEvent', 'Input.dispatchMouseEvent', 'Input.dispatchMouseEvent',
     'DOM.focus', 'DOM.resolveNode', 'Input.insertText',
     'Input.dispatchKeyEvent', 'Input.dispatchKeyEvent',
@@ -589,7 +594,8 @@ test('Phase 6 adapters create and close owned tabs while Chromium alone groups t
   const chromium = chromiumApis();
   const chrome = createChromiumCdpAdapter({ browserApi: chromium.api });
   const context = { scope, leasedTabIds: [7, 8], ownedTabIds: [7, 8], signal: new AbortController().signal };
-  assert.deepEqual(await chrome.execute('browser_tab_create', { url: 'https://example.test/new', active: false }, context), {
+  // The agent asking for a foreground tab changes nothing: the new tab opens in the background.
+  assert.deepEqual(await chrome.execute('browser_tab_create', { url: 'https://example.test/new', active: true }, context), {
     tab: { id: 9, windowId: 4, active: false, url: 'https://example.test/new' },
   });
   await chrome.execute('browser_tab_group', { tab_ids: [7, 8] }, context);
@@ -607,6 +613,10 @@ test('Phase 6 adapters create and close owned tabs while Chromium alone groups t
   const fox = createFirefoxWebExtensionAdapter({ browserApi: firefox.api });
   const foxCreated = await fox.execute('browser_tab_create', { url: 'https://example.test/new', active: true }, context);
   assert.equal(foxCreated.tab.id, 9);
+  assert.equal(foxCreated.tab.active, false);
+  assert.deepEqual(firefox.calls.filter((call) => call[0] === 'tabs.create'), [
+    ['tabs.create', { url: 'https://example.test/new', active: false, windowId: 4 }],
+  ]);
   await fox.execute('browser_tab_close', { tab_id: 8 }, context);
   await assert.rejects(fox.execute('browser_tab_group', { tab_ids: [7, 8] }, context), /not supported/i);
 });
@@ -614,15 +624,17 @@ test('Phase 6 adapters create and close owned tabs while Chromium alone groups t
 test('Phase 6 inspection does not inject a page probe into restricted surfaces', async () => {
   const { createFirefoxWebExtensionAdapter } = await adaptersModule();
   const { api, calls } = firefoxApis();
-  api.tabs.get = async () => ({ id: 7, url: 'https://example.test/account/wallet' });
+  api.tabs.get = async () => ({ id: 7, url: 'https://example.test/account/wallet', title: 'Wallet balance' });
   const inspected = await createFirefoxWebExtensionAdapter({ browserApi: api }).inspect({
     tabId: 7,
     frameId: 0,
     signal: new AbortController().signal,
   });
+  // A restricted page's title is withheld everywhere, approval wording included.
   assert.deepEqual(inspected, {
     currentUrl: 'https://example.test/account/wallet',
     hasUnsavedContent: false,
+    title: '',
   });
   assert.equal(calls.some((call) => call[0] === 'executeScript'), false);
 });
@@ -630,10 +642,10 @@ test('Phase 6 inspection does not inject a page probe into restricted surfaces',
 test('Phase 2 light inspection reads only the tab URL and skips the page probe', async () => {
   const { createFirefoxWebExtensionAdapter } = await adaptersModule();
   const { api, calls } = firefoxApis();
-  api.tabs.get = async () => ({ id: 7, url: 'https://example.test/list' });
+  api.tabs.get = async () => ({ id: 7, url: 'https://example.test/list', title: 'Reading list' });
   const adapter = createFirefoxWebExtensionAdapter({ browserApi: api });
   const light = await adapter.inspect({ tabId: 7, frameId: 0, signal: openSignal(), light: true });
-  assert.deepEqual(light, { currentUrl: 'https://example.test/list', hasUnsavedContent: false });
+  assert.deepEqual(light, { currentUrl: 'https://example.test/list', hasUnsavedContent: false, title: 'Reading list' });
   assert.equal(calls.some((call) => call[0] === 'executeScript'), false);
   await adapter.inspect({ tabId: 7, frameId: 0, signal: openSignal() });
   assert.equal(calls.some((call) => call[0] === 'executeScript'), true, 'the default probe still checks for unsaved content');
@@ -722,14 +734,190 @@ test('Chromium click never fails because the hit test failed', async () => {
   assert.equal(mouseEvents(chromium.calls).length, 3);
 });
 
-test('Chromium coordinate clicks skip the hit test but still move before pressing', async () => {
+test('Chromium coordinate clicks report no obscured state; their one hit test only looks for a new-tab link', async () => {
   const { createChromiumCdpAdapter } = await adaptersModule();
   const { api, calls } = chromiumApis();
-  await createChromiumCdpAdapter({ browserApi: api }).execute('browser_click', { x: 25.4, y: 35 }, { scope, signal: openSignal() });
-  assert.equal(calls.some((call) => call[2] === 'DOM.getNodeForLocation'), false);
+  const result = await createChromiumCdpAdapter({ browserApi: api }).execute('browser_click', { x: 25.4, y: 35 }, { scope, signal: openSignal() });
+  assert.deepEqual(result, { status: 'clicked' });
+  assert.equal(calls.filter((call) => call[2] === 'DOM.getNodeForLocation').length, 1);
   assert.deepEqual(mouseEvents(calls).map(({ type, buttons }) => [type, buttons]), [
     ['mouseMoved', 0], ['mousePressed', 1], ['mouseReleased', 0],
   ]);
+});
+
+// A minimal element: the reads clickTargetOpensNewTab makes.
+function fakeElement(tag, attributes = {}, parentElement = null, extra = {}) {
+  const values = new Map(Object.entries(attributes));
+  return {
+    nodeType: 1,
+    localName: tag,
+    parentElement,
+    getAttribute: (name) => (values.has(name) ? values.get(name) : null),
+    ...extra,
+  };
+}
+
+test('the background-tab modifier is Cmd on macOS and Ctrl on Windows and Linux', async () => {
+  const { backgroundTabModifierFor } = await adaptersModule();
+  // CDP modifier bits: Ctrl is 2, Meta (Cmd) is 4.
+  assert.equal(backgroundTabModifierFor('macOS'), 4);
+  assert.equal(backgroundTabModifierFor('MacIntel'), 4, 'navigator.platform on a Mac');
+  for (const platform of ['Windows', 'Win32', 'Linux', 'Linux x86_64', 'Chrome OS', '']) {
+    assert.equal(backgroundTabModifierFor(platform), 2, `${platform || 'an unknown platform'} uses Ctrl`);
+  }
+});
+
+test('a click counts as opening a new tab when the link or submit it lands on targets another browsing context', async () => {
+  const { clickTargetOpensNewTab } = await adaptersModule();
+  const blankLink = fakeElement('a', { target: '_blank', href: '/next' });
+  assert.equal(clickTargetOpensNewTab(blankLink), true);
+  assert.equal(clickTargetOpensNewTab(fakeElement('span', {}, blankLink)), true, 'a click on the link text');
+  assert.equal(clickTargetOpensNewTab({ nodeType: 3, parentElement: blankLink }), true, 'a text node inside the link');
+  assert.equal(clickTargetOpensNewTab(fakeElement('a', { target: '_BLANK' })), true, 'target names are case-insensitive');
+  assert.equal(clickTargetOpensNewTab(fakeElement('a', { target: 'reports' })), true, 'a named window');
+  for (const target of ['_self', '_top', '_parent', '  ']) {
+    assert.equal(clickTargetOpensNewTab(fakeElement('a', { target })), false, `target "${target}" stays in the tab`);
+  }
+  assert.equal(clickTargetOpensNewTab(fakeElement('a', { href: '/next' })), false, 'a link without a target');
+  assert.equal(clickTargetOpensNewTab(fakeElement('div', { target: '_blank' })), false, 'only links and submits count');
+  assert.equal(clickTargetOpensNewTab(null), false);
+
+  const newTabForm = { getAttribute: (name) => (name === 'target' ? '_blank' : null) };
+  const sameTabForm = { getAttribute: () => null };
+  assert.equal(clickTargetOpensNewTab(fakeElement('button', {}, null, { form: newTabForm })), true, 'a button submits by default');
+  assert.equal(clickTargetOpensNewTab(fakeElement('button', { type: 'submit' }, null, { form: newTabForm })), true);
+  assert.equal(clickTargetOpensNewTab(fakeElement('input', { type: 'submit' }, null, { form: newTabForm })), true);
+  assert.equal(clickTargetOpensNewTab(fakeElement('input', { type: 'image' }, null, { form: newTabForm })), true);
+  assert.equal(clickTargetOpensNewTab(fakeElement('button', { formtarget: '_blank' }, null, { form: sameTabForm })), true, 'a formtarget on the button');
+  assert.equal(clickTargetOpensNewTab(fakeElement('button', { formtarget: '_self' }, null, { form: newTabForm })), false, 'a formtarget overrides the form');
+  assert.equal(clickTargetOpensNewTab(fakeElement('button', { type: 'button' }, null, { form: newTabForm })), false, 'a button that does not submit');
+  assert.equal(clickTargetOpensNewTab(fakeElement('input', { type: 'text' }, null, { form: newTabForm })), false);
+  assert.equal(clickTargetOpensNewTab(fakeElement('button', {}, null, { form: null })), false, 'nothing is submitted without a form');
+  assert.equal(clickTargetOpensNewTab(fakeElement('button', {}, null, { form: sameTabForm })), false);
+});
+
+test('the in-page check is self-contained: its serialized source answers the same in an empty context', async () => {
+  const { clickTargetOpensNewTab } = await adaptersModule();
+  // The click path sends this source to the page, where no module binding exists: evaluate it in an empty context.
+  const inPage = vm.runInNewContext(`(${clickTargetOpensNewTab.toString()})`, {});
+  const link = fakeElement('a', { target: '_blank' });
+  assert.equal(inPage(fakeElement('span', {}, link)), true);
+  assert.equal(inPage(fakeElement('a', { target: '_self' })), false);
+  // The base-target lookup and the shadow-root walk need no module scope either.
+  assert.equal(inPage(fakeElement('a', { href: '/next' }, null, { ownerDocument: { querySelector: () => ({ getAttribute: () => '_blank' }) } })), true);
+  assert.equal(inPage(fakeElement('span', {}, null, { getRootNode: () => ({ nodeType: 11, host: link }) })), true);
+});
+
+test('a click on a link that opens a new tab carries the modifier for the host platform; other clicks do not', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  // Node 44 is a link that opens a new tab; node 45 is an ordinary button.
+  chromium.handlers['DOM.resolveNode'] = ({ backendNodeId }) => ({ object: { objectId: `object-${backendNodeId}` } });
+  chromium.handlers['Runtime.callFunctionOn'] = ({ objectId }) => ({ result: { value: objectId === 'object-44' } });
+  const signal = openSignal();
+  const linux = createChromiumCdpAdapter({ browserApi: chromium.api, hostPlatform: 'Linux x86_64' });
+  await linux.execute('browser_click', { ref: '@e1' }, { scope, signal, target: { backendDOMNodeId: 44 } });
+  await linux.execute('browser_click', { ref: '@e2' }, { scope, signal, target: { backendDOMNodeId: 45 } });
+  const mac = createChromiumCdpAdapter({ browserApi: chromium.api, hostPlatform: 'macOS' });
+  await mac.execute('browser_click', { ref: '@e1' }, { scope, signal, target: { backendDOMNodeId: 44 } });
+  const events = mouseEvents(chromium.calls);
+  const modifiersOf = (type) => events.filter((event) => event.type === type).map((event) => event.modifiers ?? null);
+  assert.deepEqual(modifiersOf('mousePressed'), [2, null, 4]);
+  assert.deepEqual(modifiersOf('mouseReleased'), [2, null, 4], 'the release matches the press, so it is one ctrl-click');
+  assert.ok(events.filter((event) => event.type === 'mouseMoved').every((event) => !('modifiers' in event)));
+});
+
+test('a coordinate click that lands on a new-tab link is sent with the modifier too', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  chromium.handlers['DOM.getNodeForLocation'] = () => ({ backendNodeId: 44 });
+  chromium.handlers['DOM.resolveNode'] = () => ({ object: { objectId: 'object-44' } });
+  chromium.handlers['Runtime.callFunctionOn'] = () => ({ result: { value: true } });
+  await createChromiumCdpAdapter({ browserApi: chromium.api, hostPlatform: 'Windows' })
+    .execute('browser_click', { x: 25, y: 35 }, { scope, signal: openSignal() });
+  const press = mouseEvents(chromium.calls).find((event) => event.type === 'mousePressed');
+  assert.equal(press.modifiers, 2);
+});
+
+test('a new-tab check that fails never blocks the click, which goes out as a plain click', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  chromium.handlers['DOM.resolveNode'] = () => ({ object: { objectId: 'object-44' } });
+  chromium.handlers['Runtime.callFunctionOn'] = () => { throw new Error('Execution context was destroyed.'); };
+  const result = await createChromiumCdpAdapter({ browserApi: chromium.api, hostPlatform: 'Linux' })
+    .execute('browser_click', { ref: '@e1' }, { scope, signal: openSignal(), target: { backendDOMNodeId: 44 } });
+  assert.deepEqual(result, { status: 'clicked' });
+  assert.deepEqual(mouseEvents(chromium.calls).map((event) => [event.type, 'modifiers' in event]), [
+    ['mouseMoved', false], ['mousePressed', false], ['mouseReleased', false],
+  ]);
+});
+
+test('a ref click whose centre is covered by a new-tab link is sent with the modifier, since the click lands on the link', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  // Node 44 is the image the ref names; node 46, a link to a new tab, covers its centre.
+  chromium.handlers['DOM.getNodeForLocation'] = () => ({ backendNodeId: 46 });
+  chromium.handlers['DOM.resolveNode'] = ({ backendNodeId }) => ({ object: { objectId: `object-${backendNodeId}` } });
+  // The containment check passes an argument; the new-tab check asks about one node only.
+  chromium.handlers['Runtime.callFunctionOn'] = ({ objectId, arguments: args }) => ({ result: { value: !args && objectId === 'object-46' } });
+  const adapter = createChromiumCdpAdapter({ browserApi: chromium.api, hostPlatform: 'Linux' });
+  assert.deepEqual(await adapter.execute('browser_click', { ref: '@e1' }, { scope, signal: openSignal(), target: clickTarget }), { status: 'clicked', obscured: true });
+  assert.equal(chromium.calls.filter((call) => call[2] === 'DOM.getNodeForLocation').length, 1, 'one hit test serves both the obscured check and the new-tab check');
+  assert.deepEqual(mouseEvents(chromium.calls).map((event) => [event.type, event.modifiers ?? null]), [
+    ['mouseMoved', null], ['mousePressed', 2], ['mouseReleased', 2],
+  ]);
+
+  // A covering element that is not a link leaves the click as it was.
+  chromium.handlers['DOM.getNodeForLocation'] = () => ({ backendNodeId: 47 });
+  const before = chromium.calls.length;
+  await adapter.execute('browser_click', { ref: '@e1' }, { scope, signal: openSignal(), target: clickTarget });
+  assert.deepEqual(mouseEvents(chromium.calls.slice(before)).map((event) => 'modifiers' in event), [false, false, false]);
+});
+
+test('a link or form with no target attribute takes the target of the document base element', async () => {
+  const { clickTargetOpensNewTab } = await adaptersModule();
+  // A document with a <base target> of the given value, or no base element at all.
+  const documentWithBase = (target) => ({
+    querySelector: (selector) => (target !== undefined && selector === 'base[target]'
+      ? { getAttribute: (name) => (name === 'target' ? target : null) }
+      : null),
+  });
+  const blankBase = documentWithBase('_blank');
+  const link = fakeElement('a', { href: '/next' }, null, { ownerDocument: blankBase });
+  assert.equal(clickTargetOpensNewTab(link), true, 'a link without a target follows the base');
+  assert.equal(clickTargetOpensNewTab(fakeElement('span', {}, link, { ownerDocument: blankBase })), true, 'a click on its text');
+  assert.equal(clickTargetOpensNewTab(fakeElement('a', { target: '_self' }, null, { ownerDocument: blankBase })), false, 'the link\'s own target wins over the base');
+  assert.equal(clickTargetOpensNewTab(fakeElement('a', { href: '/next' }, null, { ownerDocument: documentWithBase('_self') })), false, 'a base that keeps the tab');
+  assert.equal(clickTargetOpensNewTab(fakeElement('a', { href: '/next' }, null, { ownerDocument: documentWithBase() })), false, 'no base element');
+  assert.equal(clickTargetOpensNewTab(fakeElement('a', { href: '/next' })), false, 'a node without an owner document');
+
+  const formWithoutTarget = { getAttribute: () => null };
+  assert.equal(clickTargetOpensNewTab(fakeElement('button', {}, null, { form: formWithoutTarget, ownerDocument: blankBase })), true, 'a submit button in a form with no target follows the base');
+  const formWithTarget = { getAttribute: (name) => (name === 'target' ? '_self' : null) };
+  assert.equal(clickTargetOpensNewTab(fakeElement('button', {}, null, { form: formWithTarget, ownerDocument: blankBase })), false, 'the form\'s own target wins over the base');
+});
+
+test('the new-tab check walks out of a shadow root through its host, so a node in a shadow tree inside a new-tab link counts', async () => {
+  const { clickTargetOpensNewTab } = await adaptersModule();
+  const link = fakeElement('a', { target: '_blank', href: '/next' });
+  // A custom element in the light DOM of the link hosts a shadow root. The clicked node sits inside that root, where parentElement is null.
+  const inShadowRoot = (host) => ({ getRootNode: () => ({ nodeType: 11, host }) });
+  assert.equal(clickTargetOpensNewTab(fakeElement('span', {}, null, inShadowRoot(fakeElement('x-card', {}, link)))), true);
+  assert.equal(clickTargetOpensNewTab({ nodeType: 3, parentElement: null, ...inShadowRoot(fakeElement('x-card', {}, link)) }), true, 'a text node directly in the shadow root');
+  const sameTabLink = fakeElement('a', { target: '_self', href: '/next' });
+  assert.equal(clickTargetOpensNewTab(fakeElement('span', {}, null, inShadowRoot(fakeElement('x-card', {}, sameTabLink)))), false, 'a host in a link that stays in its tab');
+  assert.equal(clickTargetOpensNewTab(fakeElement('span', {}, null, { getRootNode: () => ({ nodeType: 9 }) })), false, 'a node under the document has no host to walk to');
+  assert.equal(clickTargetOpensNewTab(fakeElement('span', {}, null, { getRootNode: () => ({ nodeType: 11 }) })), false, 'a fragment root without a host');
+});
+
+test('an area with an href counts as a link, with its own target or the base target', async () => {
+  const { clickTargetOpensNewTab } = await adaptersModule();
+  assert.equal(clickTargetOpensNewTab(fakeElement('area', { href: '/next', target: '_blank' })), true);
+  assert.equal(clickTargetOpensNewTab(fakeElement('area', { href: '/next', target: '_self' })), false);
+  assert.equal(clickTargetOpensNewTab(fakeElement('area', { href: '/next' })), false, 'no target and no base');
+  assert.equal(clickTargetOpensNewTab(fakeElement('area', { target: '_blank' })), false, 'an area without an href is not a link');
+  const blankBase = { querySelector: (selector) => (selector === 'base[target]' ? { getAttribute: () => '_blank' } : null) };
+  assert.equal(clickTargetOpensNewTab(fakeElement('area', { href: '/next' }, null, { ownerDocument: blankBase })), true, 'an area with no target follows the base');
 });
 
 test('Chromium type clears the field by default and appends only when clear is false', async () => {
@@ -917,7 +1105,7 @@ test('Chromium hover and drag in a hidden tab fail fast with tab_hidden instead 
       adapter.execute(action, { ref: '@e1', destination_ref: '@e2' }, {
         scope, signal: openSignal(), target: clickTarget, destination: { backendDOMNodeId: 45 },
       }),
-      (error) => error.code === 'tab_hidden' && /browser_tab_activate/.test(error.message),
+      (error) => error.code === 'tab_hidden' && error.message === HIDDEN_TAB_MESSAGE && !/browser_tab_activate/.test(error.message),
     );
   }
   assert.deepEqual(mouseEvents(chromium.calls), []);
@@ -939,10 +1127,11 @@ test('Chromium screenshot of a hidden tab stops waiting for a frame that never c
     },
     clearTimer: () => {},
   });
-  await assert.rejects(
-    adapter.execute('browser_screenshot', {}, { scope, signal: openSignal() }),
-    (error) => error.code === 'tab_hidden' && /browser_tab_activate/.test(error.message),
-  );
+  const failure = await adapter.execute('browser_screenshot', {}, { scope, signal: openSignal() }).catch((error) => error);
+  assert.equal(failure.code, 'tab_hidden');
+  assert.equal(failure.message, HIDDEN_SCREENSHOT_MESSAGE);
+  // Screenshots of a background tab can succeed, so a timed-out capture never claims they cannot run.
+  assert.doesNotMatch(failure.message, /cannot run|can't run/);
   assert.ok(timers.includes(5_000));
 });
 

@@ -931,10 +931,6 @@
     "message": "Mulai atau pilih sesi Hermes sebelum mengaktifkan Hermes Control.",
     "description": "Runtime interface message browser_control.error_session_enable"
   },
-  "runtime_browser_control_follow": {
-    "message": "Ikuti Hermes",
-    "description": "Runtime interface message browser_control.follow"
-  },
   "runtime_browser_control_help_attach": {
     "message": "Izinkan Hermes mengendalikan tab ini, menggantikan tab yang sebelumnya terhubung.",
     "description": "Runtime interface message browser_control.help_attach"
@@ -942,10 +938,6 @@
   "runtime_browser_control_help_close": {
     "message": "Tutup panel ini tanpa menjeda atau menonaktifkan kontrol.",
     "description": "Runtime interface message browser_control.help_close"
-  },
-  "runtime_browser_control_help_follow": {
-    "message": "Tampilkan tab terhubung yang digunakan Hermes tanpa membawa jendela browser ke depan.",
-    "description": "Runtime interface message browser_control.help_follow"
   },
   "runtime_browser_control_help_off": {
     "message": "Matikan Hermes Control dan tutup panel ini. Aktifkan lagi di Pengaturan.",
@@ -971,9 +963,9 @@
     "message": "Kendalikan hanya tab saat ini. Tab lain tidak disertakan.",
     "description": "Runtime interface message browser_control.help_scope_this_tab"
   },
-  "runtime_browser_control_help_stay": {
-    "message": "Tetap di tab Anda saat Hermes bekerja pada tab terhubung di latar belakang.",
-    "description": "Runtime interface message browser_control.help_stay"
+  "runtime_browser_control_help_show_tab": {
+    "message": "Beralih ke tab yang digunakan Hermes. Hermes tidak pernah mengubah tab Anda dengan sendirinya.",
+    "description": "Runtime interface message browser_control.help_show_tab"
   },
   "runtime_browser_control_help_stop": {
     "message": "Hentikan tindakan browser yang berjalan dan mengantre tanpa menonaktifkan kontrol.",
@@ -1039,6 +1031,14 @@
     "message": "Tab terpilih",
     "description": "Runtime interface message browser_control.selected_tabs"
   },
+  "runtime_browser_control_show_tab": {
+    "message": "Tampilkan tab",
+    "description": "Runtime interface message browser_control.show_tab"
+  },
+  "runtime_browser_control_show_tab_aria": {
+    "message": "Tampilkan tab yang digunakan Hermes",
+    "description": "Runtime interface message browser_control.show_tab_aria"
+  },
   "runtime_browser_control_state_active": {
     "message": "Aktif",
     "description": "Runtime interface message browser_control.state_active"
@@ -1054,10 +1054,6 @@
   "runtime_browser_control_state_ready": {
     "message": "Siap",
     "description": "Runtime interface message browser_control.state_ready"
-  },
-  "runtime_browser_control_stay": {
-    "message": "Tetap di tab saya",
-    "description": "Runtime interface message browser_control.stay"
   },
   "runtime_browser_control_stop": {
     "message": "Berhenti",
@@ -1111,6 +1107,10 @@
     "message": "Tab kontrol tidak berubah",
     "description": "Runtime interface message browser_control.toast_scope_unchanged"
   },
+  "runtime_browser_control_toast_show_tab_failed": {
+    "message": "Tab itu tidak dapat ditampilkan",
+    "description": "Runtime interface message browser_control.toast_show_tab_failed"
+  },
   "runtime_browser_control_toast_state_unchanged": {
     "message": "Status Hermes Control tidak berubah",
     "description": "Runtime interface message browser_control.toast_state_unchanged"
@@ -1119,10 +1119,6 @@
     "message": "Tindakan browser tidak dapat dihentikan",
     "description": "Runtime interface message browser_control.toast_stop_failed"
   },
-  "runtime_browser_control_toast_view_unchanged": {
-    "message": "Pengaturan tampilan tidak berubah",
-    "description": "Runtime interface message browser_control.toast_view_unchanged"
-  },
   "runtime_browser_control_turn_off": {
     "message": "Nonaktifkan",
     "description": "Runtime interface message browser_control.turn_off"
@@ -1130,10 +1126,6 @@
   "runtime_browser_control_waiting": {
     "message": "Menunggu Hermes",
     "description": "Runtime interface message browser_control.waiting"
-  },
-  "runtime_browser_control_while_working": {
-    "message": "Saat Hermes bekerja",
-    "description": "Runtime interface message browser_control.while_working"
   },
   "runtime_clarify_expired": {
     "message": "This question was already answered or expired.",

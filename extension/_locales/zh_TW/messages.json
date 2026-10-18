@@ -931,10 +931,6 @@
     "message": "開啟 Hermes 控制前，請先開始或選擇一個 Hermes 工作階段。",
     "description": "Runtime interface message browser_control.error_session_enable"
   },
-  "runtime_browser_control_follow": {
-    "message": "跟隨 Hermes",
-    "description": "Runtime interface message browser_control.follow"
-  },
   "runtime_browser_control_help_attach": {
     "message": "允許 Hermes 操作此分頁，取代先前連接的分頁。",
     "description": "Runtime interface message browser_control.help_attach"
@@ -942,10 +938,6 @@
   "runtime_browser_control_help_close": {
     "message": "關閉此面板，但不暫停或關閉控制。",
     "description": "Runtime interface message browser_control.help_close"
-  },
-  "runtime_browser_control_help_follow": {
-    "message": "顯示 Hermes 正在使用的已連接分頁，但不將瀏覽器視窗帶到最前方。",
-    "description": "Runtime interface message browser_control.help_follow"
   },
   "runtime_browser_control_help_off": {
     "message": "關閉 Hermes 控制並關閉此面板。可在設定中重新開啟。",
@@ -971,9 +963,9 @@
     "message": "僅控制目前的分頁，不包含其他分頁。",
     "description": "Runtime interface message browser_control.help_scope_this_tab"
   },
-  "runtime_browser_control_help_stay": {
-    "message": "停留在目前分頁，同時讓 Hermes 在背景操作已連接的分頁。",
-    "description": "Runtime interface message browser_control.help_stay"
+  "runtime_browser_control_help_show_tab": {
+    "message": "切換到 Hermes 正在使用的分頁。Hermes 絕不會自行切換你的分頁。",
+    "description": "Runtime interface message browser_control.help_show_tab"
   },
   "runtime_browser_control_help_stop": {
     "message": "停止目前和佇列中的瀏覽器操作，但不關閉控制。",
@@ -1039,6 +1031,14 @@
     "message": "選取的分頁",
     "description": "Runtime interface message browser_control.selected_tabs"
   },
+  "runtime_browser_control_show_tab": {
+    "message": "顯示分頁",
+    "description": "Runtime interface message browser_control.show_tab"
+  },
+  "runtime_browser_control_show_tab_aria": {
+    "message": "顯示 Hermes 正在使用的分頁",
+    "description": "Runtime interface message browser_control.show_tab_aria"
+  },
   "runtime_browser_control_state_active": {
     "message": "進行中",
     "description": "Runtime interface message browser_control.state_active"
@@ -1054,10 +1054,6 @@
   "runtime_browser_control_state_ready": {
     "message": "就緒",
     "description": "Runtime interface message browser_control.state_ready"
-  },
-  "runtime_browser_control_stay": {
-    "message": "停留在我的分頁",
-    "description": "Runtime interface message browser_control.stay"
   },
   "runtime_browser_control_stop": {
     "message": "停止",
@@ -1111,6 +1107,10 @@
     "message": "控制的分頁未變更",
     "description": "Runtime interface message browser_control.toast_scope_unchanged"
   },
+  "runtime_browser_control_toast_show_tab_failed": {
+    "message": "無法顯示該分頁",
+    "description": "Runtime interface message browser_control.toast_show_tab_failed"
+  },
   "runtime_browser_control_toast_state_unchanged": {
     "message": "Hermes 控制狀態未變更",
     "description": "Runtime interface message browser_control.toast_state_unchanged"
@@ -1119,10 +1119,6 @@
     "message": "無法停止瀏覽器操作",
     "description": "Runtime interface message browser_control.toast_stop_failed"
   },
-  "runtime_browser_control_toast_view_unchanged": {
-    "message": "檢視設定未變更",
-    "description": "Runtime interface message browser_control.toast_view_unchanged"
-  },
   "runtime_browser_control_turn_off": {
     "message": "關閉控制",
     "description": "Runtime interface message browser_control.turn_off"
@@ -1130,10 +1126,6 @@
   "runtime_browser_control_waiting": {
     "message": "正在等待 Hermes。",
     "description": "Runtime interface message browser_control.waiting"
-  },
-  "runtime_browser_control_while_working": {
-    "message": "Hermes 運作時",
-    "description": "Runtime interface message browser_control.while_working"
   },
   "runtime_clarify_expired": {
     "message": "This question was already answered or expired.",

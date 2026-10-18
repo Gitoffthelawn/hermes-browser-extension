@@ -931,10 +931,6 @@
     "message": "Запустіть або виберіть сеанс Hermes, перш ніж вмикати Керування Hermes.",
     "description": "Runtime interface message browser_control.error_session_enable"
   },
-  "runtime_browser_control_follow": {
-    "message": "Слідувати за Hermes",
-    "description": "Runtime interface message browser_control.follow"
-  },
   "runtime_browser_control_help_attach": {
     "message": "Дозвольте Hermes керувати цією вкладкою замість раніше підключеної.",
     "description": "Runtime interface message browser_control.help_attach"
@@ -942,10 +938,6 @@
   "runtime_browser_control_help_close": {
     "message": "Закрийте цю панель, не призупиняючи й не вимикаючи керування.",
     "description": "Runtime interface message browser_control.help_close"
-  },
-  "runtime_browser_control_help_follow": {
-    "message": "Показуйте підключену вкладку, яку використовує Hermes, не виводячи вікно браузера на передній план.",
-    "description": "Runtime interface message browser_control.help_follow"
   },
   "runtime_browser_control_help_off": {
     "message": "Вимкніть Керування Hermes і закрийте цю панель. Увімкнути його знову можна в налаштуваннях.",
@@ -971,9 +963,9 @@
     "message": "Керувати лише поточною вкладкою. Інші вкладки не включено.",
     "description": "Runtime interface message browser_control.help_scope_this_tab"
   },
-  "runtime_browser_control_help_stay": {
-    "message": "Залишайтеся на своїй вкладці, поки Hermes працює з підключеними вкладками у фоні.",
-    "description": "Runtime interface message browser_control.help_stay"
+  "runtime_browser_control_help_show_tab": {
+    "message": "Перейти на вкладку, яку використовує Hermes. Hermes ніколи не змінює вашу вкладку самостійно.",
+    "description": "Runtime interface message browser_control.help_show_tab"
   },
   "runtime_browser_control_help_stop": {
     "message": "Зупиніть поточні дії браузера й чергу, не вимикаючи керування.",
@@ -1039,6 +1031,14 @@
     "message": "Вибрані вкладки",
     "description": "Runtime interface message browser_control.selected_tabs"
   },
+  "runtime_browser_control_show_tab": {
+    "message": "Показати вкладку",
+    "description": "Runtime interface message browser_control.show_tab"
+  },
+  "runtime_browser_control_show_tab_aria": {
+    "message": "Показати вкладку, яку використовує Hermes",
+    "description": "Runtime interface message browser_control.show_tab_aria"
+  },
   "runtime_browser_control_state_active": {
     "message": "Активно",
     "description": "Runtime interface message browser_control.state_active"
@@ -1054,10 +1054,6 @@
   "runtime_browser_control_state_ready": {
     "message": "Готово",
     "description": "Runtime interface message browser_control.state_ready"
-  },
-  "runtime_browser_control_stay": {
-    "message": "Залишатися на моїй вкладці",
-    "description": "Runtime interface message browser_control.stay"
   },
   "runtime_browser_control_stop": {
     "message": "Зупинити",
@@ -1111,6 +1107,10 @@
     "message": "Вкладки керування без змін",
     "description": "Runtime interface message browser_control.toast_scope_unchanged"
   },
+  "runtime_browser_control_toast_show_tab_failed": {
+    "message": "Не вдалося показати цю вкладку",
+    "description": "Runtime interface message browser_control.toast_show_tab_failed"
+  },
   "runtime_browser_control_toast_state_unchanged": {
     "message": "Стан Керування Hermes без змін",
     "description": "Runtime interface message browser_control.toast_state_unchanged"
@@ -1119,10 +1119,6 @@
     "message": "Не вдалося зупинити дії браузера",
     "description": "Runtime interface message browser_control.toast_stop_failed"
   },
-  "runtime_browser_control_toast_view_unchanged": {
-    "message": "Налаштування перегляду без змін",
-    "description": "Runtime interface message browser_control.toast_view_unchanged"
-  },
   "runtime_browser_control_turn_off": {
     "message": "Вимкнути",
     "description": "Runtime interface message browser_control.turn_off"
@@ -1130,10 +1126,6 @@
   "runtime_browser_control_waiting": {
     "message": "Очікування на Hermes.",
     "description": "Runtime interface message browser_control.waiting"
-  },
-  "runtime_browser_control_while_working": {
-    "message": "Поки Hermes працює",
-    "description": "Runtime interface message browser_control.while_working"
   },
   "runtime_clarify_expired": {
     "message": "This question was already answered or expired.",

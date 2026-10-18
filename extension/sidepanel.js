@@ -625,7 +625,7 @@ import {
   browserControlView,
   controlLeaseRequest,
   currentTabLeaseReplacement,
-  followTargetTabId,
+  showTabTargetId,
 } from './lib/browser-control-ui.mjs';
 import { browserControlScopeHelpKey, createBrowserControlDialog } from './lib/browser-control-dialog.mjs';
 
@@ -944,15 +944,13 @@ const els = {
   browserControlScopeInput: $('#browserControlScopeInput'),
   browserControlScopeHelp: $('#browserControlScopeHelp'),
   browserControlScopeLock: $('#browserControlScopeLock'),
-  browserControlStayButton: $('#browserControlStayButton'),
-  browserControlFollowButton: $('#browserControlFollowButton'),
+  browserControlShowTabButton: $('#browserControlShowTabButton'),
   browserControlEnableButton: $('#browserControlEnableButton'),
   browserControlDetachButton: $('#browserControlDetachButton'),
   browserControlMenuButton: $('#browserControlMenuButton'),
   browserControlDialog: $('#browserControlDialog'),
   browserControlDialogScopeInput: $('#browserControlDialogScopeInput'),
-  browserControlDialogStayButton: $('#browserControlDialogStayButton'),
-  browserControlDialogFollowButton: $('#browserControlDialogFollowButton'),
+  browserControlDialogShowTabButton: $('#browserControlDialogShowTabButton'),
   browserControlOffButton: $('#browserControlOffButton'),
   browserControlPauseLabel: $('#browserControlPauseLabel'),
   browserControlStrip: $('#browserControlStrip'),
@@ -1309,6 +1307,8 @@ let operationToastTimer = null;
 let browserControlStatus = null;
 let browserControlActiveTab = null;
 let browserControlCurrentTarget = null;
+// The tab the Show tab button would bring forward, or null when it is hidden.
+let browserControlShowTabId = null;
 let browserControlPollTimer = null;
 let browserControlDialogUi = null;
 let latestUpdateReview = null;
@@ -2460,7 +2460,6 @@ function renderBrowserControl() {
     currentTarget: browserControlCurrentTarget,
   });
   const enabled = settings.browserControlEnabled === true;
-  const viewBehavior = settings.browserControlViewBehavior === 'follow' ? 'follow' : 'stay';
   const paused = browserControlStatus?.paused === true;
   const pendingApproval = browserControlStatus?.pendingApproval || null;
 
@@ -2484,8 +2483,6 @@ function renderBrowserControl() {
   // Visible helper text explains the chosen scope; while control is on, it says why the scope is locked.
   els.browserControlScopeHelp.textContent = t(browserControlScopeHelpKey(els.browserControlScopeInput.value));
   els.browserControlScopeLock.hidden = !enabled;
-  els.browserControlStayButton.setAttribute('aria-pressed', String(viewBehavior === 'stay'));
-  els.browserControlFollowButton.setAttribute('aria-pressed', String(viewBehavior === 'follow'));
   els.browserControlEnableButton.hidden = enabled && !view.canAttach;
   els.browserControlEnableButton.textContent = t(view.canAttach
     ? 'ui.attach.to.current.tab'
@@ -2499,21 +2496,26 @@ function renderBrowserControl() {
       && !browserControlStatus?.pendingApproval && !browserControlStatus?.pendingApprovals && !browserControlStatus?.scopeChanging,
     view: { ...view, title: translateUiText(view.title), detail: translateUiText(view.detail) },
     help: {
-      stay: t('browser_control.help_stay'), follow: t('browser_control.help_follow'),
+      'show-tab': t('browser_control.help_show_tab'),
       attach: t('browser_control.help_attach'), off: t('browser_control.help_off'),
       pause: t(paused ? 'browser_control.help_resume' : 'browser_control.help_pause'),
       stop: t('browser_control.help_stop'), close: t('browser_control.help_close'),
     },
   });
-  // The dialog owns an explicit draft; status polling must not erase it.
-  els.browserControlDialogStayButton.setAttribute('aria-pressed', String(viewBehavior === 'stay'));
-  els.browserControlDialogFollowButton.setAttribute('aria-pressed', String(viewBehavior === 'follow'));
   els.browserControlStrip.hidden = !enabled;
   els.browserControlStrip.dataset.tone = view.tone;
   els.browserControlStripTitle.textContent = translateUiText(view.title);
   els.browserControlStripDetail.textContent = translateUiText(view.detail);
   els.browserControlAttachButton.hidden = !view.canAttach || view.canAuthorize;
   els.browserControlAuthorizeButton.hidden = !view.canAuthorize;
+  // Stable across actions: the target is the attached tab Hermes last used, and
+  // the button hides only when that tab is the one the panel's window shows.
+  browserControlShowTabId = enabled
+    ? showTabTargetId({ status: browserControlStatus || {}, activeTabId: browserControlActiveTab?.id })
+    : null;
+  for (const button of [els.browserControlShowTabButton, els.browserControlDialogShowTabButton]) {
+    if (button) button.hidden = browserControlShowTabId === null;
+  }
   els.browserControlAttachButton.textContent = t('ui.attach.to.current.tab');
   els.browserControlAttachButton.setAttribute('aria-label', t('ui.attach.to.current.tab'));
   els.browserControlPauseButton.dataset.paused = String(paused);
@@ -2531,7 +2533,7 @@ function renderBrowserControl() {
   els.browserControlRejectButton.hidden = !pendingApproval;
 }
 
-async function refreshBrowserControlStatus({ follow = true } = {}) {
+async function refreshBrowserControlStatus() {
   if (document.visibilityState === 'hidden') return browserControlStatus;
   try {
     browserControlStatus = await browserControlMessage('HERMES_CONTROLLER_STATUS');
@@ -2549,15 +2551,6 @@ async function refreshBrowserControlStatus({ follow = true } = {}) {
       }
     }
     renderBrowserControl();
-    if (follow && settings.browserControlViewBehavior === 'follow') {
-      const tab = await activeTab();
-      const targetTabId = followTargetTabId({
-        viewBehavior: 'follow',
-        status: browserControlStatus,
-        activeTabId: tab?.id,
-      });
-      if (targetTabId) await browserApi.tabs.update(targetTabId, { active: true });
-    }
     return browserControlStatus;
   } catch {
     browserControlStatus = null;
@@ -2578,7 +2571,7 @@ function scheduleBrowserControlPoll() {
 }
 
 async function attachBrowserControlToCurrentTab() {
-  await refreshBrowserControlStatus({ follow: false });
+  await refreshBrowserControlStatus();
   const tab = browserControlActiveTab || await activeTab();
   if (browserControlStatus?.lastConnectFailure?.reason === 'missing_session') {
     throw new Error(t('browser_control.error_session_attach'));
@@ -2587,7 +2580,7 @@ async function attachBrowserControlToCurrentTab() {
   let resolvedReplacement = replacement;
   if (!replacement.ok && replacement.error === 'controller_unavailable'
     && await ensureControllerCredentialForControl().catch(() => false)) {
-    await refreshBrowserControlStatus({ follow: false });
+    await refreshBrowserControlStatus();
     resolvedReplacement = currentTabLeaseReplacement({ status: browserControlStatus || {}, activeTab: tab, allowLocalFiles: true });
   }
   if (!resolvedReplacement.ok) {
@@ -2627,7 +2620,7 @@ async function attachBrowserControlToCurrentTab() {
       ownerId: resolvedReplacement.ownerId,
       tabIds: resolvedReplacement.acquire.tabIds,
     }).catch(() => null);
-    await refreshBrowserControlStatus({ follow: false }).catch(() => null);
+    await refreshBrowserControlStatus().catch(() => null);
     throw error;
   }
   await persistBrowserControlPreferences({
@@ -2636,7 +2629,7 @@ async function attachBrowserControlToCurrentTab() {
   });
   browserControlActiveTab = tab;
   browserControlCurrentTarget = resolved;
-  await refreshBrowserControlStatus({ follow: false });
+  await refreshBrowserControlStatus();
   scheduleBrowserControlPoll();
   showOperationToast({ title: t('browser_control.toast_attached'), detail: t('browser_control.toast_attached_detail') });
   return resolved;
@@ -2680,7 +2673,7 @@ async function enableBrowserControl() {
       ownerId: rebound.controllerId,
     });
     if (!acquired?.ok) throw new Error(acquired?.error || t('browser_control.error_enable_failed'));
-    await refreshBrowserControlStatus({ follow: false });
+    await refreshBrowserControlStatus();
     scheduleBrowserControlPoll();
     showOperationToast({ title: t('browser_control.enabled_toast'), detail: t('browser_control.enabled_detail') });
   } catch (error) {
@@ -2699,11 +2692,57 @@ async function detachBrowserControl() {
   showOperationToast({ title: t('browser_control.detached_toast'), detail: t('browser_control.detached_detail') });
 }
 
-async function setBrowserControlViewBehavior(value) {
-  const viewBehavior = value === 'follow' ? 'follow' : 'stay';
-  await persistBrowserControlPreferences({ browserControlViewBehavior: viewBehavior });
+// The only code that moves the user's tab for Hermes Control, and only when the
+// user presses Show tab. A failure is a warning: control state is left alone.
+async function showBrowserControlTab() {
+  // The target is read at press time, not taken from the strip drawn up to 750 ms
+  // ago: the action that just ran may have changed it. A failed read keeps the
+  // rendered target, and the shared status is never touched here.
+  let tabId = browserControlShowTabId;
+  try {
+    const freshStatus = await browserControlMessage('HERMES_CONTROLLER_STATUS');
+    const shownTab = await activeTab().catch(() => browserControlActiveTab);
+    tabId = showTabTargetId({
+      status: freshStatus && typeof freshStatus === 'object' ? freshStatus : (browserControlStatus || {}),
+      activeTabId: shownTab?.id,
+    });
+  } catch {
+    tabId = browserControlShowTabId;
+  }
+  if (!Number.isInteger(tabId) || tabId <= 0) return;
+  try {
+    const [panelTab] = await browserApi.tabs.query({ active: true, currentWindow: true });
+    const target = await browserApi.tabs.get(tabId);
+    await browserApi.tabs.update(tabId, { active: true });
+    const targetWindowId = Number(target?.windowId);
+    if (Number.isInteger(targetWindowId) && targetWindowId !== Number(panelTab?.windowId)) {
+      await browserApi.windows.update(targetWindowId, { focused: true });
+    }
+  } catch (error) {
+    showOperationToast({ kind: 'warn', title: t('browser_control.toast_show_tab_failed'), detail: error?.message || String(error) });
+    return;
+  }
+  // Resolve the tab now in front before drawing, so the strip moves straight to
+  // its real state instead of flashing "preparing" until the next status poll.
+  const nextActiveTab = await activeTab().catch(() => browserControlActiveTab);
+  const nextActiveTabId = Number(nextActiveTab?.id);
+  let nextTarget = null;
+  if (browserControlStatus?.leasedTabIds?.some((leasedTabId) => Number(leasedTabId) === nextActiveTabId)) {
+    const candidate = browserControlCandidate({
+      context: { activeTab: nextActiveTab },
+      scope: { mode: CONTEXT_SCOPE_MODES.ACTIVE_TAB },
+    });
+    if (candidate) {
+      try {
+        nextTarget = await browserControlMessage('HERMES_CONTROLLER_TARGET_RESOLVE', candidate);
+      } catch {
+        nextTarget = null;
+      }
+    }
+  }
+  browserControlActiveTab = nextActiveTab;
+  browserControlCurrentTarget = nextTarget;
   renderBrowserControl();
-  if (viewBehavior === 'follow') await refreshBrowserControlStatus();
 }
 
 async function toggleBrowserControlPause() {
@@ -24279,7 +24318,7 @@ function bindEvents() {
     closeButton: els.browserControlDismissButton,
     focusFallback: els.input,
     label: () => t('browser_control.kicker'),
-    refresh: () => refreshBrowserControlStatus({ follow: false }),
+    refresh: () => refreshBrowserControlStatus(),
     scopeInput: els.browserControlDialogScopeInput,
     scopeHelp: $('#browserControlDialogScopeHelp'),
     tabsField: $('#browserControlDialogTabs'), tabsList: $('#browserControlDialogTabList'),
@@ -24297,7 +24336,7 @@ function bindEvents() {
         expectedGeneration: authority?.generation, expectedSettingsRevision: authority?.settingsRevision,
         ...(scope === 'task-set' ? { taskSetId: `task-set-${[...selectedIds].sort((a, b) => a - b).join('-')}`.slice(0, 120) } : {}),
       });
-      await refreshBrowserControlStatus({ follow: false });
+      await refreshBrowserControlStatus();
       if (!result?.ok) throw Object.assign(new Error(result?.error || 'scope_change_failed'), { code: result?.error });
       // Read back the settings the worker saved; never publish picker intent.
       const stored = await browserApi.storage.local.get('hermesBrowserSettings');
@@ -24335,7 +24374,7 @@ function bindEvents() {
     els.browserControlAuthorizeButton.disabled = true;
     try {
       await ensureControllerCredentialForControl();
-      await refreshBrowserControlStatus({ follow: false });
+      await refreshBrowserControlStatus();
       if (settings.browserControlEnabled === true) await attachBrowserControlToCurrentTab().catch(() => null);
     } catch (error) {
       showOperationToast({ kind: 'warn', title: t('browser_control.toast_authorize_failed'), detail: error?.message || String(error) });
@@ -24368,14 +24407,9 @@ function bindEvents() {
       .then(renderBrowserControl)
       .catch((error) => showOperationToast({ kind: 'warn', title: t('browser_control.toast_scope_unchanged'), detail: error?.message || String(error) }));
   });
-  for (const button of [els.browserControlStayButton, els.browserControlDialogStayButton]) {
+  for (const button of [els.browserControlShowTabButton, els.browserControlDialogShowTabButton]) {
     button?.addEventListener('click', () => {
-      setBrowserControlViewBehavior('stay').catch((error) => showOperationToast({ kind: 'warn', title: t('browser_control.toast_view_unchanged'), detail: error?.message || String(error) }));
-    });
-  }
-  for (const button of [els.browserControlFollowButton, els.browserControlDialogFollowButton]) {
-    button?.addEventListener('click', () => {
-      setBrowserControlViewBehavior('follow').catch((error) => showOperationToast({ kind: 'warn', title: t('browser_control.toast_view_unchanged'), detail: error?.message || String(error) }));
+      void showBrowserControlTab();
     });
   }
   els.browserControlPauseButton?.addEventListener('click', () => {
@@ -25005,7 +25039,7 @@ void loadBotProfileOverrides();
 void refreshPetAvatarCache();
 await runStartupReadiness();
 renderBrowserControl();
-await refreshBrowserControlStatus({ follow: false });
+await refreshBrowserControlStatus();
 scheduleBrowserControlPoll();
 try {
   await consumePendingInlineDraftRequest();

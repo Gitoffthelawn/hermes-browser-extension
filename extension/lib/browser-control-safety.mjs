@@ -18,7 +18,6 @@ const SAFE_ACTIONS = new Set([
   'browser_fill',
   'browser_select',
   'browser_screenshot',
-  'browser_tab_activate',
   'browser_tab_create',
   'browser_tab_group',
   'browser_tab_ungroup',
@@ -109,6 +108,10 @@ export function classifyBrowserControlAction({
   const normalizedAction = compact(action);
   if (normalizedAction === 'browser_drag') {
     return decision(BROWSER_CONTROL_RISKS.APPROVAL, 'drag-action');
+  }
+  // Switching the tab the person is looking at is their call, so Hermes asks first.
+  if (normalizedAction === 'browser_tab_activate') {
+    return decision(BROWSER_CONTROL_RISKS.APPROVAL, 'tab-activate');
   }
   if (normalizedAction === 'browser_tab_close') {
     return decision(BROWSER_CONTROL_RISKS.APPROVAL, 'tab-close');

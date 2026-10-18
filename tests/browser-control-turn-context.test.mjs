@@ -100,6 +100,16 @@ async function settle() {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+// Reads until a value appears: a held command only reports once the person answers.
+async function untilReady(read, attempts = 200) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const value = read();
+    if (value) return value;
+    await settle();
+  }
+  return null;
+}
+
 // A page adapter that records every call, with the real executor and ref store
 // in front of it, so a ref minted for the turn is exercised end to end.
 function pageAdapter({ nodes = PAGE_NODES, snapshot = null, actions = ADAPTER_ACTIONS } = {}) {
@@ -173,7 +183,7 @@ async function controlledWorker({
     await settle();
     return transport.connections[0].sent.at(-1).params;
   };
-  return { worker, transport, adapter, refs, storage, boot, prepare, command };
+  return { worker, transport, adapter, refs, storage, boot, prepare, command, approvals };
 }
 
 test('prepare-turn returns a bounded snapshot whose refs the first broker browser_click can use', async () => {
@@ -369,13 +379,39 @@ test('the most recent turn tab survives a worker restart and is forgotten when i
   assert.equal(restarted.adapter.calls.at(-1).tabId, 41);
 });
 
+test('the tab of the latest action is reported as lastActionTabId, survives a restart, and is forgotten when its tab goes away', async () => {
+  const first = await twoTabWorker();
+  await first.prepare(41);
+  const acted = await first.command({ command_id: 'act-42', action: 'browser_scroll', arguments: { direction: 'down', tab_id: 42 } });
+  assert.equal(acted.ok, true, JSON.stringify(acted));
+  assert.equal(first.worker.status().lastActionTabId, 42);
+  assert.equal(first.storage.state.hermesBrowserControllerWorker.lastActionTabId, 42);
+
+  const restarted = await twoTabWorker({ storage: first.storage, acquire: false });
+  assert.equal(restarted.worker.status().lastActionTabId, 42);
+
+  await restarted.worker.handleTabRemoved(42);
+  assert.equal(restarted.worker.status().lastActionTabId, null);
+  assert.equal(restarted.storage.state.hermesBrowserControllerWorker.lastActionTabId, 0);
+});
+
 test('tab-owned arguments.tab_id still means the tab to act on, not the command target', async () => {
-  const { prepare, command, adapter } = await twoTabWorker({
+  const { prepare, adapter, approvals, transport } = await twoTabWorker({
     adapter: pageAdapter({ actions: [...ADAPTER_ACTIONS, 'browser_tab_activate'] }),
   });
   await prepare(41);
-  const result = await command({ command_id: 'activate', action: 'browser_tab_activate', arguments: { tab_id: 42 } });
-  assert.equal(result.ok, true, JSON.stringify(result));
+  // Switching tabs asks the person first, so the command is held until they grant it.
+  transport.connections[0].emit({
+    method: 'browser.controller.command',
+    params: { command_id: 'activate', action: 'browser_tab_activate', arguments: { tab_id: 42 } },
+  });
+  await settle();
+  const request = await untilReady(() => approvals.pending()[0] || null);
+  assert.equal(request?.action, 'browser_tab_activate', JSON.stringify(approvals.pending()));
+  assert.equal(adapter.calls.some((call) => call.action === 'browser_tab_activate'), false);
+  approvals.grant(request);
+  const result = await untilReady(() => transport.connections[0].sent.find((frame) => frame.params?.command_id === 'activate') || null);
+  assert.equal(result?.params.ok, true, JSON.stringify(result));
   assert.equal(adapter.calls.at(-1).args.tab_id, 42);
 });
 

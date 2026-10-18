@@ -931,10 +931,6 @@
     "message": "Hermes Control चालू करने से पहले एक Hermes सत्र शुरू करें या चुनें।",
     "description": "Runtime interface message browser_control.error_session_enable"
   },
-  "runtime_browser_control_follow": {
-    "message": "Hermes का अनुसरण करें",
-    "description": "Runtime interface message browser_control.follow"
-  },
   "runtime_browser_control_help_attach": {
     "message": "Hermes को इस टैब को नियंत्रित करने दें। यह पहले जुड़े टैब की जगह लेगा।",
     "description": "Runtime interface message browser_control.help_attach"
@@ -942,10 +938,6 @@
   "runtime_browser_control_help_close": {
     "message": "नियंत्रण रोके या बंद किए बिना यह पैनल बंद करें।",
     "description": "Runtime interface message browser_control.help_close"
-  },
-  "runtime_browser_control_help_follow": {
-    "message": "Hermes जिस जुड़े टैब का उपयोग कर रहा है उसे दिखाएँ, लेकिन ब्राउज़र विंडो को सामने न लाएँ।",
-    "description": "Runtime interface message browser_control.help_follow"
   },
   "runtime_browser_control_help_off": {
     "message": "Hermes Control बंद करें और यह पैनल बंद करें। सेटिंग में जाकर इसे फिर से चालू करें।",
@@ -971,9 +963,9 @@
     "message": "केवल वर्तमान टैब को नियंत्रित करें। अन्य टैब शामिल नहीं हैं।",
     "description": "Runtime interface message browser_control.help_scope_this_tab"
   },
-  "runtime_browser_control_help_stay": {
-    "message": "अपने टैब पर रहें जबकि Hermes पृष्ठभूमि में जुड़े टैब पर काम करता है।",
-    "description": "Runtime interface message browser_control.help_stay"
+  "runtime_browser_control_help_show_tab": {
+    "message": "Hermes जिस टैब का उपयोग कर रहा है, उस पर जाएँ। Hermes अपने आप आपका टैब कभी नहीं बदलता।",
+    "description": "Runtime interface message browser_control.help_show_tab"
   },
   "runtime_browser_control_help_stop": {
     "message": "नियंत्रण बंद किए बिना ब्राउज़र की चल रही और कतार में मौजूद कार्रवाइयाँ रोकें।",
@@ -1039,6 +1031,14 @@
     "message": "चयनित टैब",
     "description": "Runtime interface message browser_control.selected_tabs"
   },
+  "runtime_browser_control_show_tab": {
+    "message": "टैब दिखाएँ",
+    "description": "Runtime interface message browser_control.show_tab"
+  },
+  "runtime_browser_control_show_tab_aria": {
+    "message": "वह टैब दिखाएँ जिसका Hermes उपयोग कर रहा है",
+    "description": "Runtime interface message browser_control.show_tab_aria"
+  },
   "runtime_browser_control_state_active": {
     "message": "सक्रिय",
     "description": "Runtime interface message browser_control.state_active"
@@ -1054,10 +1054,6 @@
   "runtime_browser_control_state_ready": {
     "message": "तैयार",
     "description": "Runtime interface message browser_control.state_ready"
-  },
-  "runtime_browser_control_stay": {
-    "message": "मेरे टैब पर रहें",
-    "description": "Runtime interface message browser_control.stay"
   },
   "runtime_browser_control_stop": {
     "message": "रोकें",
@@ -1111,6 +1107,10 @@
     "message": "नियंत्रण टैब अपरिवर्तित",
     "description": "Runtime interface message browser_control.toast_scope_unchanged"
   },
+  "runtime_browser_control_toast_show_tab_failed": {
+    "message": "वह टैब नहीं दिखाया जा सका",
+    "description": "Runtime interface message browser_control.toast_show_tab_failed"
+  },
   "runtime_browser_control_toast_state_unchanged": {
     "message": "Hermes Control की स्थिति अपरिवर्तित",
     "description": "Runtime interface message browser_control.toast_state_unchanged"
@@ -1119,10 +1119,6 @@
     "message": "ब्राउज़र क्रियाएँ रोकी नहीं जा सकीं",
     "description": "Runtime interface message browser_control.toast_stop_failed"
   },
-  "runtime_browser_control_toast_view_unchanged": {
-    "message": "व्यू सेटिंग अपरिवर्तित",
-    "description": "Runtime interface message browser_control.toast_view_unchanged"
-  },
   "runtime_browser_control_turn_off": {
     "message": "बंद करें",
     "description": "Runtime interface message browser_control.turn_off"
@@ -1130,10 +1126,6 @@
   "runtime_browser_control_waiting": {
     "message": "Hermes की प्रतीक्षा में",
     "description": "Runtime interface message browser_control.waiting"
-  },
-  "runtime_browser_control_while_working": {
-    "message": "जब Hermes काम कर रहा हो",
-    "description": "Runtime interface message browser_control.while_working"
   },
   "runtime_clarify_expired": {
     "message": "This question was already answered or expired.",

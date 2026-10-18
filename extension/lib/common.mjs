@@ -98,7 +98,6 @@ export const DEFAULT_SETTINGS = Object.freeze({
   gmailCaptureEnabled: false,
   browserControlEnabled: false,
   browserControlScope: 'this-tab',
-  browserControlViewBehavior: 'stay',
   browserControlPaused: false,
   browserControlDeveloperMode: false,
   browserControlArtifactTransport: false,

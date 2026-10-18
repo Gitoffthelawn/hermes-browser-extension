@@ -931,10 +931,6 @@
     "message": "Bắt đầu hoặc chọn một phiên Hermes trước khi bật Điều khiển Hermes.",
     "description": "Runtime interface message browser_control.error_session_enable"
   },
-  "runtime_browser_control_follow": {
-    "message": "Theo dõi Hermes",
-    "description": "Runtime interface message browser_control.follow"
-  },
   "runtime_browser_control_help_attach": {
     "message": "Cho phép Hermes điều khiển thẻ này, thay cho thẻ đã kết nối trước đó.",
     "description": "Runtime interface message browser_control.help_attach"
@@ -942,10 +938,6 @@
   "runtime_browser_control_help_close": {
     "message": "Đóng bảng này mà không tạm dừng hay tắt điều khiển.",
     "description": "Runtime interface message browser_control.help_close"
-  },
-  "runtime_browser_control_help_follow": {
-    "message": "Hiển thị thẻ đã kết nối mà Hermes đang dùng, không đưa cửa sổ trình duyệt lên trước.",
-    "description": "Runtime interface message browser_control.help_follow"
   },
   "runtime_browser_control_help_off": {
     "message": "Tắt Điều khiển Hermes và đóng bảng này. Bật lại trong Cài đặt.",
@@ -971,9 +963,9 @@
     "message": "Chỉ điều khiển tab hiện tại. Không bao gồm các tab khác.",
     "description": "Runtime interface message browser_control.help_scope_this_tab"
   },
-  "runtime_browser_control_help_stay": {
-    "message": "Giữ nguyên thẻ của bạn trong khi Hermes làm việc trên các thẻ đã kết nối ở nền.",
-    "description": "Runtime interface message browser_control.help_stay"
+  "runtime_browser_control_help_show_tab": {
+    "message": "Chuyển đến thẻ mà Hermes đang dùng. Hermes không bao giờ tự thay đổi thẻ của bạn.",
+    "description": "Runtime interface message browser_control.help_show_tab"
   },
   "runtime_browser_control_help_stop": {
     "message": "Dừng các thao tác trình duyệt hiện tại và đang chờ mà không tắt điều khiển.",
@@ -1039,6 +1031,14 @@
     "message": "Các tab đã chọn",
     "description": "Runtime interface message browser_control.selected_tabs"
   },
+  "runtime_browser_control_show_tab": {
+    "message": "Hiển thị thẻ",
+    "description": "Runtime interface message browser_control.show_tab"
+  },
+  "runtime_browser_control_show_tab_aria": {
+    "message": "Hiển thị thẻ mà Hermes đang dùng",
+    "description": "Runtime interface message browser_control.show_tab_aria"
+  },
   "runtime_browser_control_state_active": {
     "message": "Đang hoạt động",
     "description": "Runtime interface message browser_control.state_active"
@@ -1054,10 +1054,6 @@
   "runtime_browser_control_state_ready": {
     "message": "Sẵn sàng",
     "description": "Runtime interface message browser_control.state_ready"
-  },
-  "runtime_browser_control_stay": {
-    "message": "Ở lại tab của tôi",
-    "description": "Runtime interface message browser_control.stay"
   },
   "runtime_browser_control_stop": {
     "message": "Dừng",
@@ -1111,6 +1107,10 @@
     "message": "Các tab điều khiển không thay đổi",
     "description": "Runtime interface message browser_control.toast_scope_unchanged"
   },
+  "runtime_browser_control_toast_show_tab_failed": {
+    "message": "Không thể hiển thị thẻ đó",
+    "description": "Runtime interface message browser_control.toast_show_tab_failed"
+  },
   "runtime_browser_control_toast_state_unchanged": {
     "message": "Trạng thái Điều khiển Hermes không thay đổi",
     "description": "Runtime interface message browser_control.toast_state_unchanged"
@@ -1119,10 +1119,6 @@
     "message": "Không thể dừng các thao tác trình duyệt",
     "description": "Runtime interface message browser_control.toast_stop_failed"
   },
-  "runtime_browser_control_toast_view_unchanged": {
-    "message": "Cài đặt xem không thay đổi",
-    "description": "Runtime interface message browser_control.toast_view_unchanged"
-  },
   "runtime_browser_control_turn_off": {
     "message": "Tắt",
     "description": "Runtime interface message browser_control.turn_off"
@@ -1130,10 +1126,6 @@
   "runtime_browser_control_waiting": {
     "message": "Đang chờ Hermes.",
     "description": "Runtime interface message browser_control.waiting"
-  },
-  "runtime_browser_control_while_working": {
-    "message": "Trong khi Hermes làm việc",
-    "description": "Runtime interface message browser_control.while_working"
   },
   "runtime_clarify_expired": {
     "message": "This question was already answered or expired.",

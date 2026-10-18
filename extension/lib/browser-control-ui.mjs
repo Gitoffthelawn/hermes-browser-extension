@@ -2,7 +2,6 @@ import { validateBrowserControlUrl } from './browser-control-safety.mjs';
 import { isGatewayAuthRejection, isGatewayControlKeyUnconfigured, isMissingGatewayCredential } from './connection-modes.mjs';
 
 const CONTROL_SCOPES = new Set(['this-tab', 'selected-tabs', 'task-set']);
-const VIEW_BEHAVIORS = new Set(['stay', 'follow']);
 
 const ACTION_LABELS = Object.freeze({
   browser_back: 'Going back',
@@ -48,11 +47,24 @@ export function controlLeaseRequest({
   return { ok: true, kind: 'selected-tabs', tabIds: selectedTabIds, windowId };
 }
 
-export function followTargetTabId({ viewBehavior = 'stay', status = {}, activeTabId = null } = {}) {
-  if ((VIEW_BEHAVIORS.has(viewBehavior) ? viewBehavior : 'stay') !== 'follow') return null;
-  const targetTabId = Number(status?.activeAction?.tabId);
-  const leased = new Set(tabIdsFrom(status?.leasedTabIds));
-  if (!Number.isInteger(targetTabId) || targetTabId <= 0 || !leased.has(targetTabId)) return null;
+// The attached tab the Show tab button brings forward. Hermes never picks this
+// for the user: the button only switches tabs on an explicit click. The target
+// is the tab an approval waits on, else the tab of the action running now, else
+// the tab of Hermes's most recent action, else the only attached tab. Each
+// candidate must be attached. Null when control is off or not connected, when
+// no tab qualifies, or when the target is already the panel window's active tab.
+export function showTabTargetId({ status = {}, activeTabId = null } = {}) {
+  if (status?.connected !== true || status?.controlEnabled !== true) return null;
+  const attached = new Set(tabIdsFrom(status?.leasedTabIds));
+  const attachedId = (value) => {
+    const tabId = Number(value);
+    return Number.isInteger(tabId) && attached.has(tabId) ? tabId : null;
+  };
+  const targetTabId = attachedId(status?.pendingApproval?.tabId)
+    ?? attachedId(status?.activeAction?.tabId)
+    ?? attachedId(status?.lastActionTabId)
+    ?? (attached.size === 1 ? [...attached][0] : null);
+  if (targetTabId === null) return null;
   return targetTabId === Number(activeTabId) ? null : targetTabId;
 }
 

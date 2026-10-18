@@ -1691,14 +1691,12 @@ body.startup-active .startup-actions #startupConnectButton:not([hidden]):focus-v
   grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
-.browser-control-field,
-.browser-control-view {
+.browser-control-field {
   display: grid;
   gap: 7px;
   min-width: 0;
 }
-.browser-control-field > span,
-.browser-control-view legend {
+.browser-control-field > span {
   color: var(--hermes-muted);
   margin-bottom: 8px;
   font: 650 calc(13px * var(--hermes-text-zoom, 1))/1.3 var(--hermes-font-ui);
@@ -1720,13 +1718,6 @@ body.startup-active .startup-actions #startupConnectButton:not([hidden]):focus-v
   font: 400 calc(12px * var(--hermes-text-zoom, 1))/1.45 var(--hermes-font-ui);
 }
 .browser-control-field > small[hidden] { display: none; }
-.browser-control-view { margin: 0; padding: 0; border: 0; gap: 14px; }
-.browser-control-view > div {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 2px;
-}
 .browser-control-card-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

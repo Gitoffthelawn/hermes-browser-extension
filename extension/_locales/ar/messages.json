@@ -931,10 +931,6 @@
     "message": "ابدأ جلسة Hermes أو اختر واحدة قبل تشغيل Hermes Control.",
     "description": "Runtime interface message browser_control.error_session_enable"
   },
-  "runtime_browser_control_follow": {
-    "message": "متابعة Hermes",
-    "description": "Runtime interface message browser_control.follow"
-  },
   "runtime_browser_control_help_attach": {
     "message": "اسمح لـ Hermes بالتحكم في علامة التبويب هذه بدلًا من علامة التبويب المرتبطة سابقًا.",
     "description": "Runtime interface message browser_control.help_attach"
@@ -942,10 +938,6 @@
   "runtime_browser_control_help_close": {
     "message": "أغلق هذه اللوحة دون إيقاف التحكم مؤقتًا أو تعطيله.",
     "description": "Runtime interface message browser_control.help_close"
-  },
-  "runtime_browser_control_help_follow": {
-    "message": "اعرض علامة التبويب المرتبطة التي يستخدمها Hermes دون إحضار نافذة المتصفح إلى المقدمة.",
-    "description": "Runtime interface message browser_control.help_follow"
   },
   "runtime_browser_control_help_off": {
     "message": "أوقف Hermes Control وأغلق هذه اللوحة. يمكنك تشغيله مجددًا من الإعدادات.",
@@ -971,9 +963,9 @@
     "message": "التحكم في علامة التبويب الحالية فقط. لا يشمل علامات التبويب الأخرى.",
     "description": "Runtime interface message browser_control.help_scope_this_tab"
   },
-  "runtime_browser_control_help_stay": {
-    "message": "ابقَ على علامة التبويب الحالية بينما يعمل Hermes على علامات التبويب المرتبطة في الخلفية.",
-    "description": "Runtime interface message browser_control.help_stay"
+  "runtime_browser_control_help_show_tab": {
+    "message": "انتقل إلى علامة التبويب التي يستخدمها Hermes. لا يغيّر Hermes علامة التبويب الخاصة بك من تلقاء نفسه أبدًا.",
+    "description": "Runtime interface message browser_control.help_show_tab"
   },
   "runtime_browser_control_help_stop": {
     "message": "أوقف إجراءات المتصفح الحالية والمنتظرة دون تعطيل التحكم.",
@@ -1039,6 +1031,14 @@
     "message": "التبويبات المحددة",
     "description": "Runtime interface message browser_control.selected_tabs"
   },
+  "runtime_browser_control_show_tab": {
+    "message": "عرض علامة التبويب",
+    "description": "Runtime interface message browser_control.show_tab"
+  },
+  "runtime_browser_control_show_tab_aria": {
+    "message": "عرض علامة التبويب التي يستخدمها Hermes",
+    "description": "Runtime interface message browser_control.show_tab_aria"
+  },
   "runtime_browser_control_state_active": {
     "message": "نشط",
     "description": "Runtime interface message browser_control.state_active"
@@ -1054,10 +1054,6 @@
   "runtime_browser_control_state_ready": {
     "message": "جاهز",
     "description": "Runtime interface message browser_control.state_ready"
-  },
-  "runtime_browser_control_stay": {
-    "message": "البقاء في تبويبي",
-    "description": "Runtime interface message browser_control.stay"
   },
   "runtime_browser_control_stop": {
     "message": "إيقاف",
@@ -1111,6 +1107,10 @@
     "message": "لم تتغير تبويبات التحكم",
     "description": "Runtime interface message browser_control.toast_scope_unchanged"
   },
+  "runtime_browser_control_toast_show_tab_failed": {
+    "message": "تعذّر عرض علامة التبويب هذه",
+    "description": "Runtime interface message browser_control.toast_show_tab_failed"
+  },
   "runtime_browser_control_toast_state_unchanged": {
     "message": "حالة Hermes Control لم تتغير",
     "description": "Runtime interface message browser_control.toast_state_unchanged"
@@ -1119,10 +1119,6 @@
     "message": "تعذّر إيقاف إجراءات المتصفح",
     "description": "Runtime interface message browser_control.toast_stop_failed"
   },
-  "runtime_browser_control_toast_view_unchanged": {
-    "message": "إعداد العرض لم يتغير",
-    "description": "Runtime interface message browser_control.toast_view_unchanged"
-  },
   "runtime_browser_control_turn_off": {
     "message": "إيقاف",
     "description": "Runtime interface message browser_control.turn_off"
@@ -1130,10 +1126,6 @@
   "runtime_browser_control_waiting": {
     "message": "في انتظار Hermes",
     "description": "Runtime interface message browser_control.waiting"
-  },
-  "runtime_browser_control_while_working": {
-    "message": "أثناء عمل Hermes",
-    "description": "Runtime interface message browser_control.while_working"
   },
   "runtime_clarify_expired": {
     "message": "This question was already answered or expired.",

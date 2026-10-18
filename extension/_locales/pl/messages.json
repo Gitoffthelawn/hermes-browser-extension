@@ -931,10 +931,6 @@
     "message": "Przed włączeniem Sterowania Hermes uruchom lub wybierz sesję Hermes.",
     "description": "Runtime interface message browser_control.error_session_enable"
   },
-  "runtime_browser_control_follow": {
-    "message": "Podążaj za Hermesem",
-    "description": "Runtime interface message browser_control.follow"
-  },
   "runtime_browser_control_help_attach": {
     "message": "Pozwól Hermes sterować tą kartą zamiast wcześniej podłączonej karty.",
     "description": "Runtime interface message browser_control.help_attach"
@@ -942,10 +938,6 @@
   "runtime_browser_control_help_close": {
     "message": "Zamknij ten panel bez wstrzymywania ani wyłączania sterowania.",
     "description": "Runtime interface message browser_control.help_close"
-  },
-  "runtime_browser_control_help_follow": {
-    "message": "Pokaż podłączoną kartę używaną przez Hermes bez przenoszenia okna przeglądarki na pierwszy plan.",
-    "description": "Runtime interface message browser_control.help_follow"
   },
   "runtime_browser_control_help_off": {
     "message": "Wyłącz Sterowanie Hermes i zamknij ten panel. Włączysz je ponownie w Ustawieniach.",
@@ -971,9 +963,9 @@
     "message": "Steruj tylko bieżącą kartą. Pozostałe karty nie są uwzględnione.",
     "description": "Runtime interface message browser_control.help_scope_this_tab"
   },
-  "runtime_browser_control_help_stay": {
-    "message": "Pozostań na swojej karcie, gdy Hermes pracuje w tle na podłączonych kartach.",
-    "description": "Runtime interface message browser_control.help_stay"
+  "runtime_browser_control_help_show_tab": {
+    "message": "Przełącz na kartę, której używa Hermes. Hermes nigdy sam nie zmienia Twojej karty.",
+    "description": "Runtime interface message browser_control.help_show_tab"
   },
   "runtime_browser_control_help_stop": {
     "message": "Zatrzymaj bieżące i oczekujące działania przeglądarki bez wyłączania sterowania.",
@@ -1039,6 +1031,14 @@
     "message": "Wybrane karty",
     "description": "Runtime interface message browser_control.selected_tabs"
   },
+  "runtime_browser_control_show_tab": {
+    "message": "Pokaż kartę",
+    "description": "Runtime interface message browser_control.show_tab"
+  },
+  "runtime_browser_control_show_tab_aria": {
+    "message": "Pokaż kartę, której używa Hermes",
+    "description": "Runtime interface message browser_control.show_tab_aria"
+  },
   "runtime_browser_control_state_active": {
     "message": "Aktywne",
     "description": "Runtime interface message browser_control.state_active"
@@ -1054,10 +1054,6 @@
   "runtime_browser_control_state_ready": {
     "message": "Gotowe",
     "description": "Runtime interface message browser_control.state_ready"
-  },
-  "runtime_browser_control_stay": {
-    "message": "Zostań na mojej karcie",
-    "description": "Runtime interface message browser_control.stay"
   },
   "runtime_browser_control_stop": {
     "message": "Zatrzymaj",
@@ -1111,6 +1107,10 @@
     "message": "Karty sterowania bez zmian",
     "description": "Runtime interface message browser_control.toast_scope_unchanged"
   },
+  "runtime_browser_control_toast_show_tab_failed": {
+    "message": "Nie udało się pokazać tej karty",
+    "description": "Runtime interface message browser_control.toast_show_tab_failed"
+  },
   "runtime_browser_control_toast_state_unchanged": {
     "message": "Stan Sterowania Hermes bez zmian",
     "description": "Runtime interface message browser_control.toast_state_unchanged"
@@ -1119,10 +1119,6 @@
     "message": "Nie udało się zatrzymać działań przeglądarki",
     "description": "Runtime interface message browser_control.toast_stop_failed"
   },
-  "runtime_browser_control_toast_view_unchanged": {
-    "message": "Ustawienie widoku bez zmian",
-    "description": "Runtime interface message browser_control.toast_view_unchanged"
-  },
   "runtime_browser_control_turn_off": {
     "message": "Wyłącz",
     "description": "Runtime interface message browser_control.turn_off"
@@ -1130,10 +1126,6 @@
   "runtime_browser_control_waiting": {
     "message": "Oczekiwanie na Hermesa.",
     "description": "Runtime interface message browser_control.waiting"
-  },
-  "runtime_browser_control_while_working": {
-    "message": "Gdy Hermes pracuje",
-    "description": "Runtime interface message browser_control.while_working"
   },
   "runtime_clarify_expired": {
     "message": "This question was already answered or expired.",

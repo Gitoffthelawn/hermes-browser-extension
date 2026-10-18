@@ -163,7 +163,6 @@ async function main() {
           browserControlEnabled: true,
           browserControlPaused: false,
           browserControlScope: 'this-tab',
-          browserControlViewBehavior: 'stay'
         },
         hermesBrowserIntroSeen: true
       });
@@ -314,9 +313,10 @@ async function main() {
         true,
         JSON.stringify(tabsBefore),
       );
-      await dispatch('browser_tab_activate', { tab_id: createdTabA });
+      // Switching the person's tab asks them first, so each switch is approved here.
+      await dispatchWithApproval('browser_tab_activate', { tab_id: createdTabA });
       await waitFor(() => extension.evaluate(`chrome.tabs.query({ active: true, currentWindow: true }).then((tabs) => Number(tabs?.[0]?.id) === ${createdTabA})`));
-      await dispatch('browser_tab_activate', { tab_id: tabId });
+      await dispatchWithApproval('browser_tab_activate', { tab_id: tabId });
       await waitFor(() => extension.evaluate(`chrome.tabs.query({ active: true, currentWindow: true }).then((tabs) => Number(tabs?.[0]?.id) === ${tabId})`));
 
       const grouped = await dispatch('browser_tab_group', { tab_ids: [createdTabA, createdTabB] });

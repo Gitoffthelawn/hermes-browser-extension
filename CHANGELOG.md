@@ -26,6 +26,7 @@
 
 ### Changed
 
+- Hermes Control's Follow Hermes and Stay on my tab choices are gone, and a Show tab button next to Turn off and Pause brings the tab Hermes is using to the front when you press it. Hermes never changes which tab you are looking at on its own: it asks before switching your tab, tabs it opens start in the background, and a link Hermes clicks that opens a new tab opens it in the background too.
 - Hermes Control has one name across the panel, settings and docs, says "attached tabs" instead of "leased tabs", explains scope choices in visible text, and lists tabs it cannot control as disabled rows with the reason. Its toasts, errors and the composer send button are translated.
 - Remote API connections no longer look for a Hermes Dashboard on this computer. Profiles and Bot Mode say a dashboard companion is not configured (#103). Thanks to @kidclone3.
 - Connect to Hermes uses a Gateway URL typed in Settings even before Save (#82). Thanks to @JonesGit4.
@@ -46,7 +47,7 @@
 
 ### Fixed
 
-- Hermes Control clicks and scrolls no longer hang on a background tab. Hover, drag or a screenshot of a hidden tab fail at once with `tab_hidden` and tell Hermes to bring the tab forward.
+- Hermes Control clicks and scrolls no longer hang on a background tab. Hover and drag of a hidden tab fail at once with `tab_hidden`, a screenshot of a hidden tab fails with `tab_hidden` after a short wait, and Hermes asks you to bring the tab forward with Show tab in Hermes Control.
 - Stop on a dashboard connection confirms from the gateway's own status instead of waiting 30 seconds. A Stop pressed before Hermes has a run id stays held, with a Release button, and the reads before an interrupt no longer delay it.
 - Cards from a connection the panel closed are withdrawn, a refused WebSocket handshake retries with a fresh ticket, and an approval raised during a slow status read is no longer closed as answered elsewhere.
 - The approval card focuses Reject when it appears, and a failed turn keeps its "Streaming failed" notice instead of the thinking indicator.

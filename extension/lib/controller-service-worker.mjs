@@ -268,6 +268,9 @@ export function createControllerServiceWorker({
   // The tab the latest turn was prepared for; the default target when several
   // tabs are attached and a command names none.
   let lastTurnTabId = 0;
+  // The tab of the most recent action Hermes ran. Show tab points at it between
+  // actions, so the button does not flicker with each action.
+  let lastActionTabId = 0;
   let terminalOutbox = [];
   let recoveredPending = [];
   let registry = createControllerRegistry({ now });
@@ -365,6 +368,7 @@ export function createControllerServiceWorker({
       tabId,
       startedAt: Number(now()),
     };
+    lastActionTabId = tabId;
     try {
       const result = await browserExecutor(frame, executorContext(context, { lease, tabId, frameId, authoritative }));
       if (!result?.ok) return result;
@@ -389,6 +393,8 @@ export function createControllerServiceWorker({
           taskSetId,
         });
         if (!acquired.ok) return terminalError('lease_acquire_failed', 'The created tab could not be adopted by this controller.');
+        // The tab Hermes just opened is the one Show tab offers, though it opens in the background.
+        lastActionTabId = createdTabId;
         await persist();
       }
 
@@ -451,6 +457,7 @@ export function createControllerServiceWorker({
       documentGenerations: cleanDocumentGenerations(documentGenerations),
       pausedLeases: cleanPausedLeases(pausedLeases),
       lastTurnTabId,
+      lastActionTabId,
       terminalOutbox: normalizeTerminalOutbox(terminalOutbox, { at: Number(now()) }),
       updatedAt: Number(now()),
     };
@@ -487,6 +494,7 @@ export function createControllerServiceWorker({
       pendingApprovals: approvals.count(),
       pendingApproval: approvals.pending?.()[0] || null,
       activeAction: activeAction ? { ...activeAction } : null,
+      lastActionTabId: lastActionTabId > 0 ? lastActionTabId : null,
       settingsRevision,
       lastConnectFailure: lastConnectFailure ? { ...lastConnectFailure } : null,
     };
@@ -909,6 +917,10 @@ export function createControllerServiceWorker({
         lastTurnTabId = sameDurableRoute && Number.isInteger(previousTurnTab) && previousTurnTab > 0
           ? previousTurnTab
           : 0;
+        const previousActionTab = Number(previousWorker?.lastActionTabId);
+        lastActionTabId = sameDurableRoute && Number.isInteger(previousActionTab) && previousActionTab > 0
+          ? previousActionTab
+          : 0;
         terminalOutbox = Number(previousWorker?.version) === CONTROLLER_WORKER_VERSION
           ? normalizeTerminalOutbox(previousWorker.terminalOutbox, { at: Number(now()) })
             .filter((entry) => entry.routeKey === routeKey)
@@ -991,6 +1003,7 @@ export function createControllerServiceWorker({
     settings = normalized;
     pausedLeases = {};
     lastTurnTabId = 0;
+    lastActionTabId = 0;
     closeConnection();
     terminalRouteOverride = previousRouteKey;
     lifecycle.restart();
@@ -1451,7 +1464,9 @@ export function createControllerServiceWorker({
     const leaseRemoved = leases.removeTab(normalizedTabId).ok;
     const turnTabRemoved = lastTurnTabId === normalizedTabId;
     if (turnTabRemoved) lastTurnTabId = 0;
-    if (documentChanged || leaseRemoved || pauseRemoved || turnTabRemoved) await persist();
+    const actionTabRemoved = lastActionTabId === normalizedTabId;
+    if (actionTabRemoved) lastActionTabId = 0;
+    if (documentChanged || leaseRemoved || pauseRemoved || turnTabRemoved || actionTabRemoved) await persist();
     return { ok: true, documentChanged, leaseRemoved, pauseRemoved };
   }
 

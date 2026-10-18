@@ -76,6 +76,7 @@ const APPROVAL_MESSAGES = Object.freeze({
   'consequential-action': 'Run this consequential browser action?',
   'coordinate-click': 'Click these exact viewport coordinates?',
   'drag-action': 'Drag this target to the selected destination?',
+  'tab-activate': 'Switch your view to this tab?',
   'tab-close': 'Close this Hermes-owned browser tab?',
   'console-metadata': 'Read console messages from this page?',
   'network-metadata': 'Read network request metadata for this page?',
@@ -87,6 +88,44 @@ const APPROVAL_MESSAGES = Object.freeze({
   'dialog-consequence': 'Approve this page dialog?',
   'dialog-action': 'Handle this page dialog?',
 });
+
+// A tab title in an approval card: short enough to read at a glance, ellipsis included.
+const TAB_TITLE_MAX_CHARS = 60;
+
+// Whitespace (line breaks included) becomes a space first, then the remaining control
+// and format characters (bidi overrides, zero-width marks) are removed, so a page title
+// cannot reorder or hide part of the approval sentence.
+function tabTitleText(value = '') {
+  return compact(String(value ?? '').replace(/\s+/g, ' ').replace(/[\p{Cc}\p{Cf}]/gu, ''), 500);
+}
+
+function truncatedTabTitle(value = '') {
+  const title = tabTitleText(value);
+  return title.length > TAB_TITLE_MAX_CHARS ? `${title.slice(0, TAB_TITLE_MAX_CHARS - 1).trimEnd()}…` : title;
+}
+
+// The host of a URL, with any port, or '' when there is no usable URL.
+function tabUrlHost(url = '') {
+  try {
+    return new URL(String(url)).host;
+  } catch {
+    return '';
+  }
+}
+
+// A URL as a title repeats it: without its scheme or trailing slash, lower-cased.
+function bareUrlText(value = '') {
+  return tabTitleText(value).replace(/^[a-z][a-z\d+.-]*:\/\//i, '').replace(/\/$/, '').toLowerCase();
+}
+
+// What a tab-switch approval calls the tab. A loading tab can show its URL as its title,
+// and an empty title has nothing to show; then the URL's host stands in. '' when neither exists.
+function tabSwitchLabel(title, url) {
+  const shown = tabTitleText(title);
+  if (shown !== '' && bareUrlText(shown) !== bareUrlText(url)) return truncatedTabTitle(shown);
+  const host = tabUrlHost(url);
+  return host ? truncatedTabTitle(host) : '';
+}
 
 const TIMED_OUT = Symbol('timed-out');
 
@@ -216,6 +255,8 @@ export function approvalBindingFields(action, args, target, destination) {
     const parts = [];
     if (refs.length) parts.push(`ref:${refs.join('>')}`);
     if (Number.isFinite(Number(args.x)) && Number.isFinite(Number(args.y))) parts.push(`point:${Number(args.x)},${Number(args.y)}`);
+    // A switch is bound to the tab it switches to, so a grant covers that tab only.
+    if (action === 'browser_tab_activate') parts.push(`tab:${Number(args.tab_id)}`);
     if (parts.length) fields.binding = parts.join(' ');
   }
   const material = approvalValueMaterial(action, args);
@@ -416,6 +457,9 @@ export function createBrowserControlExecutor({
     if (!ownedTabs.size) ownedTabs.add(scope.tabId);
     const controllerOwnedTabs = new Set(Array.from(ownedTabIds || []).map(Number).filter((tabId) => Number.isInteger(tabId) && tabId > 0));
     if (!controllerOwnedTabs.size) controllerOwnedTabs.add(scope.tabId);
+    // An approval belongs to the command's own tab and lease, which the worker
+    // checks when the person answers. A switch names its target in the adapter call only.
+    const commandScope = scope;
     if (action === 'browser_tab_activate') {
       const targetTabId = Number(args.tab_id);
       if (!ownedTabs.has(targetTabId)) return errorOutcome('lease_required', 'The target tab is not owned by this controller.');
@@ -628,6 +672,24 @@ export function createBrowserControlExecutor({
       return current;
     }
 
+    // The approval card names the tab a switch would bring forward, read through the
+    // adapter. Without a readable title the generic wording stands; either way the
+    // approval is bound to the tab id, not to this text.
+    async function tabSwitchReason(args) {
+      const generic = APPROVAL_MESSAGES['tab-activate'];
+      const targetTabId = Number(args.tab_id);
+      if (typeof adapter.inspect !== 'function' || !Number.isInteger(targetTabId) || targetTabId <= 0) return generic;
+      try {
+        const info = await adapter.inspect({
+          tabId: targetTabId, frameId: 0, signal: controller.signal, light: true,
+        });
+        const label = tabSwitchLabel(info?.title, info?.currentUrl);
+        return label ? `Switch your view to "${label}"?` : generic;
+      } catch {
+        return generic;
+      }
+    }
+
     // One action under the full rule set: ref resolution, page probe,
     // classification, approval, origin re-check and the adapter call. A batch
     // runs every step through this same path.
@@ -690,10 +752,12 @@ export function createBrowserControlExecutor({
           approvalId: stepApprovalId || compact(frame.approval_id || frame.command_id, 160),
           approvalNonce: stepApprovalNonce || compact(frame.approval_nonce || frame.approval_id || frame.command_id, 160),
           commandId: frame.command_id,
-          controllerId: scope.controllerId,
-          leaseId: scope.leaseId,
-          leaseGeneration: scope.leaseGeneration,
-          tabId: scope.tabId,
+          controllerId: commandScope.controllerId,
+          leaseId: commandScope.leaseId,
+          leaseGeneration: commandScope.leaseGeneration,
+          tabId: commandScope.tabId,
+          // The document the action will run on: a batch that navigated has moved on
+          // from the generation the command arrived with, and the grant checks this one.
           documentGeneration: scope.documentGeneration,
           action,
           state: 'paused',
@@ -709,6 +773,13 @@ export function createBrowserControlExecutor({
         }
         let consumed = approvals.consume(approval);
         if (!consumed.ok) {
+          if (action === 'browser_tab_activate') {
+            approvalReason = await tabSwitchReason(args);
+            // A cancel that landed during the title read must not leave a request behind.
+            if (controller.signal.aborted) {
+              return errorOutcome(terminalCode || 'cancelled', terminalMessage || 'The command was cancelled.');
+            }
+          }
           pendingApprovalId = approval.approvalId;
           waitedForApproval = true;
           // A batch keeps the steps it already finished, so a step that times out

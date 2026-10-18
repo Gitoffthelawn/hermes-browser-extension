@@ -19,9 +19,10 @@ test('Phase 6 Hermes Control card is target-locked inside the Permissions pane a
   assert.ok(controlCard > activeTab && controlCard < consent && controlCard < nextPane);
   assert.match(html, /id="browserControlEnableButton"/);
   assert.match(html, /id="browserControlScopeInput"/);
-  assert.match(html, /id="browserControlStayButton"/);
-  assert.match(html, /id="browserControlFollowButton"/);
+  // Settings has no tooltips, so only the Hermes Control window's Show tab button carries the help key.
+  assert.doesNotMatch(html, /id="browserControlShowTabButton"[^>]*data-control-help=/);
   assert.match(html, /id="browserControlDetachButton"/);
+  assert.doesNotMatch(html, /browserControlStayButton|browserControlFollowButton|browser-control-view|While Hermes works/);
 });
 
 test('composer launcher opens centered control management outside the conversation', () => {
@@ -44,8 +45,10 @@ test('composer launcher opens centered control management outside the conversati
   // The centered dialog has readable action labels; Stop only renders while working.
   assert.match(html, /id="browserControlPauseLabel"/);
   assert.match(html, /id="browserControlStopButton"[^>]*hidden/);
-  assert.match(html, /id="browserControlDialogStayButton"/);
-  assert.match(html, /id="browserControlDialogFollowButton"/);
+  // Show tab is the first control in the strip's action row, so the buttons that come and go after
+  // it (Attach, Stop, Approve) cannot move it sideways between ATTACH and ACTIVE.
+  assert.match(html, /<div class="browser-control-strip-actions">\s*<button id="browserControlDialogShowTabButton" class="browser-control-action secondary"[^>]*\shidden[^>]*data-control-help="show-tab"/);
+  assert.match(html, /id="browserControlDialogShowTabButton"[\s\S]*?id="browserControlAuthorizeButton"[\s\S]*?id="browserControlAttachButton"[\s\S]*?id="browserControlOffButton"[\s\S]*?id="browserControlPauseButton"[\s\S]*?id="browserControlStopButton"/);
 });
 
 test('Phase 6 enable and detach use install-declared debugger access without runtime permission prompts', () => {
@@ -75,10 +78,58 @@ test('Phase 6 visible controls call trusted worker pause stop and exact approval
   assert.match(source, /pendingApproval\.documentGeneration/);
 });
 
-test('Phase 6 Stay Follow uses tab activation only for Follow and never raises a browser window', () => {
-  assert.match(source, /followTargetTabId/);
-  assert.match(source, /tabs\.update\(targetTabId,\s*\{\s*active:\s*true\s*\}\)/s);
-  assert.doesNotMatch(source, /windows\.update\([^)]*focused:\s*true/s);
+test('Hermes Control never switches the tab on its own: status refresh is read-only and only the Show tab click moves a tab', () => {
+  const refreshStart = source.indexOf('async function refreshBrowserControlStatus()');
+  const refreshEnd = source.indexOf('\nfunction scheduleBrowserControlPoll()', refreshStart);
+  assert.ok(refreshStart > 0 && refreshEnd > refreshStart, 'refreshBrowserControlStatus is present');
+  assert.doesNotMatch(source.slice(refreshStart, refreshEnd), /tabs\.update|windows\.update|followTargetTabId/);
+
+  const handlerStart = source.indexOf('async function showBrowserControlTab()');
+  const handlerEnd = source.indexOf('\n}\n', handlerStart) + 3;
+  assert.ok(handlerStart > 0 && handlerEnd > handlerStart, 'the Show tab handler is present');
+  const moves = [...source.matchAll(/\b(?:tabs|windows)\.update\(/g)].map((match) => match.index);
+  assert.equal(moves.length, 2, 'the panel has exactly one tab move and one window focus');
+  for (const index of moves) {
+    assert.ok(index > handlerStart && index < handlerEnd, `a tab or window update at ${index} sits outside the Show tab handler`);
+  }
+  assert.match(source.slice(handlerStart, handlerEnd), /browserApi\.tabs\.update\(tabId,\s*\{\s*active:\s*true\s*\}\)/);
+  assert.match(source.slice(handlerStart, handlerEnd), /browserApi\.windows\.update\(targetWindowId,\s*\{\s*focused:\s*true\s*\}\)/);
+  assert.match(source.slice(handlerStart, handlerEnd), /toast_show_tab_failed/);
+  assert.doesNotMatch(source.slice(handlerStart, handlerEnd), /browserControlStatus\s*=\s*null|refreshBrowserControlStatus|browser_control\.error_attach_reconnecting/);
+  assert.match(source, /\[els\.browserControlShowTabButton, els\.browserControlDialogShowTabButton\]/);
+});
+
+test('Show tab draws the tab it switched to from that tab\'s real target, so the strip never flashes reconnecting', () => {
+  const handlerStart = source.indexOf('async function showBrowserControlTab()');
+  const handlerEnd = source.indexOf('\n}\n', handlerStart) + 3;
+  assert.ok(handlerStart > 0 && handlerEnd > handlerStart, 'the Show tab handler is present');
+  const handler = source.slice(handlerStart, handlerEnd);
+  // The new tab is leased, so its target is resolved with the same message and candidate the status refresh uses.
+  assert.match(handler, /browserControlStatus\?\.leasedTabIds\?\.some\(/);
+  assert.match(handler, /browserControlCandidate\(\{[\s\S]*?scope: \{ mode: CONTEXT_SCOPE_MODES\.ACTIVE_TAB \}/);
+  // Its own try/catch: a failed resolve leaves the target empty and never fails the switch.
+  assert.match(handler, /try \{\s*nextTarget = await browserControlMessage\('HERMES_CONTROLLER_TARGET_RESOLVE', candidate\);\s*\} catch \{\s*nextTarget = null;\s*\}/);
+  // The active tab and its target are set together, and only then does the panel draw.
+  assert.match(handler, /browserControlActiveTab = nextActiveTab;\s*browserControlCurrentTarget = nextTarget;\s*renderBrowserControl\(\);\s*\}\s*$/);
+  assert.equal(handler.match(/renderBrowserControl\(\)/g)?.length, 1, 'the handler draws once, after the target is known');
+  assert.ok(handler.indexOf('HERMES_CONTROLLER_TARGET_RESOLVE') < handler.indexOf('renderBrowserControl()'));
+  // Never a status refresh or a null status here: that is what made the strip show RECONNECTING.
+  assert.doesNotMatch(handler, /refreshBrowserControlStatus|browserControlStatus\s*=/);
+});
+
+test('Show tab takes its target from a fresh status read, falling back to the rendered target if that read fails', () => {
+  const handlerStart = source.indexOf('async function showBrowserControlTab()');
+  const handlerEnd = source.indexOf('\n}\n', handlerStart) + 3;
+  assert.ok(handlerStart > 0 && handlerEnd > handlerStart, 'the Show tab handler is present');
+  const handler = source.slice(handlerStart, handlerEnd);
+  // The status is read at press time, in its own try/catch, and the target follows the strip's own rule.
+  assert.match(handler, /try \{\s*const freshStatus = await browserControlMessage\('HERMES_CONTROLLER_STATUS'\);\s*const shownTab = await activeTab\(\)\.catch\(\(\) => browserControlActiveTab\);/);
+  assert.match(handler, /tabId = showTabTargetId\(\{\s*status: freshStatus && typeof freshStatus === 'object' \? freshStatus : \(browserControlStatus \|\| \{\}\),\s*activeTabId: shownTab\?\.id,\s*\}\);/);
+  // On failure the rendered target stands; a null target still does nothing.
+  assert.match(handler, /\} catch \{\s*tabId = browserControlShowTabId;\s*\}\s*if \(!Number\.isInteger\(tabId\) \|\| tabId <= 0\) return;/);
+  // The fresh read happens before anything moves, and the shared status is never reassigned here.
+  assert.ok(handler.indexOf('HERMES_CONTROLLER_STATUS') < handler.indexOf('browserApi.tabs.update(tabId'));
+  assert.doesNotMatch(handler, /browserControlStatus\s*=(?!=)/);
 });
 
 test('Phase 6 control UI reuses theme tokens, stays square, and has reduced-motion-safe feedback', () => {
@@ -90,9 +141,9 @@ test('Phase 6 control UI reuses theme tokens, stays square, and has reduced-moti
 });
 
 test('Hermes Control settings use a readable single-column hierarchy with proportional controls', () => {
-  assert.match(html, /class="browser-control-config"[\s\S]*?class="browser-control-field"[\s\S]*?class="browser-control-view"/);
+  assert.match(html, /class="browser-control-config"[\s\S]*?class="browser-control-field"/);
   assert.match(css, /\.browser-control-config\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s);
-  assert.match(css, /\.browser-control-view\s*>\s*div\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.doesNotMatch(css, /browser-control-view/);
   assert.match(css, /\.browser-control-card-head p[\s\S]*?font:\s*calc\(11px \* var\(--hermes-text-zoom,\s*1\)\)\/1\.45/s);
   assert.match(css, /\.browser-control-action\s*\{[^}]*min-height:\s*38px/s);
   assert.match(css, /\.browser-control-card-actions\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s);

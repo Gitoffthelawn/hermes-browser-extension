@@ -12,7 +12,7 @@ async function fixture({ paused = false, approvalStore, getTab, beforeWrite } = 
     connectionMode: 'local', connectionTransport: 'local-api', gatewayMode: 'local-api',
     gatewayUrl: 'http://127.0.0.1:8642', apiKey: ['scope', 'fixture', 'credential'].join('-'),
     activeProfile: 'default', sessionId: 'scope-session', browserControlEnabled: true,
-    browserControlPaused: paused, browserControlScope: 'this-tab', browserControlViewBehavior: 'stay',
+    browserControlPaused: paused, browserControlScope: 'this-tab',
   } };
   let fail = false;
   let connection;
@@ -60,7 +60,7 @@ test('inline scope replacement updates exact leases and preference without disab
   assert.equal(result.paused, false);
   assert.equal(f.values.hermesBrowserSettings.browserControlScope, 'selected-tabs');
   assert.deepEqual(f.values[TAB_LEASE_STORAGE_KEY].entries.map(l => l.kind), ['selected-tabs', 'selected-tabs']);
-  assert.equal(f.values.hermesBrowserSettings.browserControlViewBehavior, 'stay');
+  assert.equal(Object.hasOwn(f.values.hermesBrowserSettings, 'browserControlViewBehavior'), false);
 });
 
 test('task-set and this-tab changes replace kind and drop only the previous owned tabs', async () => {

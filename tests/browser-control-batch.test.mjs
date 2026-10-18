@@ -434,6 +434,47 @@ test('steps after a navigation run under the new document generation and old ref
   assert.equal(scroll.scope.documentGeneration, 4);
 });
 
+async function waitForPending(approvals, attempts = 200) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const [pending] = approvals.pending();
+    if (pending) return pending;
+    await tick();
+  }
+  assert.fail('no approval was requested');
+  return null;
+}
+
+test('a click that needs approval after a navigation in the same batch asks under the new document generation', async () => {
+  let generation = 3;
+  const { approvals, executor, calls } = fixture({
+    settle: async () => ({ navigated: generation > 3, url: 'https://example.test/next', title: 'Next' }),
+    onExecute: (action) => {
+      if (action === 'browser_navigate') generation = 4;
+      return undefined;
+    },
+  });
+  const running = executor.execute(batchFrame({
+    actions: [
+      { action: 'browser_navigate', url: 'https://example.test/next' },
+      { action: 'browser_click', x: 120, y: 240 },
+    ],
+  }), { scope, currentDocumentGeneration: () => generation });
+  // The click waits for the person. Its request names the document the click will run on,
+  // which the navigation moved on from the generation the command arrived with.
+  const pending = await waitForPending(approvals);
+  assert.equal(pending.action, 'browser_click');
+  assert.equal(pending.approvalId, 'batch-1:step-2');
+  assert.equal(pending.documentGeneration, 4);
+  assert.equal(pending.tabId, scope.tabId);
+  assert.equal(pending.leaseId, scope.leaseId);
+  assert.equal(approvals.grant(pending).ok, true);
+  const result = await running;
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.result.status, 'completed');
+  assert.equal(result.result.completed, 2);
+  assert.deepEqual(stepActions(calls), ['browser_navigate', 'browser_click']);
+});
+
 test('a document that moves without the batch causing it ends the batch', async () => {
   let generation = 3;
   const { executor, calls } = fixture({

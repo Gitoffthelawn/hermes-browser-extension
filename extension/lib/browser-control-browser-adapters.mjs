@@ -82,6 +82,64 @@ const SCROLL_NODE_FUNCTION = `function(deltaX, deltaY) {
   return false;
 }`;
 const CONTAINS_NODE_FUNCTION = 'function(node) { return this === node || this.contains(node); }';
+// Input.dispatchMouseEvent modifier bits.
+const CDP_MODIFIER_CTRL = 2;
+const CDP_MODIFIER_META = 4;
+
+// Ctrl-click (Windows, Linux) and Cmd-click (macOS) open a link in a background
+// tab. Takes the platform string, from navigator.userAgentData or navigator.platform.
+export function backgroundTabModifierFor(platform = '') {
+  return /^mac/i.test(String(platform || '')) ? CDP_MODIFIER_META : CDP_MODIFIER_CTRL;
+}
+
+function hostPlatformFromNavigator() {
+  const nav = globalThis.navigator;
+  return String(nav?.userAgentData?.platform || nav?.platform || '');
+}
+
+// Runs in the page on the node a click lands on, so it stays self-contained: the
+// click path sends its source with Function.prototype.toString. True when the click
+// would open a new tab: the closest link (an a, or an area with an href) targets another
+// browsing context (anything but the keywords _self, _top, _parent or empty, which keep
+// it in its own tab), or the closest button or input is a submit whose form (or
+// formtarget) names one. A link or form with no target attribute takes the document's
+// <base target>.
+export function clickTargetOpensNewTab(node) {
+  const opensElsewhere = (value) => {
+    const name = String(value ?? '').trim().toLowerCase();
+    return name !== '' && name !== '_self' && name !== '_top' && name !== '_parent';
+  };
+  const tagOf = (element) => String(element.localName || element.tagName || '').toLowerCase();
+  // A node directly under a shadow root has no parentElement, so the walk continues at the host.
+  const parentOf = (element) => {
+    if (element.parentElement) return element.parentElement;
+    const root = typeof element.getRootNode === 'function' ? element.getRootNode() : null;
+    return root && root.nodeType === 11 && root.host ? root.host : null;
+  };
+  const targetOf = (element) => {
+    const own = element.getAttribute('target');
+    if (own !== null) return own;
+    return node?.ownerDocument?.querySelector('base[target]')?.getAttribute('target') ?? null;
+  };
+  let link = null;
+  let control = null;
+  const start = node && node.nodeType === 1 ? node : (node ? parentOf(node) : null);
+  for (let current = start; current; current = parentOf(current)) {
+    const tag = tagOf(current);
+    if (!link && (tag === 'a' || (tag === 'area' && current.getAttribute('href') !== null))) link = current;
+    if (!control && (tag === 'button' || tag === 'input')) control = current;
+  }
+  if (link) return opensElsewhere(targetOf(link));
+  if (!control || !control.form) return false;
+  const declared = String(control.getAttribute('type') || '').trim().toLowerCase();
+  const submits = tagOf(control) === 'button'
+    ? (declared === '' || declared === 'submit')
+    : (declared === 'submit' || declared === 'image');
+  if (!submits) return false;
+  return opensElsewhere(control.getAttribute('formtarget') || targetOf(control.form));
+}
+
+const CLICK_OPENS_NEW_TAB_FUNCTION = `function() { return (${clickTargetOpensNewTab.toString()})(this); }`;
 const SCROLL_POSITION_EXPRESSION = `(() => {
   const root = document.scrollingElement || document.documentElement;
   const maxY = Math.max(0, Math.round(root.scrollHeight - window.innerHeight));
@@ -160,10 +218,21 @@ function codedError(code, message) {
   return error;
 }
 
-function hiddenTabError(action) {
+// Hover and drag need the tab on screen; Chromium cannot deliver them to a
+// background tab. Clicks, typing and scrolling work there, so the advice says so.
+function hiddenTabError() {
   return codedError(
     'tab_hidden',
-    `${action} needs the tab to be showing, but it is in the background. Use browser_tab_activate to bring it forward, then try again.`,
+    "This tab is in the background, so hover and drag can't run there. Ask the user to bring it to the front with Show tab in Hermes Control, or use click, type or scroll, which work in background tabs.",
+  );
+}
+
+// A screenshot of a background tab can still succeed, so a capture that times out
+// says only that it did not finish; it never claims screenshots cannot run.
+function hiddenScreenshotError() {
+  return codedError(
+    'tab_hidden',
+    'This tab is in the background, so the screenshot did not finish. Ask the user to bring it to the front with Show tab in Hermes Control, then try again.',
   );
 }
 
@@ -595,7 +664,9 @@ async function inspectPage(browserApi, scope, signal, { light = false } = {}) {
   const tab = await browserApi.tabs.get(tabId);
   assertNotAborted(signal);
   const currentUrl = compact(tab?.url || tab?.pendingUrl);
-  if (light || isRestrictedUrl(currentUrl)) return { currentUrl, hasUnsavedContent: false };
+  // Only for approval wording (a tab switch names its tab). A restricted page's title is never read out.
+  const title = isRestrictedUrl(currentUrl) ? '' : compact(tab?.title, 500);
+  if (light || isRestrictedUrl(currentUrl)) return { currentUrl, hasUnsavedContent: false, title };
   let hasUnsavedContent = false;
   if (browserApi.scripting?.executeScript) {
     try {
@@ -609,7 +680,7 @@ async function inspectPage(browserApi, scope, signal, { light = false } = {}) {
       // Inspection is a conservative enhancement; the action policy still runs.
     }
   }
-  return { currentUrl, hasUnsavedContent };
+  return { currentUrl, hasUnsavedContent, title };
 }
 
 function createChromiumCdpAdapter({
@@ -620,8 +691,10 @@ function createChromiumCdpAdapter({
   clearTimer = (handle) => globalThis.clearTimeout(handle),
   now = Date.now,
   sleep = defaultSleep,
+  hostPlatform = hostPlatformFromNavigator(),
 } = {}) {
   if (!browserApi?.tabs) throw new TypeError('Chromium tabs API is required.');
+  const backgroundTabModifier = backgroundTabModifierFor(hostPlatform);
   const contract = controllerAdapterContractFor({
     product: { id: 'chromium', engine: 'chromium' },
     capabilities: { apis: {
@@ -911,17 +984,12 @@ function createChromiumCdpAdapter({
     return quadCenter(await send('DOM.getBoxModel', { backendNodeId }));
   }
 
-  // Reports whether another element covers the click point. A failed hit test
-  // must never block the click, so every error except cancellation is ignored.
-  async function pointIsObscured(send, signal, backendNodeId, point) {
+  // Reports whether another element covers the click point, given the node under it
+  // (see nodeAtPoint). A failed check must never block the click, so every error
+  // except cancellation is ignored.
+  async function pointIsObscured(send, signal, backendNodeId, hitNodeId) {
+    if (!Number.isInteger(hitNodeId) || hitNodeId <= 0 || hitNodeId === backendNodeId) return false;
     try {
-      const hit = await send('DOM.getNodeForLocation', {
-        x: Math.round(point.x),
-        y: Math.round(point.y),
-        includeUserAgentShadowDOM: true,
-      });
-      const hitNodeId = Number(hit?.backendNodeId);
-      if (!Number.isInteger(hitNodeId) || hitNodeId <= 0 || hitNodeId === backendNodeId) return false;
       const targetObject = String((await send('DOM.resolveNode', { backendNodeId }))?.object?.objectId || '');
       const hitObject = String((await send('DOM.resolveNode', { backendNodeId: hitNodeId }))?.object?.objectId || '');
       if (!targetObject || !hitObject) return false;
@@ -932,6 +1000,42 @@ function createChromiumCdpAdapter({
         returnByValue: true,
       });
       return contained?.result?.value === false;
+    } catch (error) {
+      if (abortError(signal)) throw error;
+      return false;
+    }
+  }
+
+  // The node under a viewport point, for a coordinate click. Never blocks the click.
+  async function nodeAtPoint(send, signal, point) {
+    try {
+      const hit = await send('DOM.getNodeForLocation', {
+        x: Math.round(point.x),
+        y: Math.round(point.y),
+        includeUserAgentShadowDOM: true,
+      });
+      const hitNodeId = Number(hit?.backendNodeId);
+      return Number.isInteger(hitNodeId) && hitNodeId > 0 ? hitNodeId : 0;
+    } catch (error) {
+      if (abortError(signal)) throw error;
+      return 0;
+    }
+  }
+
+  // Whether a click on this node would open a new tab (see clickTargetOpensNewTab).
+  // A failed check is "no": the click then goes out exactly as it always did.
+  async function clickOpensNewTab(send, signal, backendNodeId) {
+    if (!(Number.isInteger(backendNodeId) && backendNodeId > 0)) return false;
+    try {
+      const resolved = await send('DOM.resolveNode', { backendNodeId });
+      const objectId = String(resolved?.object?.objectId || '');
+      if (!objectId) return false;
+      const checked = await send('Runtime.callFunctionOn', {
+        objectId,
+        functionDeclaration: CLICK_OPENS_NEW_TAB_FUNCTION,
+        returnByValue: true,
+      });
+      return checked?.result?.value === true;
     } catch (error) {
       if (abortError(signal)) throw error;
       return false;
@@ -1102,20 +1206,31 @@ function createChromiumCdpAdapter({
         let point;
         const backendNodeId = Number(target?.backendDOMNodeId);
         let obscured = false;
+        let hitNodeId = 0;
         if (Number.isInteger(backendNodeId) && backendNodeId > 0) {
           await enable('DOM');
           point = await nodeCenter(send, backendNodeId);
-          obscured = await pointIsObscured(send, signal, backendNodeId, point);
+          hitNodeId = await nodeAtPoint(send, signal, point);
+          obscured = await pointIsObscured(send, signal, backendNodeId, hitNodeId);
         } else {
           point = pointForArgs(args);
+          await enable('DOM');
+          hitNodeId = await nodeAtPoint(send, signal, point);
         }
+        // A link that opens a new tab gets the background-tab modifier, so Chrome opens
+        // it behind the tab the person is looking at. The click lands on whatever is under
+        // the point, so the referenced node and the node under the point are both checked.
+        const opensNewTab = await clickOpensNewTab(send, signal, backendNodeId)
+          || (hitNodeId !== backendNodeId && await clickOpensNewTab(send, signal, hitNodeId));
+        const modifiers = opensNewTab ? backgroundTabModifier : 0;
+        const modifierFields = modifiers ? { modifiers } : {};
         // Chrome holds a mouseMoved until the next frame, which a hidden tab
         // never draws; the press and release are delivered regardless.
         if (!await pageIsHidden(send, signal)) {
           await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point, button: 'none', buttons: 0 });
         }
-        await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', buttons: 1, clickCount: 1 });
-        await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', buttons: 0, clickCount: 1 });
+        await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', buttons: 1, clickCount: 1, ...modifierFields });
+        await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', buttons: 0, clickCount: 1, ...modifierFields });
         return { status: 'clicked', ...(obscured ? { obscured: true } : {}) };
       }
       if (action === 'browser_hover' || action === 'browser_scroll_to' || action === 'browser_drag') {
@@ -1124,7 +1239,7 @@ function createChromiumCdpAdapter({
         await enable('DOM');
         const sourcePoint = await nodeCenter(send, sourceNodeId);
         if (action === 'browser_scroll_to') return { status: 'scrolled-to-target' };
-        if (await pageIsHidden(send, signal)) throw hiddenTabError(action);
+        if (await pageIsHidden(send, signal)) throw hiddenTabError();
         await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...sourcePoint, button: 'none', buttons: 0 });
         if (action === 'browser_hover') return { status: 'hovered' };
         const destinationNodeId = Number(destination?.backendDOMNodeId);
@@ -1252,7 +1367,7 @@ function createChromiumCdpAdapter({
         });
         // A hidden tab may never produce the frame a capture waits for.
         const captured = await (hidden
-          ? withTimeout(capture, HIDDEN_CAPTURE_TIMEOUT_MS, () => hiddenTabError(action), setTimer, clearTimer)
+          ? withTimeout(capture, HIDDEN_CAPTURE_TIMEOUT_MS, () => hiddenScreenshotError(), setTimer, clearTimer)
           : capture);
         return boundedScreenshot(`data:image/png;base64,${String(captured?.data || '')}`);
       }
@@ -1279,7 +1394,8 @@ function createChromiumCdpAdapter({
       const windowId = Number(currentWindowId) || Number((await browserApi.tabs.get(tabId))?.windowId) || null;
       const tab = await browserApi.tabs.create({
         url: String(args.url || ''),
-        active: args.active !== false,
+        // Hermes never takes the person's view: a tab it opens starts in the background.
+        active: false,
         ...(windowId ? { windowId } : {}),
       });
       return { tab };
@@ -1465,6 +1581,8 @@ function createFirefoxWebExtensionAdapter({ browserApi, now = Date.now, sleep = 
 
   const { waitForLoad } = createLoadWaiter({ browserApi, now, sleep });
 
+  // Firefox has no browser_click here (FIREFOX_GAPS: trusted input is unavailable), so
+  // the Chromium click path and its new-tab modifier do not apply to this adapter.
   async function script(scope, signal, mode, direction = '') {
     assertNotAborted(signal);
     const response = await browserApi.scripting.executeScript({
@@ -1510,7 +1628,8 @@ function createFirefoxWebExtensionAdapter({ browserApi, now = Date.now, sleep = 
       const windowId = Number(currentWindowId) || Number((await browserApi.tabs.get(tabId))?.windowId) || null;
       const tab = await browserApi.tabs.create({
         url: String(args.url || ''),
-        active: args.active !== false,
+        // Hermes never takes the person's view: a tab it opens starts in the background.
+        active: false,
         ...(windowId ? { windowId } : {}),
       });
       return { tab };

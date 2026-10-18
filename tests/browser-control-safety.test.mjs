@@ -27,6 +27,14 @@ test('Phase 6 classifies ordinary reads and writes without trusting caller-suppl
   assert.equal(classifyBrowserControlAction({ action: 'browser_tab_group', arguments: { tab_ids: [7, 8] } }).risk, BROWSER_CONTROL_RISKS.SAFE);
   assert.equal(classifyBrowserControlAction({ action: 'browser_tab_ungroup', arguments: { tab_ids: [7, 8] } }).risk, BROWSER_CONTROL_RISKS.SAFE);
   assert.equal(classifyBrowserControlAction({ action: 'browser_tab_close', arguments: { tab_id: 7 } }).risk, BROWSER_CONTROL_RISKS.APPROVAL);
+  // Switching the tab the person is looking at needs their approval, wherever the current page is.
+  const activate = classifyBrowserControlAction({ action: 'browser_tab_activate', arguments: { tab_id: 7 } });
+  assert.deepEqual(activate, { risk: BROWSER_CONTROL_RISKS.APPROVAL, reason: 'tab-activate' });
+  assert.deepEqual(classifyBrowserControlAction({
+    action: 'browser_tab_activate',
+    arguments: { tab_id: 7 },
+    currentUrl: 'chrome://settings/',
+  }), { risk: BROWSER_CONTROL_RISKS.APPROVAL, reason: 'tab-activate' });
 
   const spoofed = classifyBrowserControlAction({
     action: 'browser_press',

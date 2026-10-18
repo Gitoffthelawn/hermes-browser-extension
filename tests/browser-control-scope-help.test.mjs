@@ -32,7 +32,7 @@ function fixture() {
     applyButton: byId('browserControlDialogApplyScope'), scopeHint: byId('browserControlDialogScopeHint'),
     getScope: () => 'this-tab', getSelectedTabIds: () => [], loadTabs: async () => [], applyScope: async () => {},
   });
-  const help = { stay: en['browser_control.help_stay'] };
+  const help = { 'show-tab': en['browser_control.help_show_tab'] };
   const render = () => ui.render({ enabled: true, view: { state: 'ready', tone: 'ok', title: 'Ready', detail: '' }, canChangeScope: true, help });
   render();
   byId('browserControlMenuButton').click();
@@ -84,16 +84,16 @@ test('scope options carry no title-only or hover tooltips; the visible helper re
 test('icon-style control buttons keep hover and focus help that survives polling', () => {
   const f = fixture();
   try {
-    const stay = f.byId('browserControlDialogStayButton');
+    const showTab = f.byId('browserControlDialogShowTabButton');
     f.tooltip.getBoundingClientRect = () => ({ width: 280, height: 80 });
-    stay.getBoundingClientRect = () => ({ left: 20, width: 120, top: 400, bottom: 436 });
-    stay.dispatchEvent(new f.dom.window.Event('focusin', { bubbles: true }));
-    assert.equal(f.tooltip.textContent, en['browser_control.help_stay']);
+    showTab.getBoundingClientRect = () => ({ left: 20, width: 120, top: 400, bottom: 436 });
+    showTab.dispatchEvent(new f.dom.window.Event('focusin', { bubbles: true }));
+    assert.equal(f.tooltip.textContent, en['browser_control.help_show_tab']);
     assert.equal(f.helpOpen(), true);
-    assert.equal(stay.getAttribute('aria-describedby'), f.tooltip.id);
+    assert.equal(showTab.getAttribute('aria-describedby'), f.tooltip.id);
     f.render();
-    assert.equal(f.tooltip.textContent, en['browser_control.help_stay'], 'poll must not erase button help');
-    stay.dispatchEvent(new f.dom.window.Event('focusout', { bubbles: true }));
+    assert.equal(f.tooltip.textContent, en['browser_control.help_show_tab'], 'poll must not erase button help');
+    showTab.dispatchEvent(new f.dom.window.Event('focusout', { bubbles: true }));
     assert.equal(f.helpOpen(), false);
   } finally { f.cleanup(); }
 });

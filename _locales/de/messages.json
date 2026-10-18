@@ -931,10 +931,6 @@
     "message": "Starte oder wähle eine Hermes-Sitzung, bevor du Hermes Control einschaltest.",
     "description": "Runtime interface message browser_control.error_session_enable"
   },
-  "runtime_browser_control_follow": {
-    "message": "Hermes folgen",
-    "description": "Runtime interface message browser_control.follow"
-  },
   "runtime_browser_control_help_attach": {
     "message": "Lass Hermes diesen Tab steuern. Er ersetzt den zuvor verbundenen Tab.",
     "description": "Runtime interface message browser_control.help_attach"
@@ -942,10 +938,6 @@
   "runtime_browser_control_help_close": {
     "message": "Schließe dieses Fenster, ohne die Steuerung zu pausieren oder auszuschalten.",
     "description": "Runtime interface message browser_control.help_close"
-  },
-  "runtime_browser_control_help_follow": {
-    "message": "Zeige den verbundenen Tab, den Hermes verwendet, ohne das Browserfenster in den Vordergrund zu holen.",
-    "description": "Runtime interface message browser_control.help_follow"
   },
   "runtime_browser_control_help_off": {
     "message": "Schalte Hermes Control aus und schließe dieses Fenster. Schalte es in den Einstellungen wieder ein.",
@@ -971,9 +963,9 @@
     "message": "Nur den aktuellen Tab steuern. Andere Tabs sind nicht eingeschlossen.",
     "description": "Runtime interface message browser_control.help_scope_this_tab"
   },
-  "runtime_browser_control_help_stay": {
-    "message": "Bleib auf deinem Tab, während Hermes im Hintergrund auf verbundenen Tabs arbeitet.",
-    "description": "Runtime interface message browser_control.help_stay"
+  "runtime_browser_control_help_show_tab": {
+    "message": "Zum Tab wechseln, den Hermes verwendet. Hermes wechselt deinen Tab nie von selbst.",
+    "description": "Runtime interface message browser_control.help_show_tab"
   },
   "runtime_browser_control_help_stop": {
     "message": "Stoppe laufende und wartende Browseraktionen, ohne die Steuerung auszuschalten.",
@@ -1039,6 +1031,14 @@
     "message": "Ausgewählte Tabs",
     "description": "Runtime interface message browser_control.selected_tabs"
   },
+  "runtime_browser_control_show_tab": {
+    "message": "Tab anzeigen",
+    "description": "Runtime interface message browser_control.show_tab"
+  },
+  "runtime_browser_control_show_tab_aria": {
+    "message": "Den Tab anzeigen, den Hermes verwendet",
+    "description": "Runtime interface message browser_control.show_tab_aria"
+  },
   "runtime_browser_control_state_active": {
     "message": "Aktiv",
     "description": "Runtime interface message browser_control.state_active"
@@ -1054,10 +1054,6 @@
   "runtime_browser_control_state_ready": {
     "message": "Bereit",
     "description": "Runtime interface message browser_control.state_ready"
-  },
-  "runtime_browser_control_stay": {
-    "message": "Auf meinem Tab bleiben",
-    "description": "Runtime interface message browser_control.stay"
   },
   "runtime_browser_control_stop": {
     "message": "Stoppen",
@@ -1111,6 +1107,10 @@
     "message": "Steuerungs-Tabs unverändert",
     "description": "Runtime interface message browser_control.toast_scope_unchanged"
   },
+  "runtime_browser_control_toast_show_tab_failed": {
+    "message": "Dieser Tab konnte nicht angezeigt werden",
+    "description": "Runtime interface message browser_control.toast_show_tab_failed"
+  },
   "runtime_browser_control_toast_state_unchanged": {
     "message": "Status von Hermes Control unverändert",
     "description": "Runtime interface message browser_control.toast_state_unchanged"
@@ -1119,10 +1119,6 @@
     "message": "Browseraktionen konnten nicht gestoppt werden",
     "description": "Runtime interface message browser_control.toast_stop_failed"
   },
-  "runtime_browser_control_toast_view_unchanged": {
-    "message": "Ansichtseinstellung unverändert",
-    "description": "Runtime interface message browser_control.toast_view_unchanged"
-  },
   "runtime_browser_control_turn_off": {
     "message": "Ausschalten",
     "description": "Runtime interface message browser_control.turn_off"
@@ -1130,10 +1126,6 @@
   "runtime_browser_control_waiting": {
     "message": "Warte auf Hermes.",
     "description": "Runtime interface message browser_control.waiting"
-  },
-  "runtime_browser_control_while_working": {
-    "message": "Während Hermes arbeitet",
-    "description": "Runtime interface message browser_control.while_working"
   },
   "runtime_clarify_expired": {
     "message": "This question was already answered or expired.",
