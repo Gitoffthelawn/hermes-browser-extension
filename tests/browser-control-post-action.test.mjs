@@ -408,3 +408,79 @@ test('Phase 2 approval waits end before the broker cancels the command at 30 sec
   assert.equal(result.error.code, 'approval_timeout');
   mock.timers.reset();
 });
+
+test('Phase 2 navigate and back never describe a restricted landing page beyond its origin', async () => {
+  const landing = { navigated: true, url: 'https://shop.example/checkout?cart=9', title: 'Checkout - Jane Doe, 12 Elm St', timedOut: false };
+  for (const [action, args, status] of [
+    ['browser_navigate', { url: 'https://shop.example/cart' }, 'navigated'],
+    ['browser_back', {}, 'navigated-back'],
+  ]) {
+    const adapter = pageAdapter({
+      actionResults: { [action]: { status, ...landing }, },
+      settle: async () => landing,
+    });
+    const { executor } = makeExecutor(adapter);
+    const outcome = await executor.execute(frame(action, args), { scope });
+    assert.equal(outcome.ok, true);
+    assert.equal(outcome.result.status, status);
+    assert.equal(outcome.result.snapshot_error, 'restricted_page');
+    assert.equal(outcome.result.url, 'https://shop.example');
+    assert.equal('title' in outcome.result, false);
+    assert.doesNotMatch(JSON.stringify(outcome), /Jane Doe|Elm St|checkout|cart=9/);
+  }
+
+  // Even when the page read is skipped, the adapter's own url and title are not passed on.
+  const skipped = pageAdapter({
+    actionResults: { browser_navigate: { status: 'navigated', ...landing } },
+  });
+  const { executor } = makeExecutor(skipped, { executorOptions: { defaultDeadlineMs: 500 } });
+  const outcome = await executor.execute(frame('browser_navigate', { url: 'https://shop.example/cart' }), { scope });
+  assert.equal(outcome.result.snapshot_error, 'deadline_near');
+  assert.equal(outcome.result.url, 'https://shop.example');
+  assert.equal('title' in outcome.result, false);
+});
+
+test('Phase 2 reads the page back only until 28 seconds after the command started, and never past the load budget', async () => {
+  let clock = 1_000;
+  const adapter = pageAdapter();
+  const originalExecute = adapter.execute;
+  // The action itself (for example after a long approval) used up most of the time.
+  adapter.execute = async (action, args, context) => {
+    if (action === 'browser_click') clock += 27_400;
+    return originalExecute(action, args, context);
+  };
+  const { executor } = makeExecutor(adapter, { executorOptions: { now: () => clock, defaultDeadlineMs: 30_000 } });
+  const late = await executor.execute(frame('browser_click', { ref: '@e1' }), { scope });
+  assert.equal(late.ok, true);
+  assert.equal(late.result.status, 'clicked');
+  assert.equal(late.result.snapshot_error, 'deadline_near', 'the 30 s broker timeout is measured from dispatch, so the page is not read this late');
+  assert.equal(adapter.calls.some((call) => call.method === 'settle'), false);
+
+  clock = 1_000;
+  const settleCalls = [];
+  const early = pageAdapter({
+    settle: async (options) => { settleCalls.push(options); return { navigated: true, url: 'https://example.test/start', title: 'Start', timedOut: false }; },
+  });
+  const roomy = makeExecutor(early, { executorOptions: { now: () => clock, defaultDeadlineMs: 30_000 } });
+  const outcome = await roomy.executor.execute(frame('browser_click', { ref: '@e1' }, { command_id: 'c2' }), { scope });
+  assert.equal(outcome.result.snapshot_error, undefined);
+  assert.equal(settleCalls.length, 1);
+  assert.equal(settleCalls[0].timeoutMs, 1_200);
+  assert.ok(settleCalls[0].loadTimeoutMs > 25_000, 'a slow navigation may use the whole remaining budget (the adapter caps it at 8 s)');
+
+  // A navigation that already waited out its own load is not waited on again.
+  settleCalls.length = 0;
+  const slowNavigate = pageAdapter({
+    actionResults: { browser_navigate: { status: 'navigated', navigated: true, timedOut: true, url: 'https://example.test/slow', title: 'Slow' } },
+    settle: async (options) => { settleCalls.push(options); return { navigated: true, url: 'https://example.test/slow', title: 'Slow', timedOut: true }; },
+  });
+  const navigating = makeExecutor(slowNavigate, { executorOptions: { now: () => clock, defaultDeadlineMs: 30_000 } });
+  await navigating.executor.execute(frame('browser_navigate', { url: 'https://example.test/slow' }, { command_id: 'c4' }), { scope });
+  assert.equal(settleCalls[0].loadTimeoutMs, 1_200);
+
+  clock = 1_000;
+  settleCalls.length = 0;
+  const tight = makeExecutor(early, { executorOptions: { now: () => clock, defaultDeadlineMs: 3_000 } });
+  await tight.executor.execute(frame('browser_click', { ref: '@e1' }, { command_id: 'c3' }), { scope });
+  assert.ok(settleCalls[0].loadTimeoutMs <= 2_600, `load budget ${settleCalls[0].loadTimeoutMs} must stay inside the command deadline`);
+});

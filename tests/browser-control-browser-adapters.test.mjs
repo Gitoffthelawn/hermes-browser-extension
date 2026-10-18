@@ -204,6 +204,8 @@ test('Chromium Phase 6 adapter snapshots AX refs through one persistent session 
   ]);
   assert.equal(await adapter.releaseTab(7), true);
   assert.equal(calls.at(-1)[0], 'detach');
+  // Chrome refuses to detach a tab that is not attached, which is what makes releasing an unattached tab a no-op.
+  api.debugger.detach = async () => { throw new Error('Debugger is not attached to the tab with id: 7.'); };
   assert.equal(await adapter.releaseTab(7), false, 'releasing an unattached tab is a no-op');
 });
 
@@ -865,12 +867,12 @@ test('Chromium scroll at a ref scrolls the element into view and wheels over its
   assert.deepEqual(mouseEvents(calls).map(({ x, y }) => [x, y]), [[20, 30]]);
 });
 
-test('Chromium navigate to the tab\'s current URL is a no-op, ignoring hash and trailing slash', async () => {
+test('Chromium navigate to the tab\'s current URL is a no-op, ignoring a missing hash and trailing slash', async () => {
   const { createChromiumCdpAdapter } = await adaptersModule();
   const chromium = chromiumApis();
   chromium.tabs.set(7, { ...chromium.tabs.get(7), url: 'https://example.test/docs/page/?q=1#top' });
   const adapter = createChromiumCdpAdapter({ browserApi: chromium.api });
-  for (const url of ['https://example.test/docs/page?q=1', 'https://example.test/docs/page/?q=1#other', 'https://example.test/docs/page/?q=1']) {
+  for (const url of ['https://example.test/docs/page?q=1', 'https://example.test/docs/page/?q=1#top', 'https://example.test/docs/page/?q=1']) {
     const result = await adapter.execute('browser_navigate', { url }, { scope, signal: openSignal() });
     assert.deepEqual(result, {
       url: 'https://example.test/docs/page/?q=1#top', title: 'Example', status: 'already-open', navigated: false,
@@ -1190,4 +1192,177 @@ test('Firefox adapter exposes the same settle and release contract without a deb
   const slow = await adapter.settle({ scope, signal: openSignal(), timeoutMs: 500 });
   assert.equal(slow.navigated, true);
   assert.equal(slow.timedOut, true);
+});
+
+test('Chromium settle gives a loading page the load budget, not the quiet-window cap, and honours loadTimeoutMs', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  const clock = fakeClock();
+  const adapter = createChromiumCdpAdapter({ browserApi: chromium.api, ...clock });
+  // A click started a navigation that needs three seconds to finish loading.
+  chromium.tabs.set(7, { ...chromium.tabs.get(7), status: 'loading', url: 'https://example.test/slow' });
+  const originalGet = chromium.api.tabs.get;
+  chromium.api.tabs.get = async (tabId) => {
+    if (clock.now() >= 3_000) chromium.tabs.set(7, { ...chromium.tabs.get(7), status: 'complete', title: 'Slow page' });
+    return originalGet(tabId);
+  };
+  const settled = await adapter.settle({ scope, signal: openSignal(), mode: 'dom', timeoutMs: 1_200, loadTimeoutMs: 8_000 });
+  assert.deepEqual(settled, { navigated: true, url: 'https://example.test/slow', title: 'Slow page', timedOut: false });
+  assert.ok(clock.now() >= 3_000, 'the page was read only after it finished loading');
+
+  // The load budget never outlasts what the caller has left.
+  chromium.tabs.set(7, { ...chromium.tabs.get(7), status: 'loading' });
+  chromium.api.tabs.get = originalGet;
+  const before = clock.now();
+  const capped = await adapter.settle({ scope, signal: openSignal(), mode: 'dom', timeoutMs: 300, loadTimeoutMs: 500 });
+  assert.equal(capped.timedOut, true);
+  assert.ok(clock.now() - before < 800);
+
+  // Same cap when the navigation only shows up after the quiet window.
+  const late = chromiumApis();
+  const lateClock = fakeClock();
+  late.handlers['Runtime.evaluate'] = () => {
+    late.tabs.set(7, { ...late.tabs.get(7), status: 'loading', url: 'https://example.test/late' });
+    return { result: { value: true } };
+  };
+  const lateAdapter = createChromiumCdpAdapter({ browserApi: late.api, ...lateClock });
+  const lateResult = await lateAdapter.settle({ scope, signal: openSignal(), mode: 'dom', timeoutMs: 300, loadTimeoutMs: 500 });
+  assert.equal(lateResult.navigated, true);
+  assert.equal(lateResult.timedOut, true);
+  assert.ok(lateClock.now() < 900, `waited ${lateClock.now()} ms for a 500 ms load budget`);
+});
+
+test('Chromium adapter lets onDetach land before retrying a command that was answered "Detached while handling command"', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  const events = [];
+  // Chrome answers the in-flight command first and reports the detach right after.
+  const adapter = createChromiumCdpAdapter({
+    browserApi: chromium.api,
+    onDebuggerDetach: (event) => events.push(event),
+    sleep: async () => { chromium.emitDetach(7, 'canceled_by_user'); },
+  });
+  const context = { scope, signal: openSignal() };
+  await adapter.execute('browser_snapshot', {}, context);
+  chromium.handlers['Accessibility.getFullAXTree'] = () => { throw new Error('Detached while handling command.'); };
+  await assert.rejects(adapter.execute('browser_snapshot', {}, context), /detached while handling/i);
+  assert.equal(countCalls(chromium.calls, 'attach'), 1, 'the user cancelled the debugger; it is not silently re-attached');
+  assert.deepEqual(events, [{ tabId: 7, reason: 'canceled_by_user', recoverable: false }]);
+
+  // With no detach report, the stale-session retry still happens exactly once.
+  const stale = chromiumApis();
+  const staleAdapter = createChromiumCdpAdapter({ browserApi: stale.api, sleep: async () => {} });
+  await staleAdapter.execute('browser_snapshot', {}, context);
+  let failures = 1;
+  stale.handlers['Accessibility.getFullAXTree'] = () => {
+    if (failures > 0) { failures -= 1; throw new Error('Detached while handling command.'); }
+    return { nodes: [] };
+  };
+  assert.deepEqual((await staleAdapter.execute('browser_snapshot', {}, context)).nodes, []);
+  assert.equal(countCalls(stale.calls, 'attach'), 2);
+});
+
+test('Chromium snapshot text never includes what is typed into a field', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  const prop = (name, value) => ({ name, value: { type: 'string', value } });
+  chromium.handlers['Accessibility.getFullAXTree'] = () => ({
+    nodes: [
+      { nodeId: '1', role: { value: 'heading' }, name: { value: 'Contact us' }, ignored: false, properties: [prop('level', 1)] },
+      { nodeId: '2', backendDOMNodeId: 20, role: { value: 'textbox' }, name: { value: 'Message' }, ignored: false, childIds: ['3'], properties: [prop('editable', 'plaintext')] },
+      { nodeId: '3', role: { value: 'generic' }, name: { value: '' }, ignored: true, childIds: ['4'] },
+      { nodeId: '4', role: { value: 'StaticText' }, name: { value: 'my card is 4111 and my address is 12 Elm St' }, ignored: false },
+      { nodeId: '5', backendDOMNodeId: 21, role: { value: 'textbox' }, name: { value: '' }, ignored: false, childIds: ['6'], properties: [{ name: 'protected', value: { value: true } }] },
+      { nodeId: '6', role: { value: 'StaticText' }, name: { value: '••••••••' }, ignored: false },
+      { nodeId: '7', role: { value: 'generic' }, name: { value: '' }, ignored: false, childIds: ['8'], properties: [prop('editable', 'richtext')] },
+      { nodeId: '8', role: { value: 'paragraph' }, name: { value: 'Dear Sam, here is my private draft' }, ignored: false },
+      { nodeId: '9', role: { value: 'StaticText' }, name: { value: 'Thanks for visiting' }, ignored: false },
+    ],
+  });
+  const adapter = createChromiumCdpAdapter({ browserApi: chromium.api });
+  const view = await adapter.execute('browser_snapshot', {}, { scope, signal: openSignal() });
+  assert.equal(view.text, 'Contact us\nThanks for visiting');
+  assert.deepEqual(view.nodes.map((node) => node.backendDOMNodeId), [20, 21], 'the fields themselves still get refs');
+  assert.doesNotMatch(JSON.stringify(view), /4111|Elm St|••••|private draft/);
+});
+
+test('Chromium releaseTab detaches an attachment a restarted worker no longer tracks, and only ours', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  const events = [];
+  const adapter = createChromiumCdpAdapter({ browserApi: chromium.api, onDebuggerDetach: (event) => events.push(event) });
+  // This adapter instance never attached tab 7 (a previous worker instance did).
+  assert.equal(await adapter.releaseTab(7), true);
+  assert.deepEqual(chromium.calls.filter((call) => call[0] === 'detach').map((call) => call[1].tabId), [7]);
+
+  // DevTools or another extension owns the attachment: detach fails and nothing is reported.
+  const foreign = chromiumApis();
+  foreign.api.debugger.detach = async () => { throw new Error('Debugger is not attached to the tab with id: 7.'); };
+  const foreignAdapter = createChromiumCdpAdapter({ browserApi: foreign.api, onDebuggerDetach: (event) => events.push(event) });
+  assert.equal(await foreignAdapter.releaseTab(7), false);
+  assert.deepEqual(events, []);
+});
+
+test('Chromium sweepOrphans detaches attachments this worker does not track and leaves live sessions alone', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  const events = [];
+  chromium.api.debugger.getTargets = async () => [
+    { type: 'page', tabId: 7, attached: true },
+    { type: 'page', tabId: 8, attached: true },
+    { type: 'page', tabId: 9, attached: false },
+    { type: 'worker', attached: true },
+  ];
+  const adapter = createChromiumCdpAdapter({ browserApi: chromium.api, onDebuggerDetach: (event) => events.push(event) });
+  await adapter.execute('browser_snapshot', {}, { scope, signal: openSignal() });
+  assert.equal(await adapter.sweepOrphans(), 1);
+  assert.deepEqual(chromium.calls.filter((call) => call[0] === 'detach').map((call) => call[1].tabId), [8], 'tab 7 has a live session here');
+  chromium.emitDetach(8, 'canceled_by_user');
+  assert.deepEqual(events, [], 'the sweep is our own detach and is never reported as an external one');
+
+  chromium.api.debugger.getTargets = async () => { throw new Error('unavailable'); };
+  assert.equal(await adapter.sweepOrphans(), 0);
+  delete chromium.api.debugger.getTargets;
+  assert.equal(await adapter.sweepOrphans(), 0);
+});
+
+test('Chromium adapter shares one re-attach between concurrent commands that hit the same stale session', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  let stale = false;
+  const baseAttach = chromium.api.debugger.attach;
+  chromium.api.debugger.attach = async (target, version) => { stale = false; return baseAttach(target, version); };
+  const baseSend = chromium.api.debugger.sendCommand;
+  chromium.api.debugger.sendCommand = async (target, method, params) => {
+    const failing = stale && method === 'Accessibility.getFullAXTree';
+    await Promise.resolve();
+    if (failing) throw new Error('Debugger is not attached to the tab with id: 7.');
+    return baseSend(target, method, params);
+  };
+  const adapter = createChromiumCdpAdapter({ browserApi: chromium.api });
+  const context = { scope, signal: openSignal() };
+  await adapter.execute('browser_snapshot', {}, context);
+
+  stale = true;
+  const results = await Promise.allSettled([
+    adapter.execute('browser_snapshot', {}, context),
+    adapter.execute('browser_snapshot', {}, context),
+    adapter.execute('browser_snapshot', {}, context),
+  ]);
+  assert.deepEqual(results.map((result) => result.status), ['fulfilled', 'fulfilled', 'fulfilled']);
+  assert.equal(countCalls(chromium.calls, 'attach'), 2, 'one initial attach and one shared recovery');
+  assert.equal(commandMethods(chromium.calls).filter((method) => method === 'Accessibility.enable').length, 2, 'domains are re-enabled once');
+});
+
+test('Chromium navigate treats a different fragment as a real navigation so hash-routed apps can change route', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  chromium.tabs.set(7, { ...chromium.tabs.get(7), url: 'https://app.example.test/#/home' });
+  const adapter = createChromiumCdpAdapter({ browserApi: chromium.api, ...fakeClock() });
+  const result = await adapter.execute('browser_navigate', { url: 'https://app.example.test/#/settings' }, { scope, signal: openSignal() });
+  assert.equal(result.status, 'navigated');
+  assert.equal(chromium.calls.some((call) => call[2] === 'Page.navigate' && call[3].url === 'https://app.example.test/#/settings'), true);
+
+  const same = await adapter.execute('browser_navigate', { url: 'https://app.example.test/#/settings' }, { scope, signal: openSignal() });
+  assert.equal(same.status, 'already-open');
 });

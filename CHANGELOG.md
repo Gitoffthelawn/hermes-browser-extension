@@ -32,6 +32,8 @@
 ### Fixed
 
 - Hermes Web no longer fails to list sessions on current Hermes: `session.list` was sent with an `offset` that Hermes rejects.
+- Hermes Control no longer leaves Chrome's debugging banner behind: releasing a tab, and a periodic sweep, now detach a debugger session that a restarted or suspended service worker had forgotten. Cancelling the banner during a command is no longer silently undone by a re-attach, and two commands that hit the same stale session share one re-attach instead of one of them failing.
+- Hermes Control results are safer and more reliable: a navigation that lands on a restricted page (banking, checkout, and so on) no longer reports that page's title, text typed into a field is never part of the page text, a slow navigation is read after it finishes loading (not half way), the page is read back only until 28 seconds into a command so the Hermes gateway's 30-second timeout cannot turn a completed action into a failure, and navigating to a different `#/route` of the same app is no longer skipped as "already open".
 - Browser control over Hermes Cloud registers again: the cloud registration no longer sends a `product` field that Hermes rejects. Local and remote API registration still send it.
 - Tool rows finish instead of duplicating on current Hermes streams: `tool.completed` and `tool.failed` now mark the call completed or failed.
 - Hermes Assist can no longer be driven by the page you are on. Its panel is now sealed from page scripts and only reacts to your own clicks and key presses, so a page cannot open it, send instructions to your chat, or read the reply or chat title.

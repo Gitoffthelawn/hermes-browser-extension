@@ -178,8 +178,14 @@ test('Phase 6 runtime releases the debugger session of a tab on demand and of ev
   const { createBrowserControlRuntime } = await runtimeModule();
   const calls = [];
   const browser = browserApi();
-  browser.api.debugger.attach = async (target) => { calls.push(['attach', target.tabId]); };
-  browser.api.debugger.detach = async (target) => { calls.push(['detach', target.tabId]); };
+  // Chrome only detaches what is attached.
+  const attached = new Set();
+  browser.api.debugger.attach = async (target) => { calls.push(['attach', target.tabId]); attached.add(target.tabId); };
+  browser.api.debugger.detach = async (target) => {
+    if (!attached.delete(target.tabId)) throw new Error(`Debugger is not attached to the tab with id: ${target.tabId}.`);
+    calls.push(['detach', target.tabId]);
+  };
+  browser.api.debugger.getTargets = async () => [...attached, 9].map((tabId) => ({ type: 'page', tabId, attached: true }));
   browser.api.debugger.sendCommand = async (_target, method) => (
     method === 'Accessibility.getFullAXTree' ? { nodes: [] } : {}
   );
@@ -202,6 +208,10 @@ test('Phase 6 runtime releases the debugger session of a tab on demand and of ev
 
   assert.equal(await runtime.releaseTab(7), true);
   assert.deepEqual(calls.at(-1), ['detach', 7]);
+  // Tab 9 is attached by a previous worker instance; tab 8 is a live session of this one.
+  attached.add(9);
+  assert.equal(await runtime.sweepOrphanSessions(), 1);
+  assert.deepEqual(calls.at(-1), ['detach', 9]);
   await runtime.disable();
   assert.deepEqual(calls.slice(-1), [['detach', 8]]);
   runtime.dispose();

@@ -21,6 +21,10 @@ const FULL_TEXT_LIMIT = 100_000;
 const MAX_SNAPSHOT_HEADINGS = 100;
 const MAX_SNAPSHOT_LANDMARKS = 30;
 const NOT_ATTACHED_RE = /not attached|detached while handling/i;
+const DETACHED_WHILE_HANDLING_RE = /detached while handling/i;
+// Chrome can answer an in-flight command with "Detached while handling command"
+// a moment before it delivers onDetach; wait this long for the event.
+const DETACH_EVENT_GRACE_MS = 75;
 const STALE_NODE_RE = /could not find node|no node with given id|node with given id|node is detached|does not belong to the document|no node found for given backend id|could not find object/i;
 const STALE_REF_MESSAGE = 'That element is gone \u2014 use the refs in the latest result or call browser_snapshot.';
 const ACTIONABLE_AX_ROLES = new Set([
@@ -150,6 +154,22 @@ function comparableUrl(value = '') {
   }
 }
 
+// A request for the page the tab already shows is not a navigation. A request
+// that names a different fragment is: hash-routed apps keep their whole route
+// there, so "#/settings" and "#/home" are different pages.
+function isSamePage(requested = '', current = '') {
+  if (comparableUrl(requested) !== comparableUrl(current)) return false;
+  const fragment = (value) => {
+    try {
+      return new URL(String(value || '').trim()).hash.replace(/^#/, '');
+    } catch {
+      return '';
+    }
+  };
+  const wanted = fragment(requested);
+  return !wanted || wanted === fragment(current);
+}
+
 function tabSummary(tab = {}) {
   return {
     url: compact(tab?.url || tab?.pendingUrl, 2_000),
@@ -251,8 +271,40 @@ function axStateFlags(node, properties, role) {
   return flags;
 }
 
+// Chrome exposes what is typed into a field as StaticText children of the field
+// itself. Those nodes are the field's value, so the page text skips everything
+// below a text field, an editable region, or a protected (password) field.
+const VALUE_HOLDER_AX_ROLES = new Set(['textbox', 'searchbox', 'combobox', 'spinbutton', 'slider', 'textarea', 'textfield']);
+
+function fieldValueNodeIds(rawNodes = []) {
+  const byId = new Map();
+  for (const node of rawNodes) {
+    if (node && node.nodeId !== undefined) byId.set(String(node.nodeId), node);
+  }
+  const hidden = new Set();
+  const stack = [];
+  for (const node of rawNodes) {
+    if (!node) continue;
+    const properties = Array.isArray(node.properties) ? node.properties : [];
+    const editable = axProperty(properties, 'editable');
+    const holdsValue = VALUE_HOLDER_AX_ROLES.has(compact(axValue(node.role), 80).toLowerCase())
+      || (editable && editable !== 'false')
+      || axFlag(axProperty(properties, 'protected'));
+    if (holdsValue) stack.push(...(Array.isArray(node.childIds) ? node.childIds : []));
+  }
+  while (stack.length) {
+    const id = String(stack.pop());
+    if (hidden.has(id)) continue;
+    hidden.add(id);
+    const child = byId.get(id);
+    if (Array.isArray(child?.childIds)) stack.push(...child.childIds);
+  }
+  return hidden;
+}
+
 function chromiumSnapshot(tree = {}, tab = {}, { full = false } = {}) {
   const rawNodes = Array.isArray(tree.nodes) ? tree.nodes : [];
+  const valueNodeIds = fieldValueNodeIds(rawNodes);
   const textLimit = full ? FULL_TEXT_LIMIT : COMPACT_TEXT_LIMIT;
   const nodes = [];
   const headings = [];
@@ -265,6 +317,7 @@ function chromiumSnapshot(tree = {}, tab = {}, { full = false } = {}) {
     const name = compact(axValue(node.name), 500);
     const properties = Array.isArray(node.properties) ? node.properties : [];
     if (name && ['statictext', 'heading', 'paragraph'].includes(role)
+      && !valueNodeIds.has(String(node.nodeId))
       && text[text.length - 1] !== name && textLength < textLimit) {
       text.push(name);
       textLength += name.length + 1;
@@ -544,6 +597,7 @@ function createChromiumCdpAdapter({
   // One persistent debugger session per tab: tabId -> { enabled, lastUsed, idleTimer }.
   const sessions = new Map();
   const inflight = new Map();
+  const recovering = new Map();
   const detaching = new Map();
   const activeOperations = new Map();
   const expectedDetaches = new Map();
@@ -588,14 +642,18 @@ function createChromiumCdpAdapter({
     return detached;
   }
 
-  function detachSession(tabId) {
-    if (!sessions.has(tabId)) return detaching.get(tabId) || Promise.resolve(false);
-    dropSession(tabId);
+  function trackDetach(tabId) {
     const pending = detachTarget(tabId).finally(() => {
       if (detaching.get(tabId) === pending) detaching.delete(tabId);
     });
     detaching.set(tabId, pending);
     return pending;
+  }
+
+  function detachSession(tabId) {
+    if (!sessions.has(tabId)) return detaching.get(tabId) || Promise.resolve(false);
+    dropSession(tabId);
+    return trackDetach(tabId);
   }
 
   const detachListener = (debuggee = {}, reason = '') => {
@@ -707,9 +765,31 @@ function createChromiumCdpAdapter({
     return error;
   }
 
+  // Re-attaches a session whose attachment went stale and enables the domains it
+  // had. Concurrent callers share one recovery.
+  function recoverSession(tabId, session) {
+    const running = recovering.get(tabId);
+    if (running) return running;
+    const recovery = (async () => {
+      const previouslyEnabled = [...session.enabled];
+      dropSession(tabId);
+      const next = await ensureSession(tabId);
+      session.replacedBy = next;
+      for (const domain of previouslyEnabled) {
+        await rawSend(tabId, `${domain}.enable`, {});
+        next.enabled.add(domain);
+      }
+      return next;
+    })().finally(() => {
+      if (recovering.get(tabId) === recovery) recovering.delete(tabId);
+    });
+    recovering.set(tabId, recovery);
+    return recovery;
+  }
+
   async function sendWithRetry(tabId, method, params, signal) {
     assertNotAborted(signal);
-    let session = await ensureSession(tabId);
+    const session = await ensureSession(tabId);
     assertNotAborted(signal);
     try {
       const result = await rawSend(tabId, method, params);
@@ -719,15 +799,23 @@ function createChromiumCdpAdapter({
       if (abortError(signal)) throw abortError(signal);
       // Only a stale cache entry is retried; an external detach already dropped
       // the session and must not be silently re-attached.
-      if (!NOT_ATTACHED_RE.test(String(error?.message || error || '')) || sessions.get(tabId) !== session) {
-        throw mapNodeError(method, error);
+      const failure = String(error?.message || error || '');
+      if (!NOT_ATTACHED_RE.test(failure)) throw mapNodeError(method, error);
+      if (DETACHED_WHILE_HANDLING_RE.test(failure) && sessions.get(tabId) === session) {
+        // The user cancelling the infobar or opening DevTools answers the command
+        // first and reports the detach right after. Let that report land, or the
+        // retry would undo the user's choice and orphan the new attachment.
+        await sleep(DETACH_EVENT_GRACE_MS);
+        assertNotAborted(signal);
       }
-      const previouslyEnabled = [...session.enabled];
-      dropSession(tabId);
-      session = await ensureSession(tabId);
-      for (const domain of previouslyEnabled) {
-        await rawSend(tabId, `${domain}.enable`, {});
-        session.enabled.add(domain);
+      if (sessions.get(tabId) === session) {
+        await recoverSession(tabId, session);
+      } else if (recovering.has(tabId) || session.replacedBy) {
+        // A concurrent command found the same stale session first and is
+        // re-attaching it; join that recovery instead of failing.
+        await (recovering.get(tabId) || Promise.resolve());
+      } else {
+        throw mapNodeError(method, error);
       }
       assertNotAborted(signal);
       try {
@@ -878,7 +966,7 @@ function createChromiumCdpAdapter({
     const before = await browserApi.tabs.get(tabId);
     assertNotAborted(signal);
     const beforeUrl = compact(before?.url || before?.pendingUrl, 2_000);
-    if (requested && comparableUrl(requested) === comparableUrl(beforeUrl)) {
+    if (requested && isSamePage(requested, beforeUrl)) {
       return { ...tabSummary(before), status: 'already-open', navigated: false };
     }
     return withSession(scope, signal, async ({ send, enable }) => {
@@ -1132,7 +1220,7 @@ function createChromiumCdpAdapter({
   // Waits for the page to react to an action. Never throws: any failure is
   // reported as timedOut so a successful action is never turned into an error.
   async function settle({
-    scope = {}, signal, mode = 'dom', timeoutMs,
+    scope = {}, signal, mode = 'dom', timeoutMs, loadTimeoutMs,
   } = {}) {
     let url = '';
     let title = '';
@@ -1144,11 +1232,15 @@ function createChromiumCdpAdapter({
       const before = await browserApi.tabs.get(tabId);
       const startUrl = before?.url || before?.pendingUrl || '';
       const loadOptions = { signal, startUrl, sawLoading: before?.status === 'loading' };
+      // `timeoutMs` bounds the quiet-window wait. A page that is loading is
+      // given the load budget instead, so a slow navigation is not read half
+      // way through (its refs would be minted before the new document is ready).
+      const loadBudgetMs = Math.min(LOAD_TIMEOUT_MS, boundedMs(loadTimeoutMs, LOAD_TIMEOUT_MS));
       if (mode === 'navigation' || before?.status === 'loading') {
         navigated = true;
         const waited = await waitForLoad(tabId, {
           ...loadOptions,
-          timeoutMs: boundedMs(timeoutMs, LOAD_TIMEOUT_MS),
+          timeoutMs: mode === 'navigation' ? boundedMs(timeoutMs, LOAD_TIMEOUT_MS) : loadBudgetMs,
           startUrl: mode === 'navigation' ? '' : startUrl,
           graceMs: 0,
         });
@@ -1162,7 +1254,7 @@ function createChromiumCdpAdapter({
           navigated = true;
           const waited = await waitForLoad(tabId, {
             ...loadOptions,
-            timeoutMs: LOAD_TIMEOUT_MS,
+            timeoutMs: loadBudgetMs,
             sawLoading: after?.status === 'loading',
             graceMs: 0,
           });
@@ -1211,7 +1303,33 @@ function createChromiumCdpAdapter({
   async function releaseTab(tabId) {
     const normalized = Number(tabId);
     if (!Number.isInteger(normalized) || normalized <= 0) return false;
-    return detachSession(normalized);
+    if (inflight.has(normalized)) await inflight.get(normalized).catch(() => {});
+    if (sessions.has(normalized) || detaching.has(normalized)) return detachSession(normalized);
+    // Nothing is recorded here, but a service worker that was restarted since
+    // the attach left the debugger attached. Detach only works for our own
+    // attachment, so DevTools or another extension is never touched.
+    return trackDetach(normalized);
+  }
+
+  // Detaches debugger attachments this worker instance does not know about: the
+  // idle timers of a suspended or restarted service worker are gone, and nothing
+  // else would ever remove Chrome's "is debugging this browser" bar.
+  async function sweepOrphans() {
+    if (typeof debuggerApi?.getTargets !== 'function') return 0;
+    let targets = [];
+    try {
+      targets = await debuggerApi.getTargets();
+    } catch {
+      return 0;
+    }
+    let released = 0;
+    for (const target of Array.isArray(targets) ? targets : []) {
+      const tabId = Number(target?.tabId);
+      if (target?.attached !== true || !Number.isInteger(tabId) || tabId <= 0) continue;
+      if (sessions.has(tabId) || inflight.has(tabId) || detaching.has(tabId) || activeOperations.has(tabId)) continue;
+      if (await trackDetach(tabId)) released += 1;
+    }
+    return released;
   }
 
   async function releaseAll() {
@@ -1235,6 +1353,7 @@ function createChromiumCdpAdapter({
     settle,
     releaseTab,
     releaseAll,
+    sweepOrphans,
     dispose() {
       debuggerApi?.onDetach?.removeListener?.(detachListener);
       debuggerApi?.onEvent?.removeListener?.(eventListener);

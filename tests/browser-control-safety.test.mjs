@@ -43,7 +43,14 @@ test('Phase 6 classifies ordinary reads and writes without trusting caller-suppl
       `${key} submits, so it needs approval like Enter`,
     );
   }
-  for (const key of ['Control+a', 'Shift+Tab', 'ArrowDown', 'Escape']) {
+  for (const args of [{ key: 'Control+v' }, { key: 'Meta+V' }, { key: 'Control+Shift+v' }, { key: 'Shift+Insert' }, { key: 'v', modifiers: ['Meta'] }, { key: 'Insert', modifiers: ['Shift'] }]) {
+    assert.equal(
+      classifyBrowserControlAction({ action: 'browser_press', arguments: args }).reason,
+      'clipboard-paste',
+      `${JSON.stringify(args)} pastes the user's clipboard, so it needs approval`,
+    );
+  }
+  for (const key of ['Control+a', 'Shift+Tab', 'ArrowDown', 'Escape', 'v', 'Control+c']) {
     assert.equal(classifyBrowserControlAction({ action: 'browser_press', arguments: { key } }).risk, BROWSER_CONTROL_RISKS.SAFE, key);
   }
 });

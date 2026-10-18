@@ -52,6 +52,7 @@ const ADAPTER_ERROR_CODES = new Set(['stale_ref', 'navigation_failed']);
 const APPROVAL_MESSAGES = Object.freeze({
   'cross-origin-unsaved-content': 'Leave this page while unsaved content may be present?',
   'submission-key': 'Press Enter to submit the current form or message?',
+  'clipboard-paste': 'Paste your clipboard into this page?',
   'consequential-action': 'Run this consequential browser action?',
   'coordinate-click': 'Click these exact viewport coordinates?',
   'drag-action': 'Drag this target to the selected destination?',
@@ -121,6 +122,12 @@ function normalizedScope(value = {}) {
     frameId: Math.max(0, Number(value.frameId) || 0),
     documentGeneration: Number(value.documentGeneration),
   };
+}
+
+function restrictedPageUrl(url = '', allowLocalDocuments = false) {
+  return Boolean(compact(url)) && classifyBrowserControlAction({
+    action: 'browser_snapshot', currentUrl: url, allowLocalDocuments,
+  }).risk === BROWSER_CONTROL_RISKS.BLOCKED;
 }
 
 function pageOrigin(value = '') {
@@ -357,7 +364,10 @@ export function createBrowserControlExecutor({
       const canSnapshot = adapter.contract.actions.includes('browser_snapshot');
       if (!canSettle && !canSnapshot) return {};
       const state = {};
-      const budgetMs = () => deadlineAt - Number(now()) - POST_ACTION_DEADLINE_MARGIN_MS;
+      // The broker gives up on a command at 30 s, so reading the page back ends
+      // by the same 28 s cap the approval wait uses, not at the 30 s deadline.
+      const postActionDeadline = Math.min(deadlineAt, startedAt + APPROVAL_WAIT_CAP_MS);
+      const budgetMs = () => postActionDeadline - Number(now()) - POST_ACTION_DEADLINE_MARGIN_MS;
       if (budgetMs() < POST_ACTION_MIN_BUDGET_MS) {
         return canSnapshot ? { snapshot_error: 'deadline_near' } : {};
       }
@@ -371,6 +381,12 @@ export function createBrowserControlExecutor({
             signal: controller.signal,
             mode: 'dom',
             timeoutMs: Math.max(1, Math.min(POST_ACTION_SETTLE_MS, budgetMs())),
+            // A click that starts a navigation waits for the load, but never past the
+            // budget, and a navigate/back that already waited out the load does not wait again.
+            loadTimeoutMs: Math.max(1, Math.min(
+              budgetMs(),
+              performedValue?.timedOut === true ? POST_ACTION_SETTLE_MS : Infinity,
+            )),
           }) || null;
         } catch {
           settled = null;
@@ -418,7 +434,7 @@ export function createBrowserControlExecutor({
 
       try {
         if (navigated) refs.invalidateTab(scope.tabId);
-        const generation = await settledDocumentGeneration(navigated);
+        const generation = await settledDocumentGeneration(navigated, budgetMs);
         const snapshotScope = { ...scope, documentGeneration: generation };
         const pending = adapter.execute('browser_snapshot', { full: false }, {
           signal: controller.signal,
@@ -477,12 +493,12 @@ export function createBrowserControlExecutor({
     // content script's document-ready message. After a navigation, wait for
     // those to land and settle so refs are minted under the generation the
     // next command will use. If it never moves, the current value stands.
-    async function settledDocumentGeneration(expectChange) {
+    async function settledDocumentGeneration(expectChange, budgetMs = () => Infinity) {
       const from = scope.documentGeneration;
       if (typeof currentDocumentGeneration !== 'function') return from;
       let current = readDocumentGeneration(from);
       if (current === from && !expectChange) return current;
-      for (let poll = 0; poll < GENERATION_MAX_POLLS && !controller.signal.aborted; poll += 1) {
+      for (let poll = 0; poll < GENERATION_MAX_POLLS && !controller.signal.aborted && budgetMs() > GENERATION_POLL_MS; poll += 1) {
         await new Promise((resolve) => { setTimeout(resolve, GENERATION_POLL_MS); });
         const next = readDocumentGeneration(from);
         if (next === current && current !== from) return current;
@@ -775,7 +791,14 @@ export function createBrowserControlExecutor({
       if (action === 'browser_navigate' || action === 'browser_back') refs.invalidateTab(scope.tabId);
       if (POST_ACTION_ACTIONS.has(action)) {
         const state = await collectPostActionState({ action, value });
-        return { ok: true, result: { ...sanitizedActionResult(action, value), ...state } };
+        const result = { ...sanitizedActionResult(action, value), ...state };
+        // navigate/back report the page they landed on; a restricted page is
+        // never described beyond its origin, whichever step saw its URL.
+        const allowLocal = Boolean(context?.allowLocalDocuments ?? context?.settings?.allowLocalDocuments);
+        const landedRestricted = restrictedPageUrl(value?.url, allowLocal);
+        if (state.snapshot_error === 'restricted_page' || (landedRestricted && !('title' in state))) delete result.title;
+        if (landedRestricted && !('url' in state)) result.url = safeResultUrl(pageOrigin(value.url));
+        return { ok: true, result };
       }
       if (action === 'browser_tabs') {
         const filtered = { tabs: Array.isArray(value?.tabs) ? value.tabs.filter((tab) => ownedTabs.has(Number(tab?.id))) : [] };

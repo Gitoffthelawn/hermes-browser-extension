@@ -130,9 +130,17 @@ function startControllerAlarms() {
   return true;
 }
 
+// A restarted or suspended service worker loses the idle-detach timers of the
+// debugger sessions it opened; this removes any attachment it no longer tracks.
+function sweepDebuggerOrphans() {
+  browserControlRuntime.sweepOrphanSessions().catch(() => {});
+}
+sweepDebuggerOrphans();
+
 browserApi.alarms?.onAlarm?.addListener?.((alarm) => {
   if (!alarm?.name) return;
   if (alarm.name === CONTROLLER_HEARTBEAT_ALARM || alarm.name === CONTROLLER_RECONCILE_ALARM) {
+    sweepDebuggerOrphans();
     controllerWorker?.reconcile({ reason: alarm.name })
       .catch((error) => console.warn('[Hermes Browser] Controller alarm reconcile failed:', error));
   }

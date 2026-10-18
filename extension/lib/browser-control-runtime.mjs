@@ -111,6 +111,11 @@ export function createBrowserControlRuntime({
     return runtimeAdapter?.releaseTab?.(tabId) ?? false;
   }
 
+  // Detaches debugger sessions a restarted service worker no longer tracks.
+  async function sweepOrphanSessions() {
+    return runtimeAdapter?.sweepOrphans?.() ?? 0;
+  }
+
   function setDebuggerDetachHandler(handler) {
     debuggerDetachHandler = typeof handler === 'function' ? handler : () => {};
   }
@@ -130,6 +135,7 @@ export function createBrowserControlRuntime({
     execute,
     setDebuggerDetachHandler,
     releaseTab,
+    sweepOrphanSessions,
     dispose,
     approvals,
     refs,

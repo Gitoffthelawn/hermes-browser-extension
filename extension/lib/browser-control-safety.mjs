@@ -27,6 +27,18 @@ const SAFE_ACTIONS = new Set([
 
 // Matches combos too ("Control+Enter"), since the adapter accepts "Mod+Key".
 const SUBMISSION_KEY_RE = /(?:^|\+)(?:enter|return)$/i;
+// Paste shortcuts insert the user's own clipboard into the page, so they need approval.
+const PASTE_KEY_RE = /^(?:(?:control|ctrl|meta|cmd|command)\+(?:shift\+)?v|shift\+insert)$/i;
+const PASTE_MODIFIER_RE = /^(?:control|ctrl|meta|cmd|command)$/i;
+
+function isPasteShortcut(args = {}) {
+  const key = compact(args?.key);
+  if (PASTE_KEY_RE.test(key)) return true;
+  const modifiers = Array.isArray(args?.modifiers) ? args.modifiers : [];
+  if (/^v$/i.test(key)) return modifiers.some((value) => PASTE_MODIFIER_RE.test(compact(value)));
+  if (/^insert$/i.test(key)) return modifiers.some((value) => /^shift$/i.test(compact(value)));
+  return false;
+}
 const APPROVAL_LABEL_RE = /\b(?:submit|send|post|publish|delete|remove|revoke|reset|buy|pay|checkout|transfer|subscribe|invite|approve|merge|deploy|download|upload|overwrite)\b/i;
 const PAYMENT_RE = /\b(?:credit.?card|card.?number|cvv|cvc|expiry|payment|billing|bank|banking|crypto|wallet|checkout)\b/i;
 const CREDENTIAL_RE = /\b(?:password|passwd|passcode|api.?(?:key|token)|access.?token|auth.?token|session.?token|private.?key|seed.?phrase|recovery.?phrase|secret)\b/i;
@@ -186,6 +198,9 @@ export function classifyBrowserControlAction({
 
   if (normalizedAction === 'browser_press' && SUBMISSION_KEY_RE.test(compact(args?.key))) {
     return decision(BROWSER_CONTROL_RISKS.APPROVAL, 'submission-key');
+  }
+  if (normalizedAction === 'browser_press' && isPasteShortcut(args)) {
+    return decision(BROWSER_CONTROL_RISKS.APPROVAL, 'clipboard-paste');
   }
   if ((normalizedAction === 'browser_click' || normalizedAction === 'browser_press') && APPROVAL_LABEL_RE.test(descriptor)) {
     return decision(BROWSER_CONTROL_RISKS.APPROVAL, 'consequential-action');
