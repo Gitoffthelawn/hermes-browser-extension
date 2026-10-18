@@ -832,3 +832,29 @@ with tempfile.TemporaryDirectory() as tmp:
 `;
   runPluginPython(script);
 });
+
+test('durable journal file is created owner-only, not narrowed afterwards', () => {
+  const script = `${pluginImportHarness}
+import os
+import stat
+import tempfile
+
+from companion_plugin import journal as journal_module
+from companion_plugin.journal import BrowserContextJournal, JOURNAL_FILE_MODE
+
+if os.name != "nt":
+    # A permissive umask and a chmod that does nothing: the only thing left to
+    # keep the payload private is the mode the file is created with.
+    os.umask(0)
+    journal_module.os.chmod = lambda *args, **kwargs: None
+    with tempfile.TemporaryDirectory() as tmp:
+        durable = BrowserContextJournal(max_rows=10, data_dir=tmp)
+        owner = type("Owner", (), {"principal_id": "session:s", "session_id": "s", "turn_id": "t", "task_id": "k"})()
+        durable.record(owner, {"ts": 1.0, "context_id": "c1", "payload_hash": "h", "scope": "follow-active",
+                               "controller_id": "c", "browser_profile_id": "p", "tab_id": 1, "lease_owned": False, "delivery": "full"})
+        path = os.path.join(tmp, "journal.jsonl")
+        assert os.path.exists(path)
+        assert stat.S_IMODE(os.stat(path).st_mode) == JOURNAL_FILE_MODE, oct(os.stat(path).st_mode)
+`;
+  runPluginPython(script);
+});
