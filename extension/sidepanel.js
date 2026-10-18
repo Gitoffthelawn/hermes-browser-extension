@@ -150,6 +150,9 @@ import { blobatar as blobatarSvg } from './lib/vendor/blobatar-2.0.0.js';
 import { renderMarkdownSafe, sanitizeHtml } from './lib/sanitizer.mjs';
 import { highlightCodeBlocks } from './lib/code-highlighting.mjs';
 import { enhanceMarkdownCodeBlocks } from './lib/markdown-code-copy.mjs';
+import { isClarifyToolEvent, isPromptEventName, isPromptRequestEvent } from './lib/gateway-prompts.mjs';
+import { createPromptCard } from './lib/prompt-card.mjs';
+import { createPendingControlsPoller, createPromptController } from './lib/prompt-controller.mjs';
 import {
   completionRevealPlan,
   newestAssistantReply,
@@ -733,6 +736,7 @@ const els = {
   contextScopeLabel: $('#contextScopeLabel'),
   contextScopeMenu: $('#contextScopeMenu'),
   localDocumentApprovalNotice: $('#localDocumentApprovalNotice'),
+  agentPromptCard: $('#agentPromptCard'),
   localDocumentApprovalTitle: $('#localDocumentApprovalTitle'),
   localDocumentApprovalDetail: $('#localDocumentApprovalDetail'),
   localDocumentApproveButton: $('#localDocumentApproveButton'),
@@ -10195,7 +10199,7 @@ async function ensureProfileWsConnection({ readyTimeoutMs = 8_000, allowDashboar
       throw error;
     }
     profileWsConnection?.client?.close?.();
-    const gatewayClient = createGatewayClient({ WebSocketImpl: WebSocket, requestTimeoutMs: 60_000, readyTimeoutMs });
+    const gatewayClient = createChatGatewayClient({ WebSocketImpl: WebSocket, requestTimeoutMs: 60_000, readyTimeoutMs });
     gatewayClient.on('close', () => {
       if (profileWsConnection?.client === gatewayClient) profileWsConnection = null;
     });
@@ -10213,7 +10217,7 @@ async function ensureProfileWsConnection({ readyTimeoutMs = 8_000, allowDashboar
     return profileWsConnection;
   }
   profileWsConnection?.client?.close?.();
-  const gatewayClient = createGatewayClient({ WebSocketImpl: WebSocket, requestTimeoutMs: 60_000, readyTimeoutMs });
+  const gatewayClient = createChatGatewayClient({ WebSocketImpl: WebSocket, requestTimeoutMs: 60_000, readyTimeoutMs });
   gatewayClient.on('close', () => {
     if (profileWsConnection?.client === gatewayClient) profileWsConnection = null;
   });
@@ -15111,6 +15115,7 @@ function sessionDisplayName(session = {}) {
 }
 
 function updateSessionLabel() {
+  promptController.refresh();
   if (activeGroupProjection) {
     const label = `${activeGroupProjection.displayName} · Group Chat`;
     els.currentSessionName.textContent = label;
@@ -20187,7 +20192,90 @@ function sseBlocksFromBuffer(buffer, { flush = false } = {}) {
   return { blocks, rest };
 }
 
-async function readSseResponse(response, onDelta, onTool, { signal, onRun, onSteerQueued, onRuntime, knownAssistantTexts = [] } = {}) {
+// ---- Approval and clarify prompts ------------------------------------------
+// Hermes pauses a turn until the user answers. REST turns learn of the prompt
+// from the run stream (or run status); dashboard WebSocket turns receive it as a
+// server request. Both land in one queue and render as one card.
+
+function promptViewedSessionIds() {
+  const connection = activeDashboardWsConnection;
+  return [settings.sessionId, connection?.wsSessionId, connection?.wsStoredSessionId];
+}
+
+async function respondRestPrompt(entry, body) {
+  const route = entry.kind === 'clarify' ? 'clarify' : 'approval';
+  const response = await apiFetch(`/v1/runs/${encodeURIComponent(entry.scope)}/${route}`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return { status: response.status, payload: await readJsonResponse(response) };
+}
+
+function handlePromptNotice({ type, entry, detail = '', reason = '', viewed = true }) {
+  const clarify = entry?.kind === 'clarify';
+  const plain = { translateTitle: false, translateDetail: false };
+  const kicker = t(clarify ? 'clarify.kicker' : 'exec_approval.kicker');
+  if (type === 'requested') {
+    setStatus(
+      'warn',
+      t(clarify ? 'clarify.waiting' : 'exec_approval.waiting'),
+      viewed ? t(clarify ? 'clarify.waiting_detail' : 'exec_approval.waiting_detail') : t('exec_approval.other_session'),
+      plain,
+    );
+  } else if (type === 'sent') {
+    setStatus('ok', t(clarify ? 'clarify.sent' : 'exec_approval.sent'), clarify ? '' : t('exec_approval.sent_detail'), plain);
+  } else if (type === 'retired' || type === 'expired') {
+    setStatus('warn', kicker, t(clarify ? 'clarify.expired' : 'exec_approval.expired'), plain);
+  } else if (type === 'cancelled' && reason !== 'resolved') {
+    setStatus('warn', kicker, t('exec_approval.cancelled'), plain);
+  } else if (type === 'failed') {
+    setStatus('warn', kicker, t(clarify ? 'clarify.send_failed' : 'exec_approval.send_failed', { error: detail }), plain);
+  }
+}
+
+const promptController = createPromptController({
+  getViewedSessionIds: promptViewedSessionIds,
+  getCapabilities: () => gatewayCapabilities,
+  respondRest: respondRestPrompt,
+  onNotice: handlePromptNotice,
+});
+
+const gatewayServerRequests = {
+  handle: (request, controls) => promptController.ingestServerRequest(request, controls),
+  cancel: (payload) => promptController.cancelServerRequest(payload?.id, { reason: payload?.reason }),
+};
+
+// Only chat connections answer server requests: they are the ones that can
+// show the card. The gateway is told so once the connection is ready.
+function createChatGatewayClient(options = {}) {
+  const gatewayClient = createGatewayClient({ ...options, serverRequests: gatewayServerRequests });
+  gatewayClient.on('close', () => promptController.dropClient(gatewayClient));
+  return gatewayClient;
+}
+
+// Reads GET /v1/runs/{id} while a REST run is quiet, for prompts the stream did
+// not carry. Built outside the turn so the turn body stays free of extra awaits
+// between consent resolution and submission.
+function createRestPromptPoller({ getRunId, sessionId, isCurrent }) {
+  return createPendingControlsPoller({
+    fetchStatus: async () => {
+      const runId = getRunId();
+      if (!runId) return null;
+      const response = await apiFetch(`/v1/runs/${encodeURIComponent(runId)}`, { method: 'GET' });
+      return response.ok ? readJsonResponse(response) : null;
+    },
+    onStatus: (payload) => {
+      if (isCurrent()) promptController.ingestRunStatus(getRunId(), payload, { sessionId });
+    },
+  });
+}
+
+function bindPromptCard() {
+  if (!els.agentPromptCard) return;
+  createPromptCard({ container: els.agentPromptCard, t, controller: promptController });
+}
+
+async function readSseResponse(response, onDelta, onTool, { signal, onRun, onSteerQueued, onRuntime, onPrompt, knownAssistantTexts = [] } = {}) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -20220,6 +20308,8 @@ async function readSseResponse(response, onDelta, onTool, { signal, onRun, onSte
       return true;
     } else if (event.type === 'steer.queued' && data.text) {
       onSteerQueued?.(data.text);
+    } else if (isPromptEventName(event.type)) {
+      onPrompt?.(event.type, data);
     } else if (event.type === 'chat.completion.chunk' || event.type === 'message') {
       const nextText = appendOpenAiChunkText(event, finalText);
       if (nextText !== finalText) {
@@ -20423,7 +20513,7 @@ async function ensureRemoteWsClient() {
   }
   await refreshContextConsentPrincipal({ dashboardPrincipal: ticket.principal });
   const wsUrl = buildDashboardWsUrl(baseUrl, ticket.ticket);
-  const client = createGatewayClient();
+  const client = createChatGatewayClient();
   try {
     await client.connect(wsUrl);
   } catch (error) {
@@ -20483,6 +20573,7 @@ async function ensureRemoteWsSession(connection) {
   connection.wsSessionId = liveId;
   connection.wsStoredSessionId = storedId;
   connection.profile = desiredProfile;
+  promptController.bindSession(liveId, storedId);
   // Persist only the durable identity. Every socket replacement resumes it and
   // receives a fresh live id for prompt/history/steer/interrupt RPCs.
   settings = {
@@ -20758,7 +20849,7 @@ async function streamDashboardWsChatAttempt(connection, sessionId, prompt, onDel
   });
 }
 
-async function streamSessionChat(prompt, onDelta, onTool, { signal, attachments: turnAttachments = attachments, onRun, onSteerQueued, onRuntime, knownAssistantTexts = [], voiceLive = null, truncate = null, onSubmitResponse = null } = {}) {
+async function streamSessionChat(prompt, onDelta, onTool, { signal, attachments: turnAttachments = attachments, onRun, onSteerQueued, onRuntime, onPrompt, knownAssistantTexts = [], voiceLive = null, truncate = null, onSubmitResponse = null } = {}) {
   if (usesDashboardWsChatTransport()) return streamDashboardWsChat(prompt, onDelta, onTool, {
     signal,
     attachments: turnAttachments,
@@ -20785,9 +20876,9 @@ async function streamSessionChat(prompt, onDelta, onTool, { signal, attachments:
     }
     throw setupError;
   }
-  if (!hasSessionRoutes) return streamChatCompletions(prompt, onDelta, onTool, { signal, attachments: turnAttachments, onRun, knownAssistantTexts, voiceLive });
+  if (!hasSessionRoutes) return streamChatCompletions(prompt, onDelta, onTool, { signal, attachments: turnAttachments, onRun, onPrompt, knownAssistantTexts, voiceLive });
   try {
-    return await streamSessionChatRest(prompt, onDelta, onTool, { signal, turnAttachments, onRun, onSteerQueued, onRuntime, knownAssistantTexts, voiceLive });
+    return await streamSessionChatRest(prompt, onDelta, onTool, { signal, turnAttachments, onRun, onSteerQueued, onRuntime, onPrompt, knownAssistantTexts, voiceLive });
   } catch (error) {
     // Profile-scoped 401: the gateway multiplexer requires each named
     // profile's own API key. Named-profile sessions still stream over the
@@ -20810,7 +20901,7 @@ async function streamSessionChat(prompt, onDelta, onTool, { signal, attachments:
   }
 }
 
-async function streamSessionChatRest(prompt, onDelta, onTool, { signal, turnAttachments, onRun, onSteerQueued, onRuntime, knownAssistantTexts, voiceLive = null }) {
+async function streamSessionChatRest(prompt, onDelta, onTool, { signal, turnAttachments, onRun, onSteerQueued, onRuntime, onPrompt, knownAssistantTexts, voiceLive = null }) {
 
   let response;
   try {
@@ -20846,7 +20937,7 @@ async function streamSessionChatRest(prompt, onDelta, onTool, { signal, turnAtta
     });
   }
   try {
-    return await readSseResponse(response, onDelta, onTool, { signal, onRun, onSteerQueued, onRuntime, knownAssistantTexts });
+    return await readSseResponse(response, onDelta, onTool, { signal, onRun, onSteerQueued, onRuntime, onPrompt, knownAssistantTexts });
   } catch (error) {
     if (!error.requestRejected && !error.streamError) {
       error.requestAccepted = true;
@@ -20855,7 +20946,7 @@ async function streamSessionChatRest(prompt, onDelta, onTool, { signal, turnAtta
   }
 }
 
-async function streamChatCompletions(prompt, onDelta, onTool, { signal, attachments: turnAttachments = attachments, onRun, knownAssistantTexts = [], voiceLive = null } = {}) {
+async function streamChatCompletions(prompt, onDelta, onTool, { signal, attachments: turnAttachments = attachments, onRun, onPrompt, knownAssistantTexts = [], voiceLive = null } = {}) {
   let response;
   try {
     response = await apiFetch('/v1/chat/completions', {
@@ -20891,7 +20982,7 @@ async function streamChatCompletions(prompt, onDelta, onTool, { signal, attachme
     });
   }
   try {
-    const result = await readSseResponse(response, onDelta, onTool, { signal, onRun, knownAssistantTexts });
+    const result = await readSseResponse(response, onDelta, onTool, { signal, onRun, onPrompt, knownAssistantTexts });
     await captureDelegationDispatchesFromCurrentRestHistory();
     return result;
   } catch (error) {
@@ -21412,6 +21503,10 @@ async function askHermes(userText, turnAttachments = [...attachments], turnOptio
   // stream just sits on the thinking bubble. After a while with no reply or tool
   // activity, tell the user it is the model, not the extension.
   let slowReplyTimer = null;
+  // REST turns: the run being watched, and the poll that finds prompts the
+  // stream did not carry (clarify) or that were raised before it attached.
+  let promptRunId = '';
+  let promptPoller = null;
   let sawReplyActivity = false;
   let slowNoticeShown = false;
   const noteReplyActivity = () => {
@@ -21603,17 +21698,33 @@ async function askHermes(userText, turnAttachments = [...attachments], turnOptio
     });
     let recoveredImageSources = [];
     let turnImageSources = [];
-    slowReplyTimer = setTimeout(() => {
-      if (sawReplyActivity || !runIsViewed()) return;
-      slowNoticeShown = true;
-      setStatus('warn', 'Still waiting on the model', SLOW_REPLY_DETAIL, { translateDetail: false });
-    }, SLOW_REPLY_NOTICE_MS);
+    const armSlowReplyTimer = () => {
+      slowReplyTimer = setTimeout(() => {
+        if (sawReplyActivity || !runIsViewed()) return;
+        // Hermes is waiting on the user, not on the model.
+        if (promptController.hasPending(promptViewedSessionIds())) {
+          armSlowReplyTimer();
+          return;
+        }
+        slowNoticeShown = true;
+        setStatus('warn', 'Still waiting on the model', SLOW_REPLY_DETAIL, { translateDetail: false });
+      }, SLOW_REPLY_NOTICE_MS);
+    };
+    armSlowReplyTimer();
+    if (!dashboardTransport && gatewayCapabilities.runStatus) {
+      promptPoller = createRestPromptPoller({
+        getRunId: () => promptRunId,
+        sessionId: runSessionId,
+        isCurrent: () => runControlGenerationMatches(turnRunControlGeneration, runControlGeneration),
+      });
+    }
     try {
       answer = await streamSessionChat(
         prompt,
         (partial) => {
           if (!runControlGenerationMatches(turnRunControlGeneration, runControlGeneration)) return;
           liveText = partial || '';
+          promptPoller?.activity();
           if (liveText) noteReplyActivity();
           if (liveText.length < pushedLive) {
             // The stream rewrote its cumulative text (retry/reattach): restart
@@ -21627,6 +21738,8 @@ async function askHermes(userText, turnAttachments = [...attachments], turnOptio
         },
         (tool) => {
           if (!runControlGenerationMatches(turnRunControlGeneration, runControlGeneration)) return;
+          promptPoller?.activity();
+          if (isClarifyToolEvent(tool)) promptPoller?.poke();
           noteReplyActivity();
           if (runIsViewed()) captureTaskToolEvent(tool).catch((error) => console.warn('[Hermes Browser] Task event persistence failed:', error));
           const activity = normalizeToolActivity(tool);
@@ -21647,12 +21760,24 @@ async function askHermes(userText, turnAttachments = [...attachments], turnOptio
             if (dashboardTransport) return;
             activeRunId = runId;
             activeRunControl = withRunControlId(activeRunControl, runId);
+            promptRunId = String(runId || '');
+            promptPoller?.start();
           },
           onSteerQueued: (payload) => { if (runIsViewed()) restoreBackendQueuedSteerDraft(payload); },
+          onPrompt: (type, data) => {
+            if (!runControlGenerationMatches(turnRunControlGeneration, runControlGeneration)) return;
+            promptPoller?.activity();
+            if (isPromptRequestEvent(type)) noteReplyActivity();
+            promptController.ingestRestEvent(type, data, { runId: promptRunId, sessionId: runSessionId });
+          },
           onRuntime: (payload) => {
             if (!runControlGenerationMatches(turnRunControlGeneration, runControlGeneration)) return;
             const status = String(payload?.status || '').trim().toLowerCase();
-            if (['completed', 'failed', 'cancelled'].includes(status)) streamTerminalStatus = status;
+            if (['completed', 'failed', 'cancelled'].includes(status)) {
+              streamTerminalStatus = status;
+              promptPoller?.stop();
+              if (promptRunId) promptController.settleScope('rest', promptRunId);
+            }
             if (runIsViewed()) applyTurnRuntimePayload(payload);
           },
           knownAssistantTexts: priorAssistantTexts,
@@ -21902,6 +22027,8 @@ ${streamError.message}`);
     }
   } finally {
     clearTimeout(slowReplyTimer);
+    promptPoller?.stop();
+    if (promptRunId) promptController.settleScope('rest', promptRunId);
     if (localSessionStream?.view === streamView) localSessionStream = null;
     if (turnRunControlGeneration === runControlGeneration) {
       activeRunControl = markRunStreamClosed(activeRunControl);
@@ -22688,6 +22815,7 @@ function eventPathContains(event, node) {
 }
 
 function bindEvents() {
+  bindPromptCard();
   portalDockFloatingPanels();
   observeDockFloatingAnchor();
   els.messages?.addEventListener('copy', (event) => {

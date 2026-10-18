@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="context-menu-editor.css" />
     <link rel="stylesheet" href="lib/surface-text-zoom.css" />
     <link rel="stylesheet" href="lib/user-file-attachments.css" />
+    <link rel="stylesheet" href="lib/agent-prompt-card.css" />
     <link rel="stylesheet" href="lib/effort-control.css" />
   </head>
   <body>
@@ -184,6 +185,7 @@
                 <button type="button" data-web-session-ownership-action="continue" data-i18n="ui.continue.here">Continue here</button>
               </div>
             </section>
+            <section id="agentPromptCard" class="agent-prompt-card" role="group" aria-live="polite" hidden></section>
             <div id="attachmentList" class="attachment-list" hidden aria-label="Message attachments" data-i18n-aria-label="ui.message.attachments"></div>
             <textarea id="fullTabPrompt" rows="3" placeholder="Ask Hermes anything…" data-i18n-placeholder="ui.ask.hermes.anything"></textarea>
 

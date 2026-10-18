@@ -139,6 +139,9 @@ import {
   subagentsFromListResult,
 } from './lib/subagent-stack.mjs';
 import { modelLockRequestOutcome, readHermesSse, runSteerFailureState } from './lib/fulltab-runtime.mjs';
+import { isClarifyToolEvent } from './lib/gateway-prompts.mjs';
+import { createPromptCard } from './lib/prompt-card.mjs';
+import { createPendingControlsPoller, createPromptController } from './lib/prompt-controller.mjs';
 import { parseBrowserCommand, resolveCommandPrompt } from './lib/commands.mjs';
 import { createDiffusionCanvas } from './lib/diffusion-canvas.mjs';
 import {
@@ -328,6 +331,7 @@ const els = {
   send: $('#fullTabSend'),
   stopRun: $('#stopRun'),
   composerStatus: $('#composerStatus'),
+  agentPromptCard: $('#agentPromptCard'),
   conversationScroll: $('#conversationScroll'),
   toolActivityList: $('#toolActivityList'),
   taskStack: $('#taskStack'),
@@ -510,6 +514,72 @@ const TASK_STACKS_STORAGE_KEY = 'hermesBrowserTaskStacks';
 const client = createHermesClient({
   getConnection: () => settings,
 });
+
+// ---- Approval and clarify prompts ------------------------------------------
+// Hermes pauses a turn until the user answers. REST turns learn of the prompt
+// from the run stream (or run status); dashboard WebSocket turns receive it as a
+// server request. Both land in one queue and render as one card.
+
+function promptViewedSessionIds() {
+  return [activeSessionId, dashboardLiveSessionId];
+}
+
+async function respondRestPrompt(entry, body) {
+  const route = entry.kind === 'clarify' ? 'clarify' : 'approval';
+  const response = await client.fetch(`/v1/runs/${encodeURIComponent(entry.scope)}/${route}`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return { status: response.status, payload: await client.readJson(response) };
+}
+
+function handlePromptNotice({ type, entry, detail = '', reason = '', viewed = true }) {
+  const clarify = entry?.kind === 'clarify';
+  const kicker = t(clarify ? 'clarify.kicker' : 'exec_approval.kicker');
+  let line = '';
+  if (type === 'requested') {
+    line = viewed
+      ? t(clarify ? 'clarify.waiting' : 'exec_approval.waiting')
+      : t('exec_approval.other_session');
+  } else if (type === 'sent') {
+    line = t(clarify ? 'clarify.sent' : 'exec_approval.sent');
+  } else if (type === 'retired' || type === 'expired') {
+    line = `${kicker}: ${t(clarify ? 'clarify.expired' : 'exec_approval.expired')}`;
+  } else if (type === 'cancelled' && reason !== 'resolved') {
+    line = `${kicker}: ${t('exec_approval.cancelled')}`;
+  } else if (type === 'failed') {
+    line = t(clarify ? 'clarify.send_failed' : 'exec_approval.send_failed', { error: detail });
+  }
+  if (line && els.composerStatus) els.composerStatus.textContent = line;
+}
+
+const promptController = createPromptController({
+  getViewedSessionIds: promptViewedSessionIds,
+  getCapabilities: () => gatewayCapabilities,
+  respondRest: respondRestPrompt,
+  onNotice: handlePromptNotice,
+});
+
+// Reads GET /v1/runs/{id} while a REST run is quiet, for prompts the stream did
+// not carry.
+function createRestPromptPoller({ getRunId, sessionId, isCurrent }) {
+  return createPendingControlsPoller({
+    fetchStatus: async () => {
+      const runId = getRunId();
+      if (!runId) return null;
+      const statusResponse = await client.fetch(`/v1/runs/${encodeURIComponent(runId)}`, { method: 'GET' });
+      return statusResponse.ok ? client.readJson(statusResponse) : null;
+    },
+    onStatus: (payload) => {
+      if (isCurrent()) promptController.ingestRunStatus(getRunId(), payload, { sessionId });
+    },
+  });
+}
+
+const gatewayServerRequests = {
+  handle: (request, controls) => promptController.ingestServerRequest(request, controls),
+  cancel: (payload) => promptController.cancelServerRequest(payload?.id, { reason: payload?.reason }),
+};
 
 function currentDelegationScopeKey() {
   return delegationScopeKey({
@@ -720,8 +790,14 @@ async function ensureDashboardConnection() {
   });
   if (!ticket.ok) throw new Error(ticketFailureHelp(ticket.reason, ticket.origin || settings.gatewayUrl));
   await refreshContextConsentPrincipal({ dashboardPrincipal: ticket.principal });
-  const gatewayClient = createGatewayClient({ WebSocketImpl: WebSocket, requestTimeoutMs: 180_000, readyTimeoutMs: 30_000 });
+  const gatewayClient = createGatewayClient({
+    WebSocketImpl: WebSocket,
+    requestTimeoutMs: 180_000,
+    readyTimeoutMs: 30_000,
+    serverRequests: gatewayServerRequests,
+  });
   gatewayClient.on('close', () => {
+    promptController.dropClient(gatewayClient);
     if (dashboardConnection?.client === gatewayClient) dashboardConnection = null;
     dashboardLiveSessionId = '';
   });
@@ -769,6 +845,7 @@ async function establishDashboardSession(storedSessionId = '', { isCurrent = () 
   }
   dashboardLiveSessionId = identity.liveId;
   activeSessionId = identity.storedId;
+  promptController.bindSession(identity.liveId, identity.storedId);
   const selectedModel = effectiveModel();
   if (selectedModel.model && selectedModel.provider) {
     try {
@@ -1903,6 +1980,7 @@ function showSessionLoadingState(session = {}) {
 }
 
 function renderSessions(query = '') {
+  promptController.refresh();
   const groups = groupSessionsForMenu(sessions, activeSessionId, query);
   const searching = Boolean(String(query || '').trim());
   els.sessionList.replaceChildren();
@@ -5330,6 +5408,10 @@ async function sendPrompt(text) {
   let contextRecoveryHandled = false;
   let streamTerminalStatus = '';
   let dashboardTurnSessionId = '';
+  // REST turns: the run being watched, and the poll that finds prompts the
+  // stream did not carry (clarify) or that were raised before it attached.
+  let promptRunId = '';
+  let promptPoller = null;
   try {
     if (turnAttachments.some(item => item.kind === 'file') && !usesDashboardTicketTransport()) {
       throw Object.assign(new Error('attachments.upload_unavailable'), { attachmentFailure: true, uiKey: 'attachments.upload_unavailable' });
@@ -5397,10 +5479,23 @@ async function sendPrompt(text) {
       body: await response.text(),
       operation: 'Hermes stream',
     });
+    if (gatewayCapabilities.runStatus) {
+      promptPoller = createRestPromptPoller({
+        getRunId: () => promptRunId,
+        sessionId: runSessionId,
+        isCurrent: () => runControlGenerationMatches(turnRunControlGeneration, runControlGeneration),
+      });
+    }
     const streamedAnswer = await readAcceptedHermesSse(response, {
       signal: activeAbortController.signal,
+      onPrompt: (type, data) => {
+        if (!runControlGenerationMatches(turnRunControlGeneration, runControlGeneration)) return;
+        promptPoller?.activity();
+        promptController.ingestRestEvent(type, data, { runId: promptRunId, sessionId: runSessionId });
+      },
       onAssistant: (content) => {
         if (!runControlGenerationMatches(turnRunControlGeneration, runControlGeneration)) return;
+        promptPoller?.activity();
         assistant.content = content;
         if (!runIsViewed()) return;
         if (isRenderableAssistantMessage(assistant)) {
@@ -5421,12 +5516,16 @@ async function sendPrompt(text) {
       },
       onTool: (tool) => {
         if (!runControlGenerationMatches(turnRunControlGeneration, runControlGeneration)) return;
+        promptPoller?.activity();
+        if (isClarifyToolEvent(tool)) promptPoller?.poke();
         if (!runIsViewed()) return;
         renderToolEvent(tool);
       },
       onRun: (runId) => {
         if (!runControlGenerationMatches(turnRunControlGeneration, runControlGeneration)) return;
         activeRunId = String(runId || '');
+        promptRunId = activeRunId;
+        promptPoller?.start();
         activeRunControl = withRunControlId(activeRunControl, activeRunId);
         if (liveRun) liveRun.seed = activeRunId || liveRun.seed;
         updateBusyControls();
@@ -5440,7 +5539,11 @@ async function sendPrompt(text) {
         if (runIsViewed()) captureDelegationRuntimePayload(runtime);
         const actual = runtime?.runtime || runtime;
         const status = String(actual?.status || runtime?.status || '').trim().toLowerCase();
-        if (['completed', 'failed', 'cancelled'].includes(status)) streamTerminalStatus = status;
+        if (['completed', 'failed', 'cancelled'].includes(status)) {
+          streamTerminalStatus = status;
+          promptPoller?.stop();
+          if (promptRunId) promptController.settleScope('rest', promptRunId);
+        }
         if (!runIsViewed()) return;
         latestRuntime = actual || {};
         if (actual?.model) els.modelLabel.textContent = actual.model;
@@ -5553,6 +5656,8 @@ async function sendPrompt(text) {
     activeMessages = [...activeMessages, { role: 'system', content: `Session context reached its compression ceiling. ${recoveryDetail} ${replayDetail}` }];
     els.composerStatus.textContent = translateUiText(compactResult.ok ? 'Context recovered · draft preserved' : 'New session required · draft preserved');
   } finally {
+    promptPoller?.stop();
+    if (promptRunId) promptController.settleScope('rest', promptRunId);
     if (liveRun?.revealPromise) await liveRun.revealPromise;
     if (turnRunControlGeneration === runControlGeneration) {
       activeRunControl = markRunStreamClosed(activeRunControl);
@@ -6313,6 +6418,7 @@ subscribeLocale(() => {
 await initI18n();
 initializeResponsiveShell();
 updateScrim();
+if (els.agentPromptCard) createPromptCard({ container: els.agentPromptCard, t, controller: promptController });
 loadApp()
   .then(async () => {
     restoreComposerDraft();
