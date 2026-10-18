@@ -22,7 +22,7 @@ The extension stores settings in `chrome.storage.local`, including:
 - local side-panel message history cache
 - Hermes Web appearance, session rail, and canonical session handoff settings
 - per-tab local message caches and per-tab Hermes session bindings when the panel is tab-attached or you pin a browser tab
-- bounded controller identity, lease metadata, paused state, document-generation counters, and redacted terminal receipts required to recover safely across MV3 service-worker suspension
+- bounded controller identity, tab attachment metadata, paused state, document-generation counters, and redacted terminal receipts required to recover safely across MV3 service-worker suspension
 
 Saved tokens are masked in the UI after save. The settings panel includes **Clear stored token** to remove the API key/browser token from extension storage.
 
@@ -35,15 +35,15 @@ The extension does not request or read:
 - bookmarks
 - existing download history; the extension only initiates a save when the user explicitly downloads a generated image or artifact
 - browser password manager data
-- debugger protocol data unless the user explicitly enables Hermes Control for leased tabs
+- debugger protocol data unless the user explicitly enables Hermes Control for tabs they attach
 
 It reads page context from the active/current browser surface for the purpose of asking Hermes about what you are viewing, unless you choose **Chat only** mode.
 
 v0.3.0 can also attach the side panel to a specific tab or pin context to a specific tab. In tab-attached or pinned mode, the extension keeps that tab's local chat cache separate from the follow-active chat cache. In Chat only mode, it does not attach active tab title/URL, open tabs, selected text, page metadata, YouTube transcript, or page text to the prompt. Sensitive and credential-bearing tab URLs are omitted before prompt assembly, including decoded/nested parameters and signed-URL credentials/signatures.
 
-## Live browser control
+## Live Hermes Control
 
-Hermes Control is opt-in and limited to explicitly leased tabs. The extension may use Chromium debugger APIs to inspect accessibility metadata and perform approved browser actions on those tabs. It does not persist raw DOM, page text, typed values, command arguments, credentials, screenshots, or response bodies in controller durability or companion diagnostics. Consequential actions pause for explicit approval, and developer-only evaluate/raw-CDP actions require both developer mode and approval.
+Hermes Control is opt-in and limited to tabs you explicitly attach. The extension may use Chromium debugger APIs to inspect accessibility metadata and perform approved browser actions on those tabs. It does not persist raw DOM, page text, typed values, command arguments, credentials, screenshots, or response bodies in controller durability or companion diagnostics. Consequential actions pause for explicit approval, and developer-only evaluate/raw-CDP actions require both developer mode and approval.
 
 Local HTML, browser-rendered PDF, and localhost pages use the same model. A local file is not exposed until the browser permits file URL access and the user approves local-document access inside the extension.
 
