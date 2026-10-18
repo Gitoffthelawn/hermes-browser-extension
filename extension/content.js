@@ -51,6 +51,7 @@
   const BROWSER_CONTROL_INDICATOR_MIN_VISIBLE_MS = 180;
   const BROWSER_CONTROL_ACTION_LABELS = Object.freeze({
     browser_back: 'Going back',
+    browser_batch: 'Running steps',
     browser_click: 'Clicking',
     browser_drag: 'Dragging',
     browser_hover: 'Hovering',

@@ -208,6 +208,21 @@ export function classifyBrowserControlAction({
   return decision(BROWSER_CONTROL_RISKS.SAFE);
 }
 
+// Identity of what the person is approving. Each field is bounded the same
+// way when a request is stored and when it is consumed, so a long label can
+// never make a legitimate approval miss its own key.
+const APPROVAL_FIELD_LIMITS = Object.freeze({
+  binding: 200,
+  targetRole: 80,
+  targetName: 200,
+  destination: 280,
+  valueHash: 64,
+});
+
+function approvalField(value, name) {
+  return compact(value).slice(0, APPROVAL_FIELD_LIMITS[name]);
+}
+
 function approvalKey(value = {}) {
   return [
     compact(value.approvalId),
@@ -220,7 +235,11 @@ function approvalKey(value = {}) {
     Number(value.documentGeneration),
     compact(value.action),
     compact(value.state),
-    compact(value.binding),
+    approvalField(value.binding, 'binding'),
+    approvalField(value.targetRole, 'targetRole'),
+    approvalField(value.targetName, 'targetName'),
+    approvalField(value.destination, 'destination'),
+    approvalField(value.valueHash, 'valueHash'),
   ].join('\u0000');
 }
 
@@ -244,7 +263,11 @@ export function createBrowserControlApprovalStore({
     const leaseGeneration = Number(value.leaseGeneration);
     const action = compact(value.action);
     const state = compact(value.state);
-    const binding = compact(value.binding).slice(0, 200);
+    const binding = approvalField(value.binding, 'binding');
+    const targetRole = approvalField(value.targetRole, 'targetRole');
+    const targetName = approvalField(value.targetName, 'targetName');
+    const destination = approvalField(value.destination, 'destination');
+    const valueHash = approvalField(value.valueHash, 'valueHash');
     const tabId = Number(value.tabId);
     const documentGeneration = Number(value.documentGeneration);
     if (!approvalId || !commandId || !action || !Number.isInteger(tabId) || tabId <= 0
@@ -261,9 +284,14 @@ export function createBrowserControlApprovalStore({
       documentGeneration,
       state,
       ...(binding ? { binding } : {}),
+      ...(targetRole ? { targetRole } : {}),
+      ...(targetName ? { targetName } : {}),
+      ...(destination ? { destination } : {}),
+      ...(valueHash ? { valueHash } : {}),
       key: approvalKey({
         approvalId, approvalNonce, commandId, controllerId, leaseId,
         leaseGeneration, action, tabId, documentGeneration, state, binding,
+        targetRole, targetName, destination, valueHash,
       }),
     };
   }
@@ -343,6 +371,7 @@ export function createBrowserControlApprovalStore({
     return [...requests.values()].map(({
       approvalId, approvalNonce, commandId, controllerId, leaseId, leaseGeneration,
       tabId, documentGeneration, action, state, reason, binding, detail,
+      targetRole, targetName, destination, valueHash,
     }) => ({
       approvalId,
       ...(approvalNonce ? { approvalNonce } : {}),
@@ -356,6 +385,10 @@ export function createBrowserControlApprovalStore({
       ...(state ? { state } : {}),
       reason,
       ...(binding ? { binding } : {}),
+      ...(targetRole ? { targetRole } : {}),
+      ...(targetName ? { targetName } : {}),
+      ...(destination ? { destination } : {}),
+      ...(valueHash ? { valueHash } : {}),
       ...(detail ? { detail } : {}),
     }));
   }

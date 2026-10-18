@@ -8,6 +8,7 @@ import {
 
 const CHROMIUM_ACTIONS = [
   'browser_back',
+  'browser_batch',
   'browser_click',
   'browser_drag',
   'browser_fill',

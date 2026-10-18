@@ -45,6 +45,26 @@ const POST_ACTION_DEADLINE_MARGIN_MS = 400;
 const GENERATION_POLL_MS = 25;
 const GENERATION_MAX_POLLS = 20;
 
+// browser_batch runs a short list of ordinary actions as one command. Tab
+// management, screenshots, raw snapshots and the developer actions stay out:
+// a mid-batch snapshot would re-mint every ref the later steps rely on, and
+// the batch already ends with exactly one snapshot.
+const BATCH_MAX_STEPS = 20;
+const BATCH_STEP_ACTIONS = new Set([
+  'browser_back', 'browser_click', 'browser_drag', 'browser_fill', 'browser_hover', 'browser_navigate',
+  'browser_press', 'browser_scroll', 'browser_scroll_to', 'browser_select', 'browser_type',
+]);
+// No new step starts when less than this is left of the command budget, so the
+// closing snapshot always has room.
+const BATCH_STEP_RESERVE_MS = 2_000;
+// A refused, expired or mismatched approval, or a page that moved away, ends
+// the batch even when stop_on_error is off.
+const BATCH_FATAL_CODES = new Set([
+  'approval_denied', 'approval_cancelled', 'approval_timeout', 'approval_required', 'approval_replayed',
+  'approval_mismatch', 'domain_changed', 'stale_document', 'scope_mismatch', 'cancelled',
+  'deadline_exceeded', 'deadline_expired',
+]);
+
 // Adapter errors that carry a model-actionable code keep it; everything else
 // is reported as a generic command_error.
 const ADAPTER_ERROR_CODES = new Set(['stale_ref', 'navigation_failed']);
@@ -110,6 +130,103 @@ function errorOutcome(code, message = '') {
       ...(message ? { message } : {}),
     },
   };
+}
+
+const SHA256_K = Uint32Array.from([
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+]);
+
+// Synchronous SHA-256: the approval store compares keys synchronously, and the
+// request must be registered in the same tick the executor builds it.
+function sha256Sync(text) {
+  const message = new TextEncoder().encode(String(text));
+  const padded = new Uint8Array(((message.length + 9 + 63) >> 6) << 6);
+  padded.set(message);
+  padded[message.length] = 0x80;
+  const view = new DataView(padded.buffer);
+  view.setUint32(padded.length - 8, Math.floor((message.length * 8) / 0x100000000));
+  view.setUint32(padded.length - 4, (message.length * 8) >>> 0);
+  const state = Uint32Array.from([
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+  ]);
+  const words = new Uint32Array(64);
+  const rotr = (value, bits) => (value >>> bits) | (value << (32 - bits));
+  for (let offset = 0; offset < padded.length; offset += 64) {
+    for (let index = 0; index < 16; index += 1) words[index] = view.getUint32(offset + index * 4);
+    for (let index = 16; index < 64; index += 1) {
+      const a = words[index - 15];
+      const b = words[index - 2];
+      words[index] = (words[index - 16]
+        + (rotr(a, 7) ^ rotr(a, 18) ^ (a >>> 3))
+        + words[index - 7]
+        + (rotr(b, 17) ^ rotr(b, 19) ^ (b >>> 10))) >>> 0;
+    }
+    let [a, b, c, d, e, f, g, h] = state;
+    for (let index = 0; index < 64; index += 1) {
+      const t1 = (h + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & f) ^ (~e & g)) + SHA256_K[index] + words[index]) >>> 0;
+      const t2 = ((rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
+      h = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+    }
+    [a, b, c, d, e, f, g, h].forEach((value, index) => { state[index] = (state[index] + value) >>> 0; });
+  }
+  return Array.from(state, (word) => word.toString(16).padStart(8, '0')).join('');
+}
+
+// A short stable fingerprint of text the person is approving. Only the hash is
+// stored with the approval, never the text itself.
+function fingerprint(text) {
+  return sha256Sync(text).slice(0, 32);
+}
+
+// What the action is about to put on the page, as a single string to hash.
+function approvalValueMaterial(action, args = {}) {
+  if (action === 'browser_type') return JSON.stringify(['type', args.text ?? null, args.value ?? null, args.clear ?? null]);
+  if (action === 'browser_fill') return JSON.stringify(['fill', args.value ?? null, args.text ?? null]);
+  if (action === 'browser_select') return JSON.stringify(['select', args.value ?? null, args.option ?? null, args.index ?? null]);
+  if (action === 'browser_press') {
+    return JSON.stringify(['press', args.key ?? null, Array.isArray(args.modifiers) ? args.modifiers : null]);
+  }
+  if (action === 'browser_evaluate') return JSON.stringify(['evaluate', args.code ?? args.expression ?? null]);
+  if (action === 'browser_cdp') return JSON.stringify(['cdp', args]);
+  return null;
+}
+
+// Ties an approval to the exact element and value it was shown for, so a
+// grant for one target or one piece of text cannot release a different one.
+export function approvalBindingFields(action, args, target, destination) {
+  const fields = {};
+  if (target?.role || target?.name) {
+    fields.targetRole = compact(target.role, 80);
+    fields.targetName = compact(target.name, 200);
+  }
+  if (destination?.role || destination?.name) {
+    fields.destination = compact(`${compact(destination.role, 80)}|${compact(destination.name, 200)}`, 280);
+  }
+  const refs = [target?.ref, destination?.ref].map((ref) => compact(ref, 32)).filter(Boolean);
+  if (action === 'browser_upload') {
+    fields.binding = compact(args.artifact_id, 200);
+  } else {
+    const parts = [];
+    if (refs.length) parts.push(`ref:${refs.join('>')}`);
+    if (Number.isFinite(Number(args.x)) && Number.isFinite(Number(args.y))) parts.push(`point:${Number(args.x)},${Number(args.y)}`);
+    if (parts.length) fields.binding = parts.join(' ');
+  }
+  const material = approvalValueMaterial(action, args);
+  if (material !== null) fields.valueHash = fingerprint(material);
+  return fields;
+}
+
+function batchStepAction(value) {
+  const name = compact(value, 120);
+  if (!name) return '';
+  return name.startsWith('browser_') ? name : `browser_${name}`;
 }
 
 function normalizedScope(value = {}) {
@@ -359,9 +476,13 @@ export function createBrowserControlExecutor({
 
     // Page state after a mutating action. It never fails the action: whatever
     // goes wrong is reported as snapshot_error next to the action's own status.
-    async function collectPostActionState({ action: performed, value: performedValue }) {
-      const canSettle = typeof adapter.settle === 'function';
-      const canSnapshot = adapter.contract.actions.includes('browser_snapshot');
+    // A batch step settles without reading the page back (`snapshot: false`); the
+    // batch then reads it once with `settle: false`.
+    async function collectPostActionState({
+      action: performed, value: performedValue, settle: wantSettle = true, snapshot: wantSnapshot = true,
+    }) {
+      const canSettle = wantSettle && typeof adapter.settle === 'function';
+      const canSnapshot = wantSnapshot && adapter.contract.actions.includes('browser_snapshot');
       if (!canSettle && !canSnapshot) return {};
       const state = {};
       // The broker gives up on a command at 30 s, so reading the page back ends
@@ -507,7 +628,10 @@ export function createBrowserControlExecutor({
       return current;
     }
 
-    const operation = (async () => {
+    // One action under the full rule set: ref resolution, page probe,
+    // classification, approval, origin re-check and the adapter call. A batch
+    // runs every step through this same path.
+    async function runAction(action, args, { approvalId: stepApprovalId = '', approvalNonce: stepApprovalNonce = '', step = null } = {}) {
       let target = null;
       let destination = null;
       if (['browser_click', 'browser_drag', 'browser_fill', 'browser_hover', 'browser_scroll_to', 'browser_select', 'browser_type'].includes(action) && args.ref) {
@@ -562,10 +686,9 @@ export function createBrowserControlExecutor({
         return errorOutcome('sensitive_action_blocked', policy.reason || 'This action is blocked.');
       }
       if (policy.risk === BROWSER_CONTROL_RISKS.APPROVAL) {
-        const binding = action === 'browser_upload' ? compact(args.artifact_id, 200) : '';
         const approval = {
-          approvalId: compact(frame.approval_id || frame.command_id, 160),
-          approvalNonce: compact(frame.approval_nonce || frame.approval_id || frame.command_id, 160),
+          approvalId: stepApprovalId || compact(frame.approval_id || frame.command_id, 160),
+          approvalNonce: stepApprovalNonce || compact(frame.approval_nonce || frame.approval_id || frame.command_id, 160),
           commandId: frame.command_id,
           controllerId: scope.controllerId,
           leaseId: scope.leaseId,
@@ -574,9 +697,10 @@ export function createBrowserControlExecutor({
           documentGeneration: scope.documentGeneration,
           action,
           state: 'paused',
-          ...(binding ? { binding } : {}),
+          ...approvalBindingFields(action, args, target, destination),
         };
         let approvalReason = APPROVAL_MESSAGES[policy.reason] || 'This browser action requires approval.';
+        if (step) approvalReason = `Step ${step.number} of ${step.total}: ${approvalReason}`;
         let approvalDetail = '';
         if (action === 'browser_evaluate') {
           const preview = compact(String(args.code ?? args.expression ?? ''), 800);
@@ -587,8 +711,12 @@ export function createBrowserControlExecutor({
         if (!consumed.ok) {
           pendingApprovalId = approval.approvalId;
           waitedForApproval = true;
+          // A batch keeps the steps it already finished, so a step that times out
+          // waiting for the person fails on its own instead of aborting the command.
           approvalTimer = setTimeout(
-            () => abort('approval_timeout', APPROVAL_TIMEOUT_MESSAGE),
+            () => (step
+              ? approvals.cancelRequest?.(approval.approvalId, 'approval_timeout')
+              : abort('approval_timeout', APPROVAL_TIMEOUT_MESSAGE)),
             Math.max(1, Math.min(deadlineAt, startedAt + APPROVAL_WAIT_CAP_MS) - Number(now())),
           );
           const requested = await approvals.request({
@@ -599,7 +727,11 @@ export function createBrowserControlExecutor({
           clearTimeout(approvalTimer);
           approvalTimer = null;
           if (!requested?.ok) {
-            return errorOutcome(requested?.error || 'approval_cancelled', 'The approval request was cancelled.');
+            pendingApprovalId = '';
+            return errorOutcome(
+              requested?.error || 'approval_cancelled',
+              requested?.error === 'approval_timeout' ? APPROVAL_TIMEOUT_MESSAGE : 'The approval request was cancelled.',
+            );
           }
           if (controller.signal.aborted) {
             approvals.cancelRequest?.(approval.approvalId);
@@ -789,6 +921,12 @@ export function createBrowserControlExecutor({
         }
       }
       if (action === 'browser_navigate' || action === 'browser_back') refs.invalidateTab(scope.tabId);
+      if (step && POST_ACTION_ACTIONS.has(action)) {
+        // Settle only; the batch reads the page once, at the end.
+        step.value = value;
+        step.state = await collectPostActionState({ action, value, snapshot: false });
+        return { ok: true, result: sanitizedActionResult(action, value) };
+      }
       if (POST_ACTION_ACTIONS.has(action)) {
         const state = await collectPostActionState({ action, value });
         const result = { ...sanitizedActionResult(action, value), ...state };
@@ -805,16 +943,149 @@ export function createBrowserControlExecutor({
         return { ok: true, result: sanitizedActionResult(action, filtered) };
       }
       return { ok: true, result: sanitizedActionResult(action, value) };
-    })().catch((error) => {
+    }
+
+    function outcomeFromError(error) {
       if (controller.signal.aborted) return errorOutcome(terminalCode || 'cancelled', terminalMessage || 'The command was cancelled.');
       return errorOutcome(
         ADAPTER_ERROR_CODES.has(error?.code) ? error.code : 'command_error',
         error?.message || 'The browser action failed.',
       );
-    });
+    }
+
+    // Progress of a running batch, so a deadline that ends the command still
+    // tells the model how far it got.
+    let batchProgress = null;
+
+    function parseBatch(batchArgs = {}) {
+      const list = batchArgs.actions;
+      if (!Array.isArray(list) || !list.length) {
+        return { error: 'invalid_batch', message: 'browser_batch needs a non-empty actions list.' };
+      }
+      if (list.length > BATCH_MAX_STEPS) {
+        return { error: 'batch_too_large', message: `A batch holds at most ${BATCH_MAX_STEPS} steps.` };
+      }
+      const steps = [];
+      for (const [index, raw] of list.entries()) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+          return { error: 'invalid_batch', message: `Step ${index + 1} must be an object with an action.` };
+        }
+        const stepAction = batchStepAction(raw.action);
+        if (!BATCH_STEP_ACTIONS.has(stepAction)) {
+          return { error: 'batch_action_not_allowed', message: `Step ${index + 1}: ${stepAction || 'a step without an action'} cannot run inside a batch.` };
+        }
+        if (!adapter.contract.actions.includes(stepAction)) {
+          return { error: 'unsupported_action', message: `Step ${index + 1}: the active browser adapter does not support ${stepAction}.` };
+        }
+        const stepArgs = { ...raw };
+        delete stepArgs.action;
+        steps.push({ action: stepAction, args: stepArgs });
+      }
+      return { ok: true, steps, stopOnError: batchArgs.stop_on_error !== false };
+    }
+
+    async function runBatch() {
+      const parsed = parseBatch(args);
+      if (!parsed.ok) return errorOutcome(parsed.error, parsed.message);
+      const { steps, stopOnError } = parsed;
+      const baseApprovalId = compact(frame.approval_id || frame.command_id, 140);
+      const baseApprovalNonce = compact(frame.approval_nonce || frame.approval_id || frame.command_id, 140);
+      const batchBudgetMs = () => Math.min(deadlineAt, startedAt + APPROVAL_WAIT_CAP_MS) - Number(now());
+      const cancelled = () => errorOutcome(terminalCode || 'cancelled', terminalMessage || 'The command was cancelled.');
+      const results = [];
+      batchProgress = { total: steps.length, results };
+      let completed = 0;
+      let stoppedReason = '';
+      let navigated = false;
+      let timedOut = false;
+      let failed = false;
+
+      for (const [index, { action: stepAction, args: stepArgs }] of steps.entries()) {
+        if (controller.signal.aborted) return cancelled();
+        if (index > 0 && batchBudgetMs() < BATCH_STEP_RESERVE_MS) {
+          stoppedReason = 'budget_exhausted';
+          break;
+        }
+        // The batch only follows navigations it caused itself; any other move of
+        // the document ends it, as it would fail a standalone command.
+        if (index > 0 && readDocumentGeneration(scope.documentGeneration) !== scope.documentGeneration) {
+          stoppedReason = 'stale_document';
+          break;
+        }
+        const info = { number: index + 1, total: steps.length };
+        let outcome;
+        try {
+          outcome = await runAction(stepAction, stepArgs, {
+            approvalId: `${baseApprovalId}:step-${index + 1}`,
+            approvalNonce: `${baseApprovalNonce}:step-${index + 1}`,
+            step: info,
+          });
+        } catch (error) {
+          outcome = outcomeFromError(error);
+        }
+        if (controller.signal.aborted) return cancelled();
+        if (outcome.ok) {
+          completed += 1;
+          results.push({ index, action: stepAction, status: compact(outcome.result?.status, 80) || 'completed' });
+          if (info.state?.timedOut === true || info.value?.timedOut === true) timedOut = true;
+          if (info.state?.navigated === true || info.value?.navigated === true) {
+            navigated = true;
+            refs.invalidateTab(scope.tabId);
+            const generation = await settledDocumentGeneration(true, batchBudgetMs);
+            scope = { ...scope, documentGeneration: generation };
+          }
+          continue;
+        }
+        failed = true;
+        const code = outcome.error?.code || 'command_error';
+        results.push({ index, action: stepAction, error: code, ...(outcome.error?.message ? { message: outcome.error.message } : {}) });
+        if (stopOnError || BATCH_FATAL_CODES.has(code)) {
+          stoppedReason = code;
+          break;
+        }
+      }
+
+      // One read of the page for the whole batch.
+      let pageState = {};
+      if (!controller.signal.aborted) {
+        pageState = await collectPostActionState({
+          action: 'browser_batch', value: { navigated: false }, settle: false,
+        });
+      }
+      if (controller.signal.aborted) return cancelled();
+      const { navigated: unusedNavigated, timedOut: unusedTimedOut, ...pageResult } = pageState;
+      void unusedNavigated;
+      void unusedTimedOut;
+      return {
+        ok: true,
+        result: {
+          status: stoppedReason ? 'stopped' : (failed ? 'completed_with_errors' : 'completed'),
+          ...(stoppedReason ? { stopped_reason: stoppedReason } : {}),
+          steps: results,
+          completed,
+          remaining: steps.length - results.length,
+          navigated,
+          ...(timedOut ? { timedOut: true } : {}),
+          ...pageResult,
+        },
+      };
+    }
+
+    const operation = (async () => {
+      if (action === 'browser_batch') return runBatch();
+      return runAction(action, args);
+    })().catch(outcomeFromError);
 
     try {
-      return await Promise.race([operation, aborted]);
+      const outcome = await Promise.race([operation, aborted]);
+      if (batchProgress && outcome && !outcome.ok && outcome.error && batchProgress.results.length) {
+        const done = batchProgress.results.filter((entry) => entry.status).length;
+        return errorOutcome(
+          outcome.error.code,
+          `${outcome.error.message || 'The batch stopped.'} ${done} of ${batchProgress.total} steps had completed.`.trim(),
+        );
+      }
+      return outcome;
     } finally {
       clearTimeout(timer);
       if (approvalTimer) clearTimeout(approvalTimer);

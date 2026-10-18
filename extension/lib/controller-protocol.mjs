@@ -33,8 +33,12 @@ export const CONTROLLER_NOOP_CAPABILITY = 'controller.noop';
 
 // Every entry must be an action the Chromium adapter implements
 // (CHROMIUM_ACTIONS in browser-controller-adapter.mjs); a drift test pins it.
+// browser_batch is run by the executor itself: every step goes through the same
+// classification and approval path as a single command. A gateway that does not
+// know it drops it at registration, so it stays inert until the gateway adds it.
 export const CONTROLLER_BROWSER_CAPABILITIES = Object.freeze([
   'browser_back',
+  'browser_batch',
   'browser_click',
   'browser_drag',
   'browser_fill',

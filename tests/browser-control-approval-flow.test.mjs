@@ -50,6 +50,10 @@ test('Phase 6 approval-required command waits in-flight, exposes minimal request
 
   assert.equal(settled, false);
   assert.equal(sideEffects(), 0);
+  // The approval is bound to the key that will be pressed; only a hash is kept.
+  const [shown] = approvals.pending();
+  assert.match(shown.valueHash, /^[0-9a-f]{32}$/);
+  assert.equal(JSON.stringify(shown).includes('"key"'), false);
   assert.deepEqual(approvals.pending(), [{
     approvalId: 'approval-command',
     approvalNonce: 'nonce-approval-command',
@@ -62,6 +66,7 @@ test('Phase 6 approval-required command waits in-flight, exposes minimal request
     action: 'browser_press',
     state: 'paused',
     reason: 'Press Enter to submit the current form or message?',
+    valueHash: shown.valueHash,
   }]);
 
   const granted = approvals.grant({
@@ -75,6 +80,7 @@ test('Phase 6 approval-required command waits in-flight, exposes minimal request
     documentGeneration: 4,
     action: 'browser_press',
     state: 'paused',
+    valueHash: shown.valueHash,
   });
   assert.equal(granted.ok, true);
   assert.deepEqual(await running, { ok: true, result: { status: 'pressed' } });
@@ -91,6 +97,7 @@ test('Phase 6 approval-required command waits in-flight, exposes minimal request
     documentGeneration: 4,
     action: 'browser_press',
     state: 'paused',
+    valueHash: shown.valueHash,
   }).ok, false);
 });
 
