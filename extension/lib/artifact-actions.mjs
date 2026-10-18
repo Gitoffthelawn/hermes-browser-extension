@@ -152,6 +152,13 @@ export const EXECUTABLE_ARTIFACT_EXTENSIONS = Object.freeze(new Set([
   'exe', 'msi', 'dll', 'bat', 'cmd', 'com', 'scr', 'ps1', 'psm1', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'hta',
   'lnk', 'url', 'jar', 'reg', 'cpl', 'msc', 'app', 'pkg', 'dmg', 'iso', 'sh', 'bash', 'zsh', 'command', 'run',
   'bin', 'apk', 'deb', 'rpm', 'appimage', 'desktop', 'workflow', 'scpt', 'action', 'py', 'pl', 'rb',
+  // Further launchers: legacy Windows script and shortcut hosts, package and
+  // installer formats, help files and shell or interpreter scripts that the
+  // desktop runs or installs when opened.
+  'pif', 'ws', 'wsc', 'vb', 'vbscript', 'sct', 'jnlp', 'msp', 'mst', 'msix', 'appx', 'appxbundle', 'msixbundle',
+  'application', 'xbap', 'gadget', 'inf', 'ins', 'chm', 'shs', 'shb', 'scf', 'cab', 'job', 'xll', 'ade', 'adp',
+  'mde', 'ps1xml', 'psc1', 'psd1', 'ps2', 'pyw', 'pyz', 'pyc', 'mjs', 'cjs', 'ksh', 'csh', 'fish', 'tool',
+  'terminal', 'webloc', 'inetloc', 'fileloc', 'xpi', 'crx', 'air', 'elf', 'out', 'so', 'dylib', 'ipa',
 ]));
 
 /**

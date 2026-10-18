@@ -62,7 +62,7 @@ const BATCH_STEP_RESERVE_MS = 2_000;
 const BATCH_FATAL_CODES = new Set([
   'approval_denied', 'approval_cancelled', 'approval_timeout', 'approval_required', 'approval_replayed',
   'approval_mismatch', 'domain_changed', 'stale_document', 'scope_mismatch', 'cancelled',
-  'deadline_exceeded', 'deadline_expired',
+  'deadline_exceeded', 'deadline_expired', 'controller_paused',
 ]);
 
 // Adapter errors that carry a model-actionable code keep it; everything else
@@ -405,7 +405,7 @@ export function createBrowserControlExecutor({
   async function execute(frame = {}, context = {}) {
     const {
       scope: rawScope = {}, signal: callerSignal, leasedTabIds = [], ownedTabIds = [], currentWindowId = null,
-      currentDocumentGeneration = null, snapshotBudget = '',
+      currentDocumentGeneration = null, snapshotBudget = '', controlHalted = null,
     } = context;
     let scope = normalizedScope(rawScope);
     if (!frameMatchesScope(frame, scope)) return errorOutcome('scope_mismatch', 'The command no longer matches the owned tab document.');
@@ -984,6 +984,15 @@ export function createBrowserControlExecutor({
       return { ok: true, steps, stopOnError: batchArgs.stop_on_error !== false };
     }
 
+    function controlIsHalted() {
+      if (typeof controlHalted !== 'function') return false;
+      try {
+        return controlHalted() === true;
+      } catch {
+        return true;
+      }
+    }
+
     async function runBatch() {
       const parsed = parseBatch(args);
       if (!parsed.ok) return errorOutcome(parsed.error, parsed.message);
@@ -999,9 +1008,17 @@ export function createBrowserControlExecutor({
       let navigated = false;
       let timedOut = false;
       let failed = false;
+      let halted = false;
 
       for (const [index, { action: stepAction, args: stepArgs }] of steps.entries()) {
         if (controller.signal.aborted) return cancelled();
+        // Pause, a debugger detach or switching control off takes effect between
+        // steps; the page is not read back once control has been halted.
+        if (index > 0 && controlIsHalted()) {
+          stoppedReason = 'controller_paused';
+          halted = true;
+          break;
+        }
         if (index > 0 && batchBudgetMs() < BATCH_STEP_RESERVE_MS) {
           stoppedReason = 'budget_exhausted';
           break;
@@ -1047,7 +1064,7 @@ export function createBrowserControlExecutor({
 
       // One read of the page for the whole batch.
       let pageState = {};
-      if (!controller.signal.aborted) {
+      if (!controller.signal.aborted && !halted && !controlIsHalted()) {
         pageState = await collectPostActionState({
           action: 'browser_batch', value: { navigated: false }, settle: false,
         });
