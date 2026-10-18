@@ -8,10 +8,18 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import { ensureExtensionStartupPage, killProcessTree, resolveChromeExecutable } from './e2e-chrome-env.mjs';
+
+export { ensureExtensionStartupPage };
+
 export const ROOT = path.resolve(import.meta.dirname, '..');
 export const DIST = path.join(ROOT, 'dist');
 const PROFILE = path.join(ROOT, 'tmp', `e2e-phase6-browser-control-${process.pid}`);
 const QA_DIR = path.join(ROOT, '.hermes', 'qa');
+// HERMES_E2E_SCREEN_DIR also receives a copy of each screenshot, for review.
+const SCREEN_COPY_DIR = process.env.HERMES_E2E_SCREEN_DIR || '';
+const READY_SCREENSHOT = path.join(QA_DIR, 'phase6-hermes-control-ready-panel.png');
+const READY_DIALOG_SCREENSHOT = path.join(QA_DIR, 'phase6-hermes-control-ready-dialog.png');
 const PANEL_SCREENSHOT = path.join(QA_DIR, 'phase6-hermes-control-settings.png');
 const LIVE_SCREENSHOT = path.join(QA_DIR, 'phase6-hermes-control-live.png');
 const UNATTACHED_SCREENSHOT = path.join(QA_DIR, 'phase6-hermes-control-unattached.png');
@@ -22,14 +30,17 @@ export const TICKET_PREFIX = 'hermes-browser-control-ticket.';
 export const REAL_CAPABILITIES = Object.freeze([
   'controller.noop',
   'browser_back',
+  'browser_batch',
   'browser_click',
   'browser_drag',
+  'browser_fill',
   'browser_hover',
   'browser_navigate',
   'browser_press',
   'browser_screenshot',
   'browser_scroll',
   'browser_scroll_to',
+  'browser_select',
   'browser_snapshot',
   'browser_tab_activate',
   'browser_tab_close',
@@ -62,13 +73,9 @@ const SECOND_PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Pha
 <body style="font-family:Arial,sans-serif;padding:40px"><h1 id="second">Second page reached</h1></body></html>`;
 
 export function chromeExecutable() {
-  const candidates = [
-    process.env.CHROME_PATH,
+  return resolveChromeExecutable([
     'C:\\Users\\Jaybo\\AppData\\Local\\hermes\\chrome-for-testing\\chrome\\win64-151.0.7922.76\\chrome-win64\\chrome.exe',
-  ].filter(Boolean);
-  const found = candidates.find((candidate) => existsSync(candidate));
-  if (!found) throw new Error('Hermes Chrome for Testing not found. Set CHROME_PATH.');
-  return found;
+  ]);
 }
 
 export function unpackedExtensionId(extensionPath) {
@@ -431,14 +438,38 @@ export async function waitFor(check, timeoutMs = 25_000, intervalMs = 100) {
   throw lastError || new Error(`Timed out after ${timeoutMs}ms`);
 }
 
+function latencyReport(timings, extra) {
+  const byAction = {};
+  for (const item of timings) {
+    if (!item.ok) continue;
+    (byAction[item.action] ||= []).push(item.ms);
+  }
+  const summary = {};
+  for (const [action, values] of Object.entries(byAction)) {
+    const sorted = [...values].sort((a, b) => a - b);
+    const at = (fraction) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))];
+    summary[action] = {
+      runs: values.length,
+      minMs: sorted[0],
+      medianMs: at(0.5),
+      p95Ms: at(0.95),
+      maxMs: sorted.at(-1),
+      ...(values.length <= 6 ? { values } : {}),
+    };
+  }
+  return { ...extra, perAction: summary };
+}
+
+async function writeScreenshot(file, base64) {
+  await writeFile(file, Buffer.from(base64, 'base64'));
+  if (SCREEN_COPY_DIR) {
+    await mkdir(SCREEN_COPY_DIR, { recursive: true });
+    await writeFile(path.join(SCREEN_COPY_DIR, path.basename(file)), Buffer.from(base64, 'base64'));
+  }
+}
+
 export function killChrome(child) {
-  if (!child?.pid) return;
-  try {
-    spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-  } catch { /* best effort */ }
+  killProcessTree(child);
 }
 
 
@@ -451,6 +482,7 @@ async function main() {
   let chrome;
   let page;
   let browser;
+  let worker;
   let chromeStderr = '';
   try {
     const extensionId = unpackedExtensionId(DIST);
@@ -473,6 +505,7 @@ async function main() {
     await waitFor(() => existsSync(activePort));
     const [portLine] = (await readFile(activePort, 'utf8')).trim().split('\n');
     const devtoolsBase = `http://127.0.0.1:${Number(portLine)}`;
+    await ensureExtensionStartupPage(devtoolsBase, extensionId);
     const version = await fetchJson(`${devtoolsBase}/json/version`);
     browser = new CdpClient(version.webSocketDebuggerUrl);
     await browser.connect();
@@ -529,6 +562,29 @@ async function main() {
       value?.connected && value?.controlEnabled && value?.controllerId ? value : null
     )));
 
+    // Count real chrome.debugger attach/detach calls made by the service worker
+    // so the run can prove one debugger session serves many actions per tab.
+    const workerTarget = await waitFor(async () => {
+      const targets = await fetchJson(`${devtoolsBase}/json/list`);
+      return targets.find((target) => target.type === 'service_worker' && String(target.url || '').startsWith(`chrome-extension://${extensionId}/`)) || null;
+    });
+    worker = new CdpClient(workerTarget.webSocketDebuggerUrl);
+    await worker.connect();
+    await worker.call('Runtime.enable');
+    await worker.evaluate(`(() => {
+      const calls = { attach: [], detach: [] };
+      globalThis.__e2eDebuggerCalls = calls;
+      for (const method of ['attach', 'detach']) {
+        const original = chrome.debugger[method].bind(chrome.debugger);
+        chrome.debugger[method] = (...args) => {
+          calls[method].push({ tabId: args[0]?.tabId ?? null, at: Date.now() });
+          return original(...args);
+        };
+      }
+      return true;
+    })()`);
+    const debuggerCalls = () => worker.evaluate('JSON.parse(JSON.stringify(globalThis.__e2eDebuggerCalls))');
+
     const fixtureUrl = `${fixture.baseUrl}/fixture`;
     const secondUrl = `${fixture.baseUrl}/second`;
     const controlledTab = await page.evaluate(`chrome.tabs.create({ url: ${JSON.stringify(fixtureUrl)}, active: true })`);
@@ -581,6 +637,7 @@ async function main() {
     assert.deepEqual(indicatorProbe, { ok: true, response: { ok: true } }, JSON.stringify(indicatorProbe));
     assert.equal(indicatorProbeVisible, true, JSON.stringify(indicatorProbe));
 
+    const timings = [];
     const controllerConnectionFor = (action) => {
       const connectionIndex = [...fixture.registrations]
         .map((registration, index) => ({ registration, index }))
@@ -593,6 +650,7 @@ async function main() {
     };
     const sendCommand = async (commandId, action, args = {}, targetOverride = target) => {
       const connection = controllerConnectionFor(action);
+      const startedAt = performance.now();
       connection.send({
         method: 'browser.controller.command',
         params: {
@@ -604,7 +662,9 @@ async function main() {
           document_generation: targetOverride.documentGeneration,
         },
       });
-      return waitFor(() => fixture.results.find((frame) => frame?.params?.command_id === commandId));
+      const result = await waitFor(() => fixture.results.find((frame) => frame?.params?.command_id === commandId), 25_000, 5);
+      timings.push({ commandId, action, ok: result.params.ok === true, ms: Math.round(performance.now() - startedAt) });
+      return result;
     };
 
     const panelTarget = await fetchJson(
@@ -630,6 +690,9 @@ async function main() {
     await waitFor(() => panel.evaluate(`(() => {
       const dialog = document.querySelector('#settingsDialog');
       if (dialog?.hidden !== false) document.querySelector('#settingsButton')?.click();
+      if (dialog?.hidden === false && document.querySelector('#browserControlCard')?.getBoundingClientRect().height === 0) {
+        document.querySelector('[data-settings-category="permissions"]')?.click();
+      }
       return dialog?.hidden === false;
     })()`)).catch(async (error) => {
       const diagnostics = await panel.evaluate(`(() => ({
@@ -652,7 +715,7 @@ async function main() {
         contrast: getComputedStyle(document.querySelector('#browserControlDetachButton')).color,
         scope: document.querySelector('#browserControlScopeInput')?.value,
       };
-      return /READY|ACTIVE|PAUSED/i.test(proof.state || '') ? proof : null;
+      return proof.visible && /READY|ACTIVE|PAUSED/i.test(proof.state || '') ? proof : null;
     })()`)).catch(async (error) => {
       const panelState = await panel.evaluate(`(() => ({
         state: document.querySelector('#browserControlState')?.textContent,
@@ -677,9 +740,39 @@ async function main() {
     await panel.evaluate(`document.querySelector('#browserControlCard').scrollIntoView({ block: 'center' })`);
     await mkdir(QA_DIR, { recursive: true });
     const panelShot = await panel.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
-    await writeFile(PANEL_SCREENSHOT, Buffer.from(panelShot.data, 'base64'));
+    await writeScreenshot(PANEL_SCREENSHOT, panelShot.data);
     await panel.evaluate(`document.querySelector('#closeSettingsButton')?.click()`);
     await waitFor(() => panel.evaluate(`document.querySelector('#settingsDialog')?.hidden === true`));
+    // The side panel the way a person sees it with Hermes Control attached and
+    // ready: the launcher in the composer, then the Hermes Control dialog it opens.
+    await waitFor(() => panel.evaluate(`(() => {
+      const launcher = document.querySelector('#browserControlMenuButton');
+      const rect = launcher?.getBoundingClientRect();
+      return Boolean(launcher && !launcher.hidden && rect.width > 0 && rect.height > 0);
+    })()`));
+    const readyShot = await panel.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+    await writeScreenshot(READY_SCREENSHOT, readyShot.data);
+    await panel.evaluate(`document.querySelector('#browserControlMenuButton').click()`);
+    const readyDialog = await waitFor(() => panel.evaluate(`(() => {
+      const dialog = document.querySelector('#browserControlDialog');
+      const strip = document.querySelector('#browserControlStrip');
+      const rect = strip?.getBoundingClientRect();
+      const state = document.querySelector('#browserControlState')?.textContent || '';
+      return dialog?.open && rect.width > 0 && rect.height > 0 && /READY/i.test(state)
+        ? { state, title: document.querySelector('#browserControlStripTitle')?.textContent || '' }
+        : null;
+    })()`));
+    assert.match(readyDialog.state, /READY/i);
+    const readyDialogShot = await panel.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+    await writeScreenshot(READY_DIALOG_SCREENSHOT, readyDialogShot.data);
+    await panel.evaluate(`document.querySelector('#browserControlDismissButton').click()`);
+    await waitFor(() => panel.evaluate(`document.querySelector('#browserControlDialog')?.open === false`));
+
+    // The side panel was opened as a tab, which hides the controlled tab. Input
+    // actions need a showing tab (a hidden one is covered at the end), so put
+    // the controlled tab back in front the way a user looking at it would.
+    await controlled.call('Page.bringToFront');
+    await waitFor(() => controlled.evaluate(`document.visibilityState === 'visible'`));
 
     const snapshot = await sendCommand('cmd-phase6-snapshot', 'browser_snapshot');
     assert.equal(snapshot.params.ok, true, JSON.stringify(snapshot.params));
@@ -696,15 +789,31 @@ async function main() {
     const clicked = await clickPromise;
     assert.equal(clicked.params.ok, true, JSON.stringify(clicked.params));
     assert.equal(indicatorDuringClick, true);
+    // Every action returns the updated page: status, final URL and a compact
+    // redacted list of actionable elements with fresh refs.
+    assert.equal(clicked.params.result.status, 'clicked');
+    assert.equal(clicked.params.result.navigated, false);
+    assert.match(clicked.params.result.snapshot.text, /\[@e\d+\] button "Apply draft"/);
+    assert.match(clicked.params.result.snapshot.text, /Applied: Phase Six Draft/);
+    assert.doesNotMatch(JSON.stringify(typed.params.result), /Phase Six Draft/, 'typed text must not be echoed back');
+    const chainedButtonRef = clicked.params.result.snapshot.refs.find((item) => item.role === 'button' && /Apply draft/i.test(item.name));
+    assert.ok(chainedButtonRef?.ref, 'refs from an action result are usable without a snapshot call');
     const mutation = await waitFor(() => controlled.evaluate(`phase6State.clicks === 1 ? ({ value: document.querySelector('#draft').value, result: document.querySelector('#result').textContent }) : null`));
     assert.deepEqual(mutation, { value: 'Phase Six Draft', result: 'Applied: Phase Six Draft' });
+    const chained = await sendCommand('cmd-phase6-chained-click', 'browser_click', { ref: chainedButtonRef.ref });
+    assert.equal(chained.params.ok, true, JSON.stringify(chained.params));
+    await waitFor(() => controlled.evaluate(`phase6State.clicks === 2`));
 
     const pressed = await sendCommand('cmd-phase6-press', 'browser_press', { key: 'a' });
     assert.equal(pressed.params.ok, true, JSON.stringify(pressed.params));
     await waitFor(() => controlled.evaluate(`phase6State.keys.includes('a')`));
-    const scrolled = await sendCommand('cmd-phase6-scroll', 'browser_scroll', { direction: 'down' });
+    const scrolled = await sendCommand('cmd-phase6-scroll', 'browser_scroll', { direction: 'down' }).catch(async (error) => {
+      throw new Error(`${error.message}; status=${JSON.stringify(await page.evaluate(`chrome.runtime.sendMessage({ type: 'HERMES_CONTROLLER_STATUS' })`))}; vis=${await controlled.evaluate('document.visibilityState + " " + document.hasFocus()')}`);
+    });
     assert.equal(scrolled.params.ok, true, JSON.stringify(scrolled.params));
-    await waitFor(() => controlled.evaluate(`scrollY > 0`));
+    await waitFor(() => controlled.evaluate(`scrollY > 0`)).catch(async (error) => {
+      throw new Error(`${error.message}; scroll result=${JSON.stringify(scrolled.params)}; page=${JSON.stringify(await controlled.evaluate(`({ scrollY, innerHeight, height: document.documentElement.scrollHeight })`))}`);
+    });
 
     const screenshot = await sendCommand('cmd-phase6-screenshot', 'browser_screenshot');
     assert.equal(screenshot.params.ok, true, JSON.stringify(screenshot.params));
@@ -723,7 +832,15 @@ async function main() {
     });
     const pending = await waitFor(() => page.evaluate(`chrome.runtime.sendMessage({ type: 'HERMES_CONTROLLER_STATUS' })`).then((value) => value?.pendingApproval || null));
     assert.equal(pending.commandId, 'cmd-phase6-approval');
+    // The panel only renders pending approvals while it is the showing tab.
+    await panel.call('Page.bringToFront');
     await waitFor(() => panel.evaluate(`document.querySelector('#browserControlApproveButton')?.hidden === false`));
+    // The approval controls live in the Hermes Control dialog behind the launcher.
+    await waitFor(() => panel.evaluate(`(() => {
+      const dialog = document.querySelector('#browserControlDialog');
+      if (!dialog.open) document.querySelector('#browserControlMenuButton')?.click();
+      return dialog.open;
+    })()`));
     await panel.evaluate(`document.querySelector('#browserControlStrip')?.scrollIntoView({ block: 'center' })`);
     const liveProof = await panel.evaluate(`(() => {
       const strip = document.querySelector('#browserControlStrip');
@@ -744,10 +861,12 @@ async function main() {
       rejectVisible: true,
     });
     const liveShot = await panel.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
-    await writeFile(LIVE_SCREENSHOT, Buffer.from(liveShot.data, 'base64'));
+    await writeScreenshot(LIVE_SCREENSHOT, liveShot.data);
     await panel.evaluate(`document.querySelector('#browserControlApproveButton').click()`);
+    await panel.evaluate(`document.querySelector('#browserControlDismissButton')?.click()`);
     const approved = await waitFor(() => fixture.results.find((frame) => frame?.params?.command_id === 'cmd-phase6-approval'));
     assert.equal(approved.params.ok, true, JSON.stringify(approved.params));
+    await controlled.call('Page.bringToFront');
 
     const navigated = await sendCommand('cmd-phase6-navigate', 'browser_navigate', { url: secondUrl });
     assert.equal(navigated.params.ok, true, JSON.stringify(navigated.params));
@@ -759,6 +878,43 @@ async function main() {
     await waitFor(() => controlled.evaluate(`location.pathname === '/fixture'`));
     await page.evaluate(`chrome.runtime.sendMessage({ type: 'HERMES_CONTROLLER_DOCUMENT_READY', tabId: ${tabId}, frameId: 0 })`);
     target = await waitFor(() => resolveTarget(fixtureUrl).then((value) => value?.availability === 'available' ? value : null));
+
+    // A longer run on the same tab: many clicks, typed texts and scrolls, so the
+    // latency numbers are more than single samples and the debugger session is
+    // proven to serve all of them.
+    const burstSnapshot = await sendCommand('cmd-burst-snapshot', 'browser_snapshot', {}, target);
+    assert.equal(burstSnapshot.params.ok, true, JSON.stringify(burstSnapshot.params));
+    let burstRefs = burstSnapshot.params.result.refs;
+    const refFor = (role, pattern) => burstRefs.find((item) => item.role === role && pattern.test(item.name || ''))?.ref;
+    for (let index = 0; index < 15; index += 1) {
+      const ref = refFor('button', /Apply draft/i);
+      assert.ok(ref, JSON.stringify(burstRefs));
+      const result = await sendCommand(`cmd-burst-click-${index}`, 'browser_click', { ref }, target);
+      assert.equal(result.params.ok, true, JSON.stringify(result.params));
+      burstRefs = result.params.result.snapshot?.refs || burstRefs;
+    }
+    for (let index = 0; index < 5; index += 1) {
+      const ref = refFor('textbox', /Draft title/i);
+      assert.ok(ref, JSON.stringify(burstRefs));
+      const result = await sendCommand(`cmd-burst-type-${index}`, 'browser_type', { ref, text: `burst ${index}` }, target);
+      assert.equal(result.params.ok, true, JSON.stringify(result.params));
+      burstRefs = result.params.result.snapshot?.refs || burstRefs;
+    }
+    for (let index = 0; index < 6; index += 1) {
+      const result = await sendCommand(`cmd-burst-scroll-${index}`, 'browser_scroll', { direction: index % 2 === 0 ? 'down' : 'up' }, target);
+      assert.equal(result.params.ok, true, JSON.stringify(result.params));
+    }
+
+    // snapshot, type, clicks, press, scroll, screenshot, approved press,
+    // navigate and back all ran on one debugger session for the tab.
+    const debuggerBeforePause = await debuggerCalls();
+    const attachesForTab = debuggerBeforePause.attach.filter((call) => call.tabId === tabId).length;
+    const detachesForTab = debuggerBeforePause.detach.filter((call) => call.tabId === tabId).length;
+    // The approved press is sent outside sendCommand, so add it to the timed ones.
+    const debuggerActionCount = timings.filter((item) => item.ok).length + 1;
+    assert.equal(attachesForTab, 1, `expected one debugger attach for ${debuggerActionCount} actions, saw ${JSON.stringify(debuggerBeforePause)}`);
+    assert.equal(detachesForTab, 0, JSON.stringify(debuggerBeforePause));
+    assert.ok(debuggerActionCount >= 30, `only ${debuggerActionCount} actions ran`);
 
     const secondTab = await page.evaluate(`chrome.tabs.create({ url: ${JSON.stringify(secondUrl)}, active: false })`);
     const secondTabId = Number(secondTab.id);
@@ -816,24 +972,63 @@ async function main() {
     assert.match(unattachedProof.detail, /not attached|other tabs?/i);
     assert.match(unattachedProof.attachText, /attach/i);
     const unattachedShot = await panel.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
-    await writeFile(UNATTACHED_SCREENSHOT, Buffer.from(unattachedShot.data, 'base64'));
+    await writeScreenshot(UNATTACHED_SCREENSHOT, unattachedShot.data);
+    const attachClickedAt = performance.now();
     await panel.evaluate(`document.querySelector('#browserControlAttachButton').click()`);
     const replacementStatus = await waitFor(() => page.evaluate(`chrome.runtime.sendMessage({ type: 'HERMES_CONTROLLER_STATUS' })`).then((value) => (
       value?.leasedTabIds?.length === 1 && Number(value.leasedTabIds[0]) === replacementTabId ? value : null
-    )));
+    )), 25_000, 10);
     assert.deepEqual(replacementStatus.leasedTabIds, [replacementTabId]);
     const replacementTarget = await waitFor(() => page.evaluate(`chrome.runtime.sendMessage({
       type: 'HERMES_CONTROLLER_TARGET_RESOLVE',
       tabId: ${replacementTabId},
       frameId: 0,
       expectedUrl: ${JSON.stringify(replacementUrl)}
-    })`).then((value) => value?.availability === 'available' ? value : null));
-    await waitFor(() => panel.evaluate(`document.querySelector('#browserControlState')?.textContent?.match(/READY/i)`));
+    })`).then((value) => value?.availability === 'available' ? value : null), 25_000, 10);
+    await waitFor(() => panel.evaluate(`document.querySelector('#browserControlState')?.textContent?.match(/READY/i)`), 25_000, 10);
+    const replacementTargetInfo = await fetchJson(`${devtoolsBase}/json/list`).then((targets) => targets.find((item) => item.type === 'page' && String(item.url || '').startsWith(replacementUrl)));
+    const replacementPage = new CdpClient(replacementTargetInfo.webSocketDebuggerUrl);
+    await replacementPage.connect();
+    await replacementPage.call('Runtime.enable');
+    // Like a user who attached the tab and is looking at it.
+    await replacementPage.call('Page.bringToFront');
+    await waitFor(() => replacementPage.evaluate(`document.visibilityState === 'visible'`));
     const replacementSnapshot = await sendCommand('cmd-phase6-first-try-replacement', 'browser_snapshot', {}, replacementTarget);
     assert.equal(replacementSnapshot.params.ok, true, JSON.stringify(replacementSnapshot.params));
     assert.ok(replacementSnapshot.params.result.refs.some((item) => (
       item.role === 'textbox' && /Draft title/i.test(item.name || '')
     )), JSON.stringify(replacementSnapshot.params.result.refs));
+
+    const attachToSnapshotMs = Math.round(performance.now() - attachClickedAt);
+    const replacementButtonRef = replacementSnapshot.params.result.refs.find((item) => item.role === 'button' && /Apply draft/i.test(item.name));
+    assert.ok(replacementButtonRef?.ref, JSON.stringify(replacementSnapshot.params.result.refs));
+    const firstClick = await sendCommand('cmd-phase6-first-click-replacement', 'browser_click', { ref: replacementButtonRef.ref }, replacementTarget);
+    const attachToFirstClickMs = Math.round(performance.now() - attachClickedAt);
+    assert.equal(firstClick.params.ok, true, JSON.stringify(firstClick.params));
+    await waitFor(() => replacementPage.evaluate(`phase6State.clicks === 1`));
+
+    // Now the panel is the showing tab and the attached tab is hidden. Clicks and
+    // scrolls still work (Chrome would hold a mouseMoved or wheel event for a
+    // hidden tab and the action would hang), and actions that cannot work
+    // report it instead of waiting.
+    await panel.call('Page.bringToFront');
+    await waitFor(() => replacementPage.evaluate(`document.visibilityState === 'hidden'`));
+    const hiddenClick = await sendCommand('cmd-phase6-hidden-click', 'browser_click', { ref: replacementButtonRef.ref }, replacementTarget);
+    assert.equal(hiddenClick.params.ok, true, JSON.stringify(hiddenClick.params));
+    await waitFor(() => replacementPage.evaluate(`phase6State.clicks === 2`));
+    const hiddenScroll = await sendCommand('cmd-phase6-hidden-scroll', 'browser_scroll', { direction: 'down' }, replacementTarget);
+    assert.equal(hiddenScroll.params.ok, true, JSON.stringify(hiddenScroll.params));
+    await waitFor(() => replacementPage.evaluate('scrollY > 0'));
+    const hiddenShot = await sendCommand('cmd-phase6-hidden-screenshot', 'browser_screenshot', {}, replacementTarget);
+    // Chrome may still hold a recent frame for a just-hidden tab, so the capture
+    // either succeeds or fails fast with guidance; it must never hang.
+    if (hiddenShot.params.ok) assert.match(hiddenShot.params.result.dataUrl, /^data:image\/png;base64,/);
+    else {
+      assert.equal(hiddenShot.params.error.code, 'tab_hidden');
+      assert.match(hiddenShot.params.error.message, /browser_tab_activate/);
+    }
+    assert.ok(timings.at(-1).ms < 10_000, `hidden screenshot took ${timings.at(-1).ms}ms`);
+    replacementPage.close();
 
     const detached = await panel.evaluate(`chrome.runtime.sendMessage({ type: 'HERMES_CONTROLLER_DETACH' })`);
     assert.equal(detached.ok, true);
@@ -864,15 +1059,22 @@ async function main() {
         leasedTabIds: replacementStatus.leasedTabIds,
         firstAction: replacementSnapshot.params.ok,
       },
+      debugger: {
+        actionsOnOneSession: debuggerActionCount,
+        attachesForTab,
+        detachesForTab,
+      },
+      latencyMs: latencyReport(timings, { attachToSnapshotMs, attachToFirstClickMs }),
       restrictedPersistence: false,
       detached: true,
-      screenshots: [PANEL_SCREENSHOT, LIVE_SCREENSHOT, UNATTACHED_SCREENSHOT],
+      screenshots: [READY_SCREENSHOT, READY_DIALOG_SCREENSHOT, PANEL_SCREENSHOT, LIVE_SCREENSHOT, UNATTACHED_SCREENSHOT],
     }, null, 2));
   } catch (error) {
     error.message = `${error.message}\nChrome stderr tail:\n${chromeStderr.slice(-3000)}`;
     throw error;
   } finally {
     page?.close();
+    worker?.close();
     browser?.close();
     killChrome(chrome);
     await fixture.close();

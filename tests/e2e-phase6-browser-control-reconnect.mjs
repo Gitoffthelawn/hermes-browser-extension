@@ -12,6 +12,7 @@ import {
   TEST_ACCESS_VALUE,
   TEST_SESSION_ID,
   chromeExecutable,
+  ensureExtensionStartupPage,
   fetchJson,
   killChrome,
   startControllerFixture,
@@ -61,6 +62,7 @@ async function main() {
     await waitFor(() => existsSync(activePort));
     const [portLine] = (await readFile(activePort, 'utf8')).trim().split('\n');
     const devtoolsBase = `http://127.0.0.1:${Number(portLine)}`;
+    await ensureExtensionStartupPage(devtoolsBase, extensionId);
     const version = await fetchJson(`${devtoolsBase}/json/version`);
     browser = new CdpClient(version.webSocketDebuggerUrl);
     await browser.connect();
