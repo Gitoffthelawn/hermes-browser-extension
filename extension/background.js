@@ -112,6 +112,7 @@ const controllerWorker = typeof browserApi.storage?.local?.set === 'function'
       approvalStore: browserControlRuntime.approvals,
       getControllerCapabilities: async (settings) => (await browserControlRuntime.status(settings)).capabilities,
       executeBrowserCommand: (frame, context) => browserControlRuntime.execute(frame, context, context.settings),
+      releaseTabDebugger: (tabId) => browserControlRuntime.releaseTab(tabId),
       getTab: (tabId) => browserApi.tabs.get(tabId),
     })
   : null;

@@ -844,3 +844,62 @@ test('worker drops a rejected pairing token so reconnect can mint a fresh ticket
   assert.equal(String(store.state.hermesBrowserSettings.tokenSource || ''), '');
   assert.equal(String(store.state.hermesBrowserSettings.apiKey || ''), '');
 });
+
+test('Phase 6 worker drops the tab debugger session when a lease is released, paused, or detached', async () => {
+  const storage = memoryStorage({ hermesBrowserSettings: settings() });
+  const released = [];
+  const worker = createControllerServiceWorker({
+    storageArea: storage.area,
+    connector: connector(),
+    product: PRODUCT,
+    randomUUID: uuids(),
+    extensionOrigin: 'chrome-extension://fixture',
+    executeBrowserCommand: async () => ({ ok: true, result: { status: 'scrolled' } }),
+    releaseTabDebugger: async (tabId) => {
+      released.push(tabId);
+      if (tabId === 913) throw new Error('detach failed');
+    },
+  });
+  await worker.boot();
+  const { boot } = await ownedReady(worker, 911, { windowId: 2 });
+  const sender = extensionSender();
+
+  const release = await worker.handleMessage({
+    type: CONTROLLER_WORKER_MESSAGES.leaseRelease, ownerId: boot.controllerId, tabIds: [911],
+  }, sender);
+  assert.equal(release.ok, true);
+  await settle();
+  assert.deepEqual(released, [911]);
+
+  await ownedReady(worker, 912, { windowId: 2 });
+  await worker.handleMessage({ type: CONTROLLER_WORKER_MESSAGES.pause }, sender);
+  await settle();
+  assert.deepEqual(released, [911, 912], 'pausing releases the leased tabs');
+  await worker.handleMessage({ type: CONTROLLER_WORKER_MESSAGES.resume }, sender);
+  await settle();
+  assert.deepEqual(released, [911, 912], 'resuming does not touch sessions; the next command re-attaches');
+
+  await ownedReady(worker, 913, { windowId: 2 });
+  const detached = await worker.handleMessage({ type: CONTROLLER_WORKER_MESSAGES.detach }, sender);
+  assert.equal(detached.ok, true, 'a failing release hook never fails the transition');
+  await settle();
+  assert.ok(released.includes(913));
+});
+
+test('Phase 6 worker works without a debugger release hook', async () => {
+  const storage = memoryStorage({ hermesBrowserSettings: settings() });
+  const worker = createControllerServiceWorker({
+    storageArea: storage.area,
+    connector: connector(),
+    product: PRODUCT,
+    randomUUID: uuids(),
+    extensionOrigin: 'chrome-extension://fixture',
+    executeBrowserCommand: async () => ({ ok: true, result: { status: 'scrolled' } }),
+  });
+  await worker.boot();
+  const { boot } = await ownedReady(worker, 911, { windowId: 2 });
+  const release = await worker.handleMessage({
+    type: CONTROLLER_WORKER_MESSAGES.leaseRelease, ownerId: boot.controllerId, tabIds: [911],
+  }, extensionSender());
+  assert.equal(release.ok, true);
+});

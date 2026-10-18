@@ -68,6 +68,7 @@ export function createBrowserControlRuntime({
 
   async function disable() {
     refs.clear();
+    await runtimeAdapter?.releaseAll?.();
     return disabledStatus('disabled');
   }
 
@@ -105,6 +106,11 @@ export function createBrowserControlRuntime({
     return active.execute(frame, { ...context, scope: context.scope });
   }
 
+  // Drops the persistent debugger session for a tab whose lease ended or paused.
+  async function releaseTab(tabId) {
+    return runtimeAdapter?.releaseTab?.(tabId) ?? false;
+  }
+
   function setDebuggerDetachHandler(handler) {
     debuggerDetachHandler = typeof handler === 'function' ? handler : () => {};
   }
@@ -123,6 +129,7 @@ export function createBrowserControlRuntime({
     executor,
     execute,
     setDebuggerDetachHandler,
+    releaseTab,
     dispose,
     approvals,
     refs,

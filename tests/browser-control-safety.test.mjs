@@ -35,6 +35,17 @@ test('Phase 6 classifies ordinary reads and writes without trusting caller-suppl
   });
   assert.equal(spoofed.risk, BROWSER_CONTROL_RISKS.APPROVAL);
   assert.equal(spoofed.reason, 'submission-key');
+
+  for (const key of ['Control+Enter', 'Shift+Return', 'Meta+Enter', 'enter']) {
+    assert.equal(
+      classifyBrowserControlAction({ action: 'browser_press', arguments: { key } }).reason,
+      'submission-key',
+      `${key} submits, so it needs approval like Enter`,
+    );
+  }
+  for (const key of ['Control+a', 'Shift+Tab', 'ArrowDown', 'Escape']) {
+    assert.equal(classifyBrowserControlAction({ action: 'browser_press', arguments: { key } }).risk, BROWSER_CONTROL_RISKS.SAFE, key);
+  }
 });
 
 test('Phase 6 pauses destructive actions and hard-blocks payment, credential, MFA, and secret handling', async () => {

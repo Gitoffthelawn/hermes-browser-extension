@@ -27,6 +27,10 @@ const CDP_DENY_METHODS = new Set([
   'Runtime.terminateExecution',
 ]);
 
+// Adapter errors that carry a model-actionable code keep it; everything else
+// is reported as a generic command_error.
+const ADAPTER_ERROR_CODES = new Set(['stale_ref', 'navigation_failed']);
+
 const APPROVAL_MESSAGES = Object.freeze({
   'cross-origin-unsaved-content': 'Leave this page while unsaved content may be present?',
   'submission-key': 'Press Enter to submit the current form or message?',
@@ -542,7 +546,10 @@ export function createBrowserControlExecutor({
       return { ok: true, result: sanitizedActionResult(action, value) };
     })().catch((error) => {
       if (controller.signal.aborted) return errorOutcome(terminalCode || 'cancelled', terminalMessage || 'The command was cancelled.');
-      return errorOutcome('command_error', error?.message || 'The browser action failed.');
+      return errorOutcome(
+        ADAPTER_ERROR_CODES.has(error?.code) ? error.code : 'command_error',
+        error?.message || 'The browser action failed.',
+      );
     });
 
     try {

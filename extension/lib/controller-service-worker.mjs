@@ -238,6 +238,7 @@ export function createControllerServiceWorker({
   approvalStore = undefined,
   getControllerCapabilities = undefined,
   getTab = undefined,
+  releaseTabDebugger = undefined,
 } = {}) {
   if (!storageArea?.get || !storageArea?.set) throw new TypeError('Controller storage area is required.');
   if (!connector?.connect) throw new TypeError('Controller connector is required.');
@@ -1076,6 +1077,13 @@ export function createControllerServiceWorker({
     }
   }
 
+  // Lease ended or paused: let the adapter detach its debugger session now
+  // instead of waiting for the idle timeout. Best effort, never blocks.
+  function releaseDebuggerSession(tabId) {
+    if (typeof releaseTabDebugger !== 'function') return;
+    Promise.resolve().then(() => releaseTabDebugger(tabId)).catch(() => undefined);
+  }
+
   async function releaseLeases(message = {}) {
     const ownerId = String(message.ownerId || '').trim();
     const tabIds = [...new Set((Array.isArray(message.tabIds) ? message.tabIds : [])
@@ -1087,6 +1095,7 @@ export function createControllerServiceWorker({
       const result = leases.release({ tabId, ownerId });
       if (result.ok) {
         released.push(result.lease);
+        releaseDebuggerSession(tabId);
         const nextPaused = { ...pausedLeases };
         delete nextPaused[String(tabId)];
         pausedLeases = nextPaused;
@@ -1100,6 +1109,9 @@ export function createControllerServiceWorker({
     settings = { ...settings, browserControlPaused: paused === true };
     await storageArea.set({ hermesBrowserSettings: { ...settings } });
     await persist();
+    if (paused === true) {
+      for (const tabId of leases.leasedTabIds()) releaseDebuggerSession(tabId);
+    }
     return { ...status(), paused: settings.browserControlPaused };
   }
 
@@ -1115,7 +1127,10 @@ export function createControllerServiceWorker({
     for (const tabId of leases.leasedTabIds()) {
       const lease = leases.leaseForTab(tabId);
       if (lease?.ownership !== TAB_LEASE_OWNERSHIPS.OWNED || lease.ownerId !== controllerId) continue;
-      if (leases.release({ tabId, ownerId: controllerId }).ok) releasedTabIds.push(tabId);
+      if (leases.release({ tabId, ownerId: controllerId }).ok) {
+        releasedTabIds.push(tabId);
+        releaseDebuggerSession(tabId);
+      }
     }
     approvals.clear?.();
     const nextSettings = { ...settings, browserControlEnabled: false, browserControlPaused: false };

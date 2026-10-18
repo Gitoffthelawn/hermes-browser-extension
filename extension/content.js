@@ -48,6 +48,7 @@
     CANCELLED: 'HERMES_ELEMENT_PICK_CANCELLED',
   });
   const BROWSER_CONTROL_INDICATOR_MESSAGE = 'HERMES_BROWSER_CONTROL_INDICATOR';
+  const BROWSER_CONTROL_INDICATOR_MIN_VISIBLE_MS = 180;
   const BROWSER_CONTROL_ACTION_LABELS = Object.freeze({
     browser_back: 'Going back',
     browser_click: 'Clicking',
@@ -73,6 +74,8 @@
   let highlightedElement = null;
   let browserControlIndicatorHost = null;
   let browserControlIndicatorSuspended = false;
+  let browserControlIndicatorShownAt = 0;
+  let browserControlIndicatorHideTimer = null;
 
   function clamp(value, limit) {
     return HermesContentExtractor?.clampExtractedText?.(value, limit)?.text
@@ -84,9 +87,22 @@
   }
 
   function removeBrowserControlIndicator() {
+    if (browserControlIndicatorHideTimer) clearTimeout(browserControlIndicatorHideTimer);
+    browserControlIndicatorHideTimer = null;
     browserControlIndicatorHost?.remove?.();
     browserControlIndicatorHost = null;
     browserControlIndicatorSuspended = false;
+  }
+
+  // The visual hold lives here so the command result never waits on it.
+  function finishBrowserControlIndicator() {
+    const remaining = BROWSER_CONTROL_INDICATOR_MIN_VISIBLE_MS - (Date.now() - browserControlIndicatorShownAt);
+    if (!browserControlIndicatorHost || remaining <= 0) {
+      removeBrowserControlIndicator();
+      return;
+    }
+    if (browserControlIndicatorHideTimer) clearTimeout(browserControlIndicatorHideTimer);
+    browserControlIndicatorHideTimer = setTimeout(removeBrowserControlIndicator, remaining);
   }
 
   function showBrowserControlIndicator(action = '', targetRect = null) {
@@ -119,6 +135,7 @@
     </style><div class="target"></div><div class="badge"><i></i><span>Hermes · ${label}</span></div>`;
     (document.documentElement || document.body).appendChild(host);
     browserControlIndicatorHost = host;
+    browserControlIndicatorShownAt = Date.now();
     return true;
   }
 
@@ -547,7 +564,7 @@
 
   const messageListener = (message, _sender, sendResponse) => {
     if (message?.type === BROWSER_CONTROL_INDICATOR_MESSAGE) {
-      if (message.phase === 'finish') removeBrowserControlIndicator();
+      if (message.phase === 'finish') finishBrowserControlIndicator();
       else if (message.phase === 'suspend') {
         browserControlIndicatorSuspended = true;
         if (browserControlIndicatorHost) browserControlIndicatorHost.style.display = 'none';

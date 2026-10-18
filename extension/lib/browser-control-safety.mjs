@@ -25,7 +25,8 @@ const SAFE_ACTIONS = new Set([
   'browser_tabs',
 ]);
 
-const SUBMISSION_KEY_RE = /^(?:enter|return)$/i;
+// Matches combos too ("Control+Enter"), since the adapter accepts "Mod+Key".
+const SUBMISSION_KEY_RE = /(?:^|\+)(?:enter|return)$/i;
 const APPROVAL_LABEL_RE = /\b(?:submit|send|post|publish|delete|remove|revoke|reset|buy|pay|checkout|transfer|subscribe|invite|approve|merge|deploy|download|upload|overwrite)\b/i;
 const PAYMENT_RE = /\b(?:credit.?card|card.?number|cvv|cvc|expiry|payment|billing|bank|banking|crypto|wallet|checkout)\b/i;
 const CREDENTIAL_RE = /\b(?:password|passwd|passcode|api.?(?:key|token)|access.?token|auth.?token|session.?token|private.?key|seed.?phrase|recovery.?phrase|secret)\b/i;

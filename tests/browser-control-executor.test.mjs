@@ -338,3 +338,32 @@ test('Phase 6 executor rejects an adapter that bypasses the screenshot transport
   const result = await executor.execute(frame('browser_screenshot'), { scope, leasedTabIds: [7] });
   assert.deepEqual(result, { ok: false, error: { code: 'screenshot_too_large', message: 'The screenshot exceeds the inline Phase 6 transport cap.' } });
 });
+
+test('Phase 6 keeps the stale_ref and navigation_failed codes adapter errors carry and hides unknown ones', async () => {
+  const { createBrowserControlExecutor } = await executorModule();
+  const refs = createBrowserControlRefStore();
+  refs.replace({ ...scope, nodes: [{ role: 'button', name: 'Search', backendDOMNodeId: 44 }] });
+  let failure = null;
+  const executor = createBrowserControlExecutor({
+    adapter: fullAdapter(async () => { throw failure; }),
+    approvals: createBrowserControlApprovalStore(),
+    refs,
+    now: () => 5_000,
+  });
+  const coded = (code, message) => Object.assign(new Error(message), { code });
+
+  failure = coded('stale_ref', 'That element is gone \u2014 use the refs in the latest result or call browser_snapshot.');
+  const stale = await executor.execute(frame('browser_click', { ref: '@e1' }), { scope });
+  assert.equal(stale.ok, false);
+  assert.equal(stale.error.code, 'stale_ref');
+  assert.match(stale.error.message, /browser_snapshot/);
+
+  failure = coded('navigation_failed', 'Navigation failed: net::ERR_NAME_NOT_RESOLVED');
+  const navigation = await executor.execute(frame('browser_navigate', { url: 'https://nope.invalid/' }), { scope });
+  assert.equal(navigation.error.code, 'navigation_failed');
+
+  failure = coded('debugger_conflict', 'Another debugger controls this tab: x');
+  assert.equal((await executor.execute(frame('browser_click', { ref: '@e1' }), { scope })).error.code, 'command_error');
+  failure = new Error('plain failure');
+  assert.equal((await executor.execute(frame('browser_scroll', { direction: 'down' }), { scope })).error.code, 'command_error');
+});
