@@ -85,10 +85,10 @@ test('regular profile selection uses the transactional switch controller and bin
 
 test('dynamic Ask <Agent> buttons adapt to the active bot and regular session state', () => {
   assert.match(sidepanelSource, /function updateComposerActionLabels\(\)/);
-  assert.match(sidepanelSource, /ASK \$\{botName\.toUpperCase\(\)\}/);
-  assert.match(sidepanelSource, /botName\.length > 10 \? 'Ask' : `Ask \$\{botName\}`/);
-  assert.match(sidepanelSource, /els\.composerLabel\.textContent = 'ASK HERMES'/);
-  assert.match(sidepanelSource, /els\.sendButton\.textContent = 'Ask Hermes'/);
+  assert.match(sidepanelSource, /t\('ui\.composer\.ask_bot_label', \{ name: botName\.toUpperCase\(\) \}\)/);
+  assert.match(sidepanelSource, /botName\.length > 10\s*\?\s*t\('ui\.composer\.ask'\)\s*:\s*t\('ui\.composer\.ask_bot', \{ name: botName \}\)/);
+  assert.match(sidepanelSource, /els\.composerLabel\.textContent = t\('ui\.composer\.ask_hermes_label'\)/);
+  assert.match(sidepanelSource, /els\.sendButton\.textContent = t\('ui\.composer\.ask_hermes'\)/);
 });
 
 test('new session button in Bot Mode prompts with on-brand exit dialog', () => {

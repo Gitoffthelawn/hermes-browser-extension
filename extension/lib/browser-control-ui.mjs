@@ -106,19 +106,19 @@ export function browserControlView({ settings = {}, status = {}, activeTab = nul
   if (settings?.browserControlEnabled !== true) return baseView();
   if (status?.connected !== true) {
     const failure = status?.lastConnectFailure;
-    let detail = 'Hermes is restoring the controller connection. No tab actions can run yet.';
+    let detail = 'Hermes Control is reconnecting. No tab actions can run yet.';
     let canAuthorize = false;
     if (failure?.reason === 'missing_session') {
       detail = 'No Hermes session is active yet. Start or select a session, then attach this tab.';
     } else if (failure?.reason === 'connect_failed' && isGatewayControlKeyUnconfigured(failure.detail)) {
-      detail = 'This Hermes gateway has no browser-control API key configured. Set API_SERVER_KEY on the gateway, then reconnect.';
+      detail = 'This Hermes gateway has no Hermes Control API key configured. Set API_SERVER_KEY on the gateway, then reconnect.';
     } else if (failure?.reason === 'connect_failed' && isMissingGatewayCredential(failure.detail)) {
       // Tab control needs its own credential. The panel is already connected for
       // chat (often over the local Desktop dashboard), so never send the reader
       // back through the first-run connect flow; the control strip owns the one
       // action that fixes this.
       canAuthorize = true;
-      detail = 'Browser control needs one authorization from Hermes before it can operate tabs.';
+      detail = 'Hermes Control needs one authorization from Hermes before it can operate tabs.';
     } else if (failure?.reason === 'connect_failed' && isGatewayAuthRejection(failure.detail)) {
       canAuthorize = true;
       detail = "Hermes rejected this browser's saved control token. Authorize again to restore control.";
@@ -140,7 +140,7 @@ export function browserControlView({ settings = {}, status = {}, activeTab = nul
       state: 'unavailable',
       tone: 'warn',
       title: 'Control unavailable',
-      detail: 'Browser debugging access is not available for this browser profile, so Hermes cannot operate tabs.',
+      detail: 'Chromium debugger access is not available for this browser profile, so Hermes cannot operate tabs.',
       canEnable: false,
       canDetach: true,
     });
@@ -163,7 +163,7 @@ export function browserControlView({ settings = {}, status = {}, activeTab = nul
       state: 'paused',
       tone: 'warn',
       title: 'Control paused',
-      detail: `${tabIdsFrom(status.leasedTabIds).length} leased tab${tabIdsFrom(status.leasedTabIds).length === 1 ? '' : 's'} retained. New actions are blocked.`,
+      detail: `${tabIdsFrom(status.leasedTabIds).length} attached tab${tabIdsFrom(status.leasedTabIds).length === 1 ? '' : 's'} kept. New actions are blocked.`,
       canEnable: false,
       canPause: true,
       canStop: Number(status.pendingCommands) > 0,
@@ -179,7 +179,7 @@ export function browserControlView({ settings = {}, status = {}, activeTab = nul
       title: `${actionLabel} in tab ${Number(activeAction.tabId)}`,
       detail: Number(status.pendingCommands) > 1
         ? `${Number(status.pendingCommands) - 1} more action${Number(status.pendingCommands) === 2 ? '' : 's'} queued.`
-        : 'Hermes is operating the leased tab now.',
+        : 'Hermes is using an attached tab now.',
       canEnable: false,
       canPause: true,
       canStop: true,
@@ -207,7 +207,7 @@ export function browserControlView({ settings = {}, status = {}, activeTab = nul
       title: 'This tab is not attached',
       detail: leaseCount
         ? `Control is active on ${leaseCount} other tab${leaseCount === 1 ? '' : 's'}. Attach this tab before asking Hermes to operate it.`
-        : 'The controller is connected, but no tab is leased. Attach this tab before asking Hermes to operate it.',
+        : 'Hermes Control is connected, but no tab is attached. Attach this tab before asking Hermes to operate it.',
       canEnable: false,
       canAttach: true,
       canDetach: true,
@@ -220,7 +220,7 @@ export function browserControlView({ settings = {}, status = {}, activeTab = nul
       state: 'preparing',
       tone: 'warn',
       title: 'Preparing this tab',
-      detail: 'The lease is owned. Hermes is waiting for the exact page document to become ready.',
+      detail: 'This tab is attached. Hermes is waiting for the exact page document to become ready.',
       canEnable: false,
       canPause: true,
       canDetach: true,
@@ -230,7 +230,7 @@ export function browserControlView({ settings = {}, status = {}, activeTab = nul
     state: 'ready',
     tone: 'ok',
     title: 'This tab is ready',
-    detail: 'This exact tab is leased. Hermes can operate it on the first controlled turn.',
+    detail: 'This exact tab is attached. Hermes can operate it on the first controlled turn.',
     canEnable: false,
     canPause: true,
     canStop: Number(status.pendingCommands) > 0,

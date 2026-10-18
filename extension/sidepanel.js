@@ -618,7 +618,7 @@ import {
   currentTabLeaseReplacement,
   followTargetTabId,
 } from './lib/browser-control-ui.mjs';
-import { createBrowserControlDialog } from './lib/browser-control-dialog.mjs';
+import { browserControlScopeHelpKey, createBrowserControlDialog } from './lib/browser-control-dialog.mjs';
 
 // -- Train 1 Phase 0 startup instrumentation (observer-only) ---------------
 // Marks/measure hooks for scripts/bench-startup.mjs (window.__HBE_BOOT_MARKS).
@@ -932,6 +932,8 @@ const els = {
   browserControlCardDetail: $('#browserControlCardDetail'),
   browserControlState: $('#browserControlState'),
   browserControlScopeInput: $('#browserControlScopeInput'),
+  browserControlScopeHelp: $('#browserControlScopeHelp'),
+  browserControlScopeLock: $('#browserControlScopeLock'),
   browserControlStayButton: $('#browserControlStayButton'),
   browserControlFollowButton: $('#browserControlFollowButton'),
   browserControlEnableButton: $('#browserControlEnableButton'),
@@ -2457,6 +2459,9 @@ function renderBrowserControl() {
     ? settings.browserControlScope
     : 'this-tab';
   els.browserControlScopeInput.disabled = enabled;
+  // Visible helper text explains the chosen scope; while control is on, it says why the scope is locked.
+  els.browserControlScopeHelp.textContent = t(browserControlScopeHelpKey(els.browserControlScopeInput.value));
+  els.browserControlScopeLock.hidden = !enabled;
   els.browserControlStayButton.setAttribute('aria-pressed', String(viewBehavior === 'stay'));
   els.browserControlFollowButton.setAttribute('aria-pressed', String(viewBehavior === 'follow'));
   els.browserControlEnableButton.hidden = enabled && !view.canAttach;
@@ -2554,7 +2559,7 @@ async function attachBrowserControlToCurrentTab() {
   await refreshBrowserControlStatus({ follow: false });
   const tab = browserControlActiveTab || await activeTab();
   if (browserControlStatus?.lastConnectFailure?.reason === 'missing_session') {
-    throw new Error('Start or select a Hermes session, then attach this tab.');
+    throw new Error(t('browser_control.error_session_attach'));
   }
   const replacement = currentTabLeaseReplacement({ status: browserControlStatus || {}, activeTab: tab, allowLocalFiles: true });
   let resolvedReplacement = replacement;
@@ -2564,22 +2569,25 @@ async function attachBrowserControlToCurrentTab() {
     resolvedReplacement = currentTabLeaseReplacement({ status: browserControlStatus || {}, activeTab: tab, allowLocalFiles: true });
   }
   if (!resolvedReplacement.ok) {
-    const messages = {
-      controller_busy: 'Wait for the current browser action to finish before attaching another tab.',
-      controller_unavailable: 'Hermes Control is still reconnecting. Try Attach this tab again in a moment.',
-      restricted_url: 'Open a normal HTTP or HTTPS page before attaching Hermes Control.',
+    const messageKeys = {
+      controller_busy: 'browser_control.error_attach_busy',
+      controller_unavailable: 'browser_control.error_attach_reconnecting',
+      restricted_url: 'browser_control.error_attach_restricted',
     };
-    throw new Error(messages[resolvedReplacement.error] || 'This tab cannot be attached right now.');
+    const messageKey = Object.hasOwn(messageKeys, resolvedReplacement.error)
+      ? messageKeys[resolvedReplacement.error]
+      : 'browser_control.error_attach_unavailable';
+    throw new Error(t(messageKey));
   }
   if (resolvedReplacement.releaseTabIds.length) {
     const released = await browserControlMessage('HERMES_CONTROLLER_LEASE_RELEASE', {
       ownerId: resolvedReplacement.ownerId,
       tabIds: resolvedReplacement.releaseTabIds,
     });
-    if (!released?.ok) throw new Error(released?.error || 'Could not release the previous tab lease.');
+    if (!released?.ok) throw new Error(released?.error || t('browser_control.error_release_failed'));
   }
   const acquired = await browserControlMessage('HERMES_CONTROLLER_LEASE_ACQUIRE', resolvedReplacement.acquire);
-  if (!acquired?.ok) throw new Error(acquired?.error || 'Could not lease this tab.');
+  if (!acquired?.ok) throw new Error(acquired?.error || t('browser_control.error_attach_failed'));
   // Attach is a transaction: a lease that never became ready is given back, so
   // the tab is not left half-attached.
   let resolved = null;
@@ -2608,7 +2616,7 @@ async function attachBrowserControlToCurrentTab() {
   browserControlCurrentTarget = resolved;
   await refreshBrowserControlStatus({ follow: false });
   scheduleBrowserControlPoll();
-  showOperationToast({ title: 'This tab is attached', detail: 'Hermes Control is ready for the first browser action.' });
+  showOperationToast({ title: t('browser_control.toast_attached'), detail: t('browser_control.toast_attached_detail') });
   return resolved;
 }
 
@@ -2617,7 +2625,7 @@ async function enableBrowserControl() {
     return attachBrowserControlToCurrentTab();
   }
   if (!String(settings.sessionId || '').trim()) {
-    throw new Error('Start or select a Hermes session before enabling control.');
+    throw new Error(t('browser_control.error_session_enable'));
   }
   const tab = await activeTab();
   const scope = els.browserControlScopeInput.value;
@@ -2629,8 +2637,8 @@ async function enableBrowserControl() {
   });
   if (!leaseRequest.ok) {
     throw new Error(leaseRequest.error === 'explicit_selection_required'
-      ? 'Select one or more tabs in the Browser context scope before enabling this control scope.'
-      : 'A supported active tab is required.');
+      ? t('browser_control.error_select_tabs')
+      : t('browser_control.error_active_tab'));
   }
 
   try {
@@ -2640,7 +2648,7 @@ async function enableBrowserControl() {
       browserControlScope: scope,
     });
     let rebound = await browserControlMessage('HERMES_CONTROLLER_SETTINGS_REFRESH');
-    if (!rebound?.ok) throw new Error(rebound?.error || 'Controller capability refresh failed.');
+    if (!rebound?.ok) throw new Error(rebound?.error || t('browser_control.error_refresh_failed'));
     if (!rebound.connected && await ensureControllerCredentialForControl()) {
       rebound = await browserControlMessage('HERMES_CONTROLLER_STATUS').catch(() => null) || rebound;
     }
@@ -2649,7 +2657,7 @@ async function enableBrowserControl() {
       ownership: 'owned',
       ownerId: rebound.controllerId,
     });
-    if (!acquired?.ok) throw new Error(acquired?.error || 'Could not lease the selected tabs.');
+    if (!acquired?.ok) throw new Error(acquired?.error || t('browser_control.error_enable_failed'));
     await refreshBrowserControlStatus({ follow: false });
     scheduleBrowserControlPoll();
     showOperationToast({ title: t('browser_control.enabled_toast'), detail: t('browser_control.enabled_detail') });
@@ -2700,7 +2708,7 @@ async function decideBrowserControlApproval(approved) {
     documentGeneration: pendingApproval.documentGeneration,
     state: pendingApproval.state,
   });
-  if (!result?.ok) throw new Error(result?.error || 'Approval decision was not accepted.');
+  if (!result?.ok) throw new Error(result?.error || t('browser_control.error_approval_failed'));
   await refreshBrowserControlStatus();
 }
 
@@ -4613,7 +4621,7 @@ function updateConnectionPrompt() {
       }
     }
   } else {
-    els.sendButton.textContent = translateUiText(sending ? 'Hermes running' : 'Ask Hermes');
+    els.sendButton.textContent = sending ? t('ui.composer.hermes_running') : t('ui.composer.ask_hermes');
     if (state.state === 'degraded') {
       els.connectStatus.textContent = `Connected to Hermes with a runtime warning. ${currentConnectionTroubleshooting(state)}`;
       // Surface a degraded runtime as a warning status so the recovery action
@@ -4707,7 +4715,7 @@ function updateComposerBusyState() {
     if (isConnected()) {
       if (viewedSessionIsRunning()) {
         const botName = activeBotProfileName();
-        els.sendButton.textContent = botName ? `${botName} running` : translateUiText('Hermes running');
+        els.sendButton.textContent = botName ? t('ui.composer.bot_running', { name: botName }) : t('ui.composer.hermes_running');
       } else {
         updateComposerActionLabels();
       }
@@ -4731,25 +4739,27 @@ function activeBotProfileName() {
 function updateComposerActionLabels() {
   const botName = activeBotProfileName();
   if (activeGroupProjection) {
-    if (els.composerLabel) els.composerLabel.textContent = 'GROUP CHAT';
+    if (els.composerLabel) els.composerLabel.textContent = t('ui.composer.group_chat');
     if (els.sendButton && isConnected() && !viewedSessionIsRunning()) {
-      els.sendButton.textContent = 'Send';
+      els.sendButton.textContent = t('ui.composer.send');
     }
     return;
   }
   if (botName) {
     if (els.composerLabel) {
-      els.composerLabel.textContent = `ASK ${botName.toUpperCase()}`;
+      els.composerLabel.textContent = t('ui.composer.ask_bot_label', { name: botName.toUpperCase() });
     }
     if (els.sendButton && isConnected() && !viewedSessionIsRunning()) {
-      els.sendButton.textContent = botName.length > 10 ? 'Ask' : `Ask ${botName}`;
+      els.sendButton.textContent = botName.length > 10
+        ? t('ui.composer.ask')
+        : t('ui.composer.ask_bot', { name: botName });
     }
   } else {
     if (els.composerLabel) {
-      els.composerLabel.textContent = 'ASK HERMES';
+      els.composerLabel.textContent = t('ui.composer.ask_hermes_label');
     }
     if (els.sendButton && isConnected() && !viewedSessionIsRunning()) {
-      els.sendButton.textContent = 'Ask Hermes';
+      els.sendButton.textContent = t('ui.composer.ask_hermes');
     }
   }
 }
@@ -12222,7 +12232,7 @@ function startNewGroupThread() {
   activeGroupExpandedThreads.clear();
   renderGroupThreadStrip();
   updateSessionLabel();
-  if (els.sendButton) els.sendButton.textContent = 'New Thread';
+  if (els.sendButton) els.sendButton.textContent = t('ui.composer.new_thread');
   els.input?.focus?.();
 }
 
@@ -17423,7 +17433,7 @@ function renderLocalDocumentApproval(tab = currentContext?.activeTab) {
     fileName = 'local document';
   }
   els.localDocumentApprovalTitle.textContent = `Local document · ${fileName}`;
-  els.localDocumentApprovalDetail.textContent = 'Approve local document access to inspect this file, extract slides/text, and attach browser control.';
+  els.localDocumentApprovalDetail.textContent = t('browser_control.local_document_detail');
   els.localDocumentApprovalNotice.hidden = false;
 }
 
@@ -24029,6 +24039,7 @@ function bindEvents() {
     label: () => t('browser_control.kicker'),
     refresh: () => refreshBrowserControlStatus({ follow: false }),
     scopeInput: els.browserControlDialogScopeInput,
+    scopeHelp: $('#browserControlDialogScopeHelp'),
     tabsField: $('#browserControlDialogTabs'), tabsList: $('#browserControlDialogTabList'),
     applyButton: $('#browserControlDialogApplyScope'), scopeHint: $('#browserControlDialogScopeHint'),
     translate: t,
@@ -24058,7 +24069,7 @@ function bindEvents() {
     try {
       await enableBrowserControl();
     } catch (error) {
-      showOperationToast({ kind: 'warn', title: 'Control not enabled', detail: error?.message || String(error) });
+      showOperationToast({ kind: 'warn', title: t('browser_control.toast_enable_failed'), detail: error?.message || String(error) });
     } finally {
       els.browserControlEnableButton.disabled = false;
       renderBrowserControl();
@@ -24069,7 +24080,7 @@ function bindEvents() {
     try {
       await attachBrowserControlToCurrentTab();
     } catch (error) {
-      showOperationToast({ kind: 'warn', title: 'Control not attached', detail: error?.message || String(error) });
+      showOperationToast({ kind: 'warn', title: t('browser_control.toast_attach_failed'), detail: error?.message || String(error) });
     } finally {
       els.browserControlAttachButton.disabled = false;
       renderBrowserControl();
@@ -24085,7 +24096,7 @@ function bindEvents() {
       await refreshBrowserControlStatus({ follow: false });
       if (settings.browserControlEnabled === true) await attachBrowserControlToCurrentTab().catch(() => null);
     } catch (error) {
-      showOperationToast({ kind: 'warn', title: 'Control not authorized', detail: error?.message || String(error) });
+      showOperationToast({ kind: 'warn', title: t('browser_control.toast_authorize_failed'), detail: error?.message || String(error) });
     } finally {
       els.browserControlAuthorizeButton.disabled = false;
       renderBrowserControl();
@@ -24113,31 +24124,31 @@ function bindEvents() {
     }
     persistBrowserControlPreferences({ browserControlScope: els.browserControlScopeInput.value })
       .then(renderBrowserControl)
-      .catch((error) => showOperationToast({ kind: 'warn', title: 'Scope unchanged', detail: error?.message || String(error) }));
+      .catch((error) => showOperationToast({ kind: 'warn', title: t('browser_control.toast_scope_unchanged'), detail: error?.message || String(error) }));
   });
   for (const button of [els.browserControlStayButton, els.browserControlDialogStayButton]) {
     button?.addEventListener('click', () => {
-      setBrowserControlViewBehavior('stay').catch((error) => showOperationToast({ kind: 'warn', title: 'View unchanged', detail: error?.message || String(error) }));
+      setBrowserControlViewBehavior('stay').catch((error) => showOperationToast({ kind: 'warn', title: t('browser_control.toast_view_unchanged'), detail: error?.message || String(error) }));
     });
   }
   for (const button of [els.browserControlFollowButton, els.browserControlDialogFollowButton]) {
     button?.addEventListener('click', () => {
-      setBrowserControlViewBehavior('follow').catch((error) => showOperationToast({ kind: 'warn', title: 'View unchanged', detail: error?.message || String(error) }));
+      setBrowserControlViewBehavior('follow').catch((error) => showOperationToast({ kind: 'warn', title: t('browser_control.toast_view_unchanged'), detail: error?.message || String(error) }));
     });
   }
   els.browserControlPauseButton?.addEventListener('click', () => {
-    toggleBrowserControlPause().catch((error) => showOperationToast({ kind: 'warn', title: 'Control state unchanged', detail: error?.message || String(error) }));
+    toggleBrowserControlPause().catch((error) => showOperationToast({ kind: 'warn', title: t('browser_control.toast_state_unchanged'), detail: error?.message || String(error) }));
   });
   els.browserControlStopButton?.addEventListener('click', () => {
     browserControlMessage('HERMES_CONTROLLER_STOP')
       .then(() => refreshBrowserControlStatus())
-      .catch((error) => showOperationToast({ kind: 'warn', title: 'Stop failed', detail: error?.message || String(error) }));
+      .catch((error) => showOperationToast({ kind: 'warn', title: t('browser_control.toast_stop_failed'), detail: error?.message || String(error) }));
   });
   els.browserControlApproveButton?.addEventListener('click', () => {
-    decideBrowserControlApproval(true).catch((error) => showOperationToast({ kind: 'warn', title: 'Approval not accepted', detail: error?.message || String(error) }));
+    decideBrowserControlApproval(true).catch((error) => showOperationToast({ kind: 'warn', title: t('browser_control.toast_approval_failed'), detail: error?.message || String(error) }));
   });
   els.browserControlRejectButton?.addEventListener('click', () => {
-    decideBrowserControlApproval(false).catch((error) => showOperationToast({ kind: 'warn', title: 'Rejection not accepted', detail: error?.message || String(error) }));
+    decideBrowserControlApproval(false).catch((error) => showOperationToast({ kind: 'warn', title: t('browser_control.toast_rejection_failed'), detail: error?.message || String(error) }));
   });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
@@ -24323,7 +24334,7 @@ function bindEvents() {
       await refreshContext({ allowLocalDocuments: true });
       await attachBrowserControlToCurrentTab();
     } catch (error) {
-      showOperationToast({ kind: 'warn', title: 'Control not attached', detail: error?.message || String(error) });
+      showOperationToast({ kind: 'warn', title: t('browser_control.toast_attach_failed'), detail: error?.message || String(error) });
     }
   });
   els.localDocumentDismissButton?.addEventListener('click', () => {

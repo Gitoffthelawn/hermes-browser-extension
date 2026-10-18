@@ -52,7 +52,7 @@ test('Phase 6 enable and detach use install-declared debugger access without run
   assert.match(source, /browserControlEnableButton.*addEventListener\('click'/s);
   assert.doesNotMatch(source, /permissions\?\.request\(\{\s*permissions:\s*\['debugger'\]\s*\}\)/s);
   assert.doesNotMatch(source, /permissions\?\.remove\(\{\s*permissions:\s*\['debugger'\]\s*\}\)/s);
-  assert.match(html, /granted when this extension or update was installed/i);
+  assert.match(html, /grants this extension debugger access when it is installed or updated/i);
   assert.match(source, /HERMES_CONTROLLER_LEASE_ACQUIRE/);
   assert.match(source, /HERMES_CONTROLLER_DETACH/);
   assert.match(source, /browserControlEnabled:\s*true/);
@@ -108,7 +108,7 @@ test('local document approval does not leak attach failures as uncaught rejectio
   assert.match(handler, /try \{/);
   assert.match(handler, /attachBrowserControlToCurrentTab\(\)/);
   assert.match(handler, /catch \(error\)/);
-  assert.match(handler, /Control not attached/);
+  assert.match(handler, /t\('browser_control\.toast_attach_failed'\)/);
 });
 
 test('startup Connect button uses the theme primary tokens so it stays readable in every theme and mode', () => {

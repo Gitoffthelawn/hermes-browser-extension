@@ -106,9 +106,9 @@ test('Attach this tab replaces stale this-tab leases and proves the exact target
 test('enable and attach fail closed with a session-first message when no Hermes session exists', () => {
   const enable = sidepanel.match(/async function enableBrowserControl\([\s\S]*?\n\}/)?.[0] || '';
   const attach = sidepanel.match(/async function attachBrowserControlToCurrentTab\([\s\S]*?\n\}/)?.[0] || '';
-  assert.match(enable, /Start or select a Hermes session before enabling control/);
+  assert.match(enable, /t\('browser_control\.error_session_enable'\)/);
   assert.match(attach, /missing_session/);
-  assert.match(attach, /Start or select a Hermes session, then attach this tab/);
+  assert.match(attach, /t\('browser_control\.error_session_attach'\)/);
 });
 
 test('unconfigured startup screen offers one-click pairing and test connection pairs when available', () => {
