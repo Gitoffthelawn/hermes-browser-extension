@@ -201,6 +201,7 @@ export default Object.freeze({
   "attachments.attachment_too_large": "Można załączać pliki do 25 MiB.",
   "attachments.download_to_open": "Pobierz ten plik, aby otworzyć go w zgodnej aplikacji.",
   "attachments.file_unavailable": "Oryginalny plik jest niedostępny. Załącz go ponownie.",
+  "attachments.paste_excerpt_notice": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
   "attachments.preview_limited": "Podgląd jest ograniczony. Pobierz cały plik.",
   "attachments.upload_unavailable": "Nie potwierdzono przesłania całego pliku. Sprawdź połączenie lub użyj połączenia WebSocket z panelem i spróbuj ponownie.",
   "browser_control.selected_tabs": "Wybrane karty",

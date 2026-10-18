@@ -201,6 +201,7 @@ export default Object.freeze({
   "attachments.attachment_too_large": "25 MiB’a kadar dosya eklenebilir.",
   "attachments.download_to_open": "Bu dosyayı uyumlu bir uygulamada açmak için indirin.",
   "attachments.file_unavailable": "Orijinal dosya kullanılamıyor. Erişimi geri getirmek için yeniden ekleyin.",
+  "attachments.paste_excerpt_notice": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
   "attachments.preview_limited": "Önizleme sınırlı. Dosyanın tamamını indirin.",
   "attachments.upload_unavailable": "Dosyanın tamamının yüklenmesi doğrulanmadı. Bağlantıyı kontrol edin veya pano WebSocket bağlantısını kullanıp yeniden deneyin.",
   "browser_control.selected_tabs": "Seçili sekmeler",

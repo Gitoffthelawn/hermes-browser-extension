@@ -201,6 +201,7 @@ export default Object.freeze({
   "attachments.attachment_too_large": "แนบไฟล์ขนาดไม่เกิน 25 MiB ได้",
   "attachments.download_to_open": "ดาวน์โหลดไฟล์นี้เพื่อเปิดในแอปที่รองรับ",
   "attachments.file_unavailable": "ไม่มีไฟล์ต้นฉบับ โปรดแนบไฟล์อีกครั้งเพื่อเรียกคืนการเข้าถึง",
+  "attachments.paste_excerpt_notice": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
   "attachments.preview_limited": "แสดงตัวอย่างได้บางส่วน ดาวน์โหลดไฟล์ฉบับเต็ม",
   "attachments.upload_unavailable": "ยังยืนยันการอัปโหลดไฟล์ฉบับเต็มไม่ได้ ตรวจสอบการเชื่อมต่อหรือใช้ WebSocket ของแดชบอร์ด แล้วลองอีกครั้ง",
   "browser_control.selected_tabs": "แท็บที่เลือก",

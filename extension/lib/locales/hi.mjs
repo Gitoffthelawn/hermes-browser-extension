@@ -201,6 +201,7 @@ export default Object.freeze({
   "attachments.attachment_too_large": "25 MiB तक की फ़ाइलें संलग्न की जा सकती हैं।",
   "attachments.download_to_open": "इस फ़ाइल को किसी संगत ऐप में खोलने के लिए डाउनलोड करें।",
   "attachments.file_unavailable": "मूल फ़ाइल उपलब्ध नहीं है। पहुँच वापस पाने के लिए इसे फिर संलग्न करें।",
+  "attachments.paste_excerpt_notice": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
   "attachments.preview_limited": "पूर्वावलोकन सीमित है। पूरी फ़ाइल डाउनलोड करें।",
   "attachments.upload_unavailable": "पूरी फ़ाइल का अपलोड पुष्ट नहीं हुआ। कनेक्शन जाँचें या डैशबोर्ड WebSocket कनेक्शन से फिर प्रयास करें।",
   "browser_control.selected_tabs": "चयनित टैब",

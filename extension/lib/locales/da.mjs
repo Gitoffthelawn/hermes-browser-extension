@@ -201,6 +201,7 @@ export default Object.freeze({
   "attachments.attachment_too_large": "Filer på op til 25 MiB kan vedhæftes.",
   "attachments.download_to_open": "Download filen for at åbne den i en kompatibel app.",
   "attachments.file_unavailable": "Originalfilen er ikke tilgængelig. Vedhæft den igen.",
+  "attachments.paste_excerpt_notice": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
   "attachments.preview_limited": "Begrænset forhåndsvisning. Download hele filen.",
   "attachments.upload_unavailable": "Upload af hele filen blev ikke bekræftet. Kontrollér forbindelsen, eller brug en WebSocket-forbindelse til dashboardet, og prøv igen.",
   "browser_control.selected_tabs": "Valgte faner",

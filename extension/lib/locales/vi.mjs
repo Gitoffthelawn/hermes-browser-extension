@@ -201,6 +201,7 @@ export default Object.freeze({
   "attachments.attachment_too_large": "Có thể đính kèm tệp tối đa 25 MiB.",
   "attachments.download_to_open": "Tải tệp này xuống để mở bằng ứng dụng tương thích.",
   "attachments.file_unavailable": "Không có tệp gốc. Hãy đính kèm lại để khôi phục quyền truy cập.",
+  "attachments.paste_excerpt_notice": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
   "attachments.preview_limited": "Bản xem trước bị giới hạn. Tải xuống tệp đầy đủ.",
   "attachments.upload_unavailable": "Chưa xác nhận tải lên toàn bộ tệp. Kiểm tra kết nối hoặc dùng kết nối WebSocket của bảng điều khiển rồi thử lại.",
   "browser_control.selected_tabs": "Các tab đã chọn",

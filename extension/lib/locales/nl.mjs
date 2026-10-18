@@ -201,6 +201,7 @@ export default Object.freeze({
   "attachments.attachment_too_large": "Je kunt bestanden tot 25 MiB bijvoegen.",
   "attachments.download_to_open": "Download dit bestand om het in een geschikte app te openen.",
   "attachments.file_unavailable": "Het oorspronkelijke bestand is niet beschikbaar. Voeg het opnieuw toe.",
+  "attachments.paste_excerpt_notice": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
   "attachments.preview_limited": "Beperkt voorbeeld. Download het volledige bestand.",
   "attachments.upload_unavailable": "De upload van het volledige bestand is niet bevestigd. Controleer de verbinding of gebruik een dashboard-WebSocket-verbinding en probeer opnieuw.",
   "browser_control.selected_tabs": "Geselecteerde tabbladen",

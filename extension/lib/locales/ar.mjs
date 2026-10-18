@@ -201,6 +201,7 @@ export default Object.freeze({
   "attachments.attachment_too_large": "يمكن إرفاق ملفات حتى 25 ميبيبايت.",
   "attachments.download_to_open": "نزّل هذا الملف لفتحه في تطبيق متوافق.",
   "attachments.file_unavailable": "الملف الأصلي غير متاح. أعد إرفاقه لاستعادة الوصول.",
+  "attachments.paste_excerpt_notice": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
   "attachments.preview_limited": "المعاينة محدودة. نزّل الملف الكامل.",
   "attachments.upload_unavailable": "لم يُؤكّد رفع الملف الكامل. تحقق من الاتصال أو استخدم اتصال WebSocket للوحة التحكم، ثم حاول مجددًا.",
   "browser_control.selected_tabs": "التبويبات المحددة",

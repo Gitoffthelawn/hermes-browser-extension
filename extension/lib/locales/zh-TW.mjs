@@ -201,6 +201,7 @@ export default Object.freeze({
   "attachments.attachment_too_large": "可附加最大25 MiB的檔案。",
   "attachments.download_to_open": "下載此檔案後，可使用相容的應用程式開啟。",
   "attachments.file_unavailable": "原始檔案無法使用。請重新附加以恢復存取。",
+  "attachments.paste_excerpt_notice": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
   "attachments.preview_limited": "預覽內容有限。請下載完整檔案。",
   "attachments.upload_unavailable": "尚未確認完整檔案上傳。請檢查連線或使用儀表板WebSocket連線，然後重試。",
   "browser_control.selected_tabs": "選取的分頁",

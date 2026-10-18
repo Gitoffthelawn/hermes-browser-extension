@@ -180,6 +180,7 @@ export default Object.freeze({
   "attachments.attachment_too_large": "Files up to 25 MiB can be attached.",
   "attachments.download_to_open": "Download this file to open it in a compatible app.",
   "attachments.file_unavailable": "Original file unavailable. Reattach it to restore access.",
+  "attachments.paste_excerpt_notice": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
   "attachments.preview_limited": "Preview limited. Download the complete file.",
   "attachments.upload_unavailable": "Complete-file upload was not confirmed. Check the connection or use a dashboard WebSocket connection, then retry.",
   "browser_control.selected_tabs": "Selected tabs",

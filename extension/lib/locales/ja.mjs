@@ -201,6 +201,7 @@ export default Object.freeze({
   "attachments.attachment_too_large": "25 MiBまでのファイルを添付できます。",
   "attachments.download_to_open": "対応するアプリで開くには、このファイルをダウンロードしてください。",
   "attachments.file_unavailable": "元のファイルを利用できません。もう一度添付してください。",
+  "attachments.paste_excerpt_notice": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
   "attachments.preview_limited": "プレビューは一部のみです。完全なファイルをダウンロードしてください。",
   "attachments.upload_unavailable": "ファイル全体のアップロードを確認できませんでした。接続を確認するか、ダッシュボードのWebSocket接続を使用して再試行してください。",
   "browser_control.selected_tabs": "選択したタブ",

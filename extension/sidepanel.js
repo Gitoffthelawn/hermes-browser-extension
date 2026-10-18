@@ -182,6 +182,7 @@ import {
   isPasteArtifact,
   pasteArtifactExceedsLocalLimit,
   pasteArtifactExcerpt,
+  pasteArtifactShortening,
 } from './lib/paste-artifact.mjs';
 import {
   APPEARANCE_THEMES,
@@ -7800,6 +7801,23 @@ function renderAttachments() {
 
     pill.append(icon, label, close);
     els.attachmentList.appendChild(pill);
+  }
+  // Issue #94: a long paste is sent as a head and tail excerpt. Say so in the
+  // composer for as long as the paste is attached, not only in a status line
+  // that disappears, so the user knows what Hermes will receive.
+  for (const attachment of attachments) {
+    const shortening = pasteArtifactShortening(attachment);
+    if (!shortening) continue;
+    const note = document.createElement('p');
+    note.className = 'attachment-excerpt-notice';
+    note.setAttribute('role', 'note');
+    note.textContent = `${attachment.label}: ${t('attachments.paste_excerpt_notice', {
+      head: shortening.head.toLocaleString(),
+      tail: shortening.tail.toLocaleString(),
+      total: shortening.total.toLocaleString(),
+      omitted: shortening.omitted.toLocaleString(),
+    })}`;
+    els.attachmentList.appendChild(note);
   }
   updateComposerBusyState();
 }

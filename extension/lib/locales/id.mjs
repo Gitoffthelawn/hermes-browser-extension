@@ -201,6 +201,7 @@ export default Object.freeze({
   "attachments.attachment_too_large": "File hingga 25 MiB dapat dilampirkan.",
   "attachments.download_to_open": "Unduh file ini untuk membukanya di aplikasi yang kompatibel.",
   "attachments.file_unavailable": "File asli tidak tersedia. Lampirkan kembali untuk memulihkan akses.",
+  "attachments.paste_excerpt_notice": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
   "attachments.preview_limited": "Pratinjau terbatas. Unduh file lengkap.",
   "attachments.upload_unavailable": "Unggahan file lengkap belum dikonfirmasi. Periksa koneksi atau gunakan koneksi WebSocket dasbor, lalu coba lagi.",
   "browser_control.selected_tabs": "Tab terpilih",

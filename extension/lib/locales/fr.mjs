@@ -201,6 +201,7 @@ export default Object.freeze({
   "attachments.attachment_too_large": "Vous pouvez joindre des fichiers jusqu’à 25 Mio.",
   "attachments.download_to_open": "Téléchargez ce fichier pour l’ouvrir dans une application compatible.",
   "attachments.file_unavailable": "Fichier original indisponible. Joignez-le à nouveau.",
+  "attachments.paste_excerpt_notice": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
   "attachments.preview_limited": "Aperçu limité. Téléchargez le fichier complet.",
   "attachments.upload_unavailable": "L’envoi du fichier complet n’a pas été confirmé. Vérifiez la connexion ou utilisez une connexion WebSocket du tableau de bord, puis réessayez.",
   "browser_control.selected_tabs": "Onglets sélectionnés",

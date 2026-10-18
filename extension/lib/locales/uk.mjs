@@ -201,6 +201,7 @@ export default Object.freeze({
   "attachments.attachment_too_large": "Можна прикріплювати файли розміром до 25 МіБ.",
   "attachments.download_to_open": "Завантажте цей файл, щоб відкрити його в сумісному застосунку.",
   "attachments.file_unavailable": "Оригінальний файл недоступний. Прикріпіть його знову.",
+  "attachments.paste_excerpt_notice": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
   "attachments.preview_limited": "Попередній перегляд обмежений. Завантажте весь файл.",
   "attachments.upload_unavailable": "Завантаження повного файлу не підтверджено. Перевірте з’єднання або скористайтеся WebSocket-з’єднанням панелі та повторіть спробу.",
   "browser_control.selected_tabs": "Вибрані вкладки",

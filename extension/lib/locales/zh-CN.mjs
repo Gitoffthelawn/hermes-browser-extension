@@ -179,6 +179,7 @@ export default Object.freeze({
   "attachments.attachment_too_large": "可附加最大25 MiB的文件。",
   "attachments.download_to_open": "下载此文件后，可使用兼容的应用打开。",
   "attachments.file_unavailable": "原始文件不可用。请重新附加以恢复访问。",
+  "attachments.paste_excerpt_notice": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
   "attachments.preview_limited": "预览内容有限。请下载完整文件。",
   "attachments.upload_unavailable": "未确认完整文件上传。请检查连接或使用仪表盘WebSocket连接，然后重试。",
   "browser_control.selected_tabs": "选中的标签页",

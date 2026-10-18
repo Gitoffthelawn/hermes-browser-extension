@@ -201,6 +201,7 @@ export default Object.freeze({
   "attachments.attachment_too_large": "최대 25 MiB의 파일을 첨부할 수 있습니다.",
   "attachments.download_to_open": "호환되는 앱에서 열려면 이 파일을 다운로드하세요.",
   "attachments.file_unavailable": "원본 파일을 사용할 수 없습니다. 다시 첨부하세요.",
+  "attachments.paste_excerpt_notice": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
   "attachments.preview_limited": "미리보기가 제한됩니다. 전체 파일을 다운로드하세요.",
   "attachments.upload_unavailable": "전체 파일 업로드를 확인하지 못했습니다. 연결을 확인하거나 대시보드 WebSocket 연결을 사용하여 다시 시도하세요.",
   "browser_control.selected_tabs": "선택한 탭",
