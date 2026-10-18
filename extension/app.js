@@ -575,8 +575,8 @@ function createRestPromptPoller({ getRunId, sessionId, isCurrent }) {
       const statusResponse = await client.fetch(`/v1/runs/${encodeURIComponent(runId)}`, { method: 'GET' });
       return statusResponse.ok ? client.readJson(statusResponse) : null;
     },
-    onStatus: (payload) => {
-      if (isCurrent()) promptController.ingestRunStatus(getRunId(), payload, { sessionId });
+    onStatus: (payload, { requestedAt } = {}) => {
+      if (isCurrent()) promptController.ingestRunStatus(getRunId(), payload, { sessionId, requestedAt });
     },
     isTerminal: isRunStatusTerminal,
   });

@@ -496,3 +496,71 @@ test('a run that stays quiet is read less and less often, and any stream activit
   assert.equal(delays.at(-1), 4_000, 'and the next reads are frequent again');
   poller.stop();
 });
+
+// ---- a slow status read ------------------------------------------------------------------------
+
+function restWorld() {
+  const clock = { now: 0 };
+  const controller = createPromptController({
+    now: () => clock.now,
+    getViewedSessionIds: () => ['sess-a'],
+    getCapabilities: () => ({ source: 'api-server', runApproval: true }),
+  });
+  const approval = { run_id: 'run-1', request_id: 'r1', execution_generation: 1, command: 'ls', choices: ['once', 'deny'] };
+  return { clock, controller, approval };
+}
+
+test('a status answer that was sent before a prompt existed cannot withdraw it, however late it is processed', () => {
+  const { clock, controller, approval } = restWorld();
+  clock.now = 600;
+  controller.ingestRestEvent('approval.request', approval, { sessionId: 'sess-a' });
+  clock.now = 4_000; // the answer to a read sent at t=0 only now arrives
+  controller.ingestRunStatus('run-1', { run_id: 'run-1', status: 'running', pending_controls: [] }, { sessionId: 'sess-a', requestedAt: 0 });
+  assert.equal(controller.getSnapshot().visible.length, 1, 'the prompt is still answerable');
+  // Seen again, it is still one prompt: it was never settled, so it is not blocked from returning either.
+  controller.ingestRestEvent('approval.request', approval, { sessionId: 'sess-a' });
+  assert.equal(controller.getSnapshot().total, 1);
+  controller.destroy();
+});
+
+test('a prompt the status no longer lists is still withdrawn once a read sent after it says so', () => {
+  const { clock, controller, approval } = restWorld();
+  clock.now = 600;
+  controller.ingestRestEvent('approval.request', approval, { sessionId: 'sess-a' });
+  clock.now = 10_000;
+  controller.ingestRunStatus('run-1', { run_id: 'run-1', status: 'running', pending_controls: [] }, { sessionId: 'sess-a', requestedAt: 9_900 });
+  assert.equal(controller.getSnapshot().total, 0, 'answered elsewhere: the card closes');
+  // A status without a request time keeps the old behaviour: judged as of now.
+  clock.now = 20_000;
+  controller.ingestRestEvent('approval.request', { ...approval, request_id: 'r2' }, { sessionId: 'sess-a' });
+  clock.now = 30_000;
+  controller.ingestRunStatus('run-1', { run_id: 'run-1', status: 'running', pending_controls: [] }, { sessionId: 'sess-a' });
+  assert.equal(controller.getSnapshot().total, 0);
+  controller.destroy();
+});
+
+test('the poll tells its reader when each read was sent', async () => {
+  const stamps = [];
+  const timers = [];
+  let clock = 1_000;
+  const poller = createPendingControlsPoller({
+    fetchStatus: async () => {
+      clock += 2_500; // a slow read
+      return { status: 'running', pending_controls: [] };
+    },
+    onStatus: (payload, meta) => stamps.push(meta.requestedAt),
+    now: () => clock,
+    setTimeoutFn: (fn) => { timers.push(fn); return timers.length; },
+    clearTimeoutFn: () => {},
+  });
+  poller.start();
+  await timers.pop()();
+  assert.deepEqual(stamps, [1_000], 'stamped before the read, not when its answer came back');
+  poller.stop();
+});
+
+test('both surfaces pass the read time on to the controller', () => {
+  for (const source of [sidepanel, app]) {
+    assert.match(source, /onStatus: \(payload, \{ requestedAt \} = \{\}\) => \{\s*if \(isCurrent\(\)\) promptController\.ingestRunStatus\(getRunId\(\), payload, \{ sessionId, requestedAt \}\);/);
+  }
+});

@@ -171,7 +171,10 @@ export function createPromptController({
     return false;
   }
 
-  function ingestRunStatus(runId, payload, { sessionId = '' } = {}) {
+  // requestedAt: when the status read was sent. The answer describes the run as it
+  // was then, so a prompt that arrived after that cannot be missing from it, however
+  // late the answer is processed: dropping it would also keep it from coming back.
+  function ingestRunStatus(runId, payload, { sessionId = '', requestedAt = Number.NaN } = {}) {
     const result = promptsFromRunStatus(payload, { runId, sessionId, now: now() });
     const scope = String(payload?.run_id || runId || '').trim();
     if (result.terminal) {
@@ -181,8 +184,9 @@ export function createPromptController({
     for (const entry of result.entries) addEntry(entry);
     if (!result.authoritative) return;
     const live = new Set(result.entries.map((entry) => entry.key));
+    const readAt = Number.isFinite(requestedAt) ? Math.min(requestedAt, now()) : now();
     const stale = state.entries.filter((entry) => entry.transport === 'rest' && entry.scope === scope
-      && !live.has(entry.key) && now() - entry.receivedAt > STATUS_GRACE_MS);
+      && !live.has(entry.key) && readAt - entry.receivedAt > STATUS_GRACE_MS);
     for (const entry of stale) settle(entry.key, 'cancelled', { reason: 'resolved' });
   }
 
@@ -433,6 +437,7 @@ export function createPendingControlsPoller({
   maxPollMs = 20_000,
   backoffEvery = 5,
   maxFailures = 5,
+  now = () => Date.now(),
   setTimeoutFn = globalThis.setTimeout?.bind(globalThis),
   clearTimeoutFn = globalThis.clearTimeout?.bind(globalThis),
 } = {}) {
@@ -462,11 +467,12 @@ export function createPendingControlsPoller({
     inFlight = true;
     quietReads += 1;
     try {
+      const requestedAt = now();
       const payload = await fetchStatus();
       if (!active) return;
       if (payload) {
         failures = 0;
-        onStatus(payload);
+        onStatus(payload, { requestedAt });
         if (isTerminal(payload)) active = false;
       } else {
         failures += 1;
