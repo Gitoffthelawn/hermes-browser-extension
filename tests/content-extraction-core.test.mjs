@@ -174,6 +174,54 @@ test('redactSensitiveTextWithCount returns deterministic text and replacement co
   assert.equal(result.count, 2);
 });
 
+test('suffixed and prefixed credential names are redacted while ordinary keys are kept', () => {
+  const result = redactSensitiveTextWithCount([
+    'DATABASE_PASSWORD=hunter2hunter2',
+    'stripe_secret_key=synthetic-stripe-value',
+    'MY_API_TOKEN: synthetic-token-value',
+    'x-service-pwd=synthetic-pwd-value',
+    'sort_key=price',
+    'max_tokens=4096',
+  ].join(' '));
+
+  assert.equal(result.count, 4);
+  assert.doesNotMatch(result.text, /hunter2hunter2|synthetic-/);
+  assert.match(result.text, /sort_key=price max_tokens=4096$/);
+});
+
+test('quoted JSON secrets keep their key, quotes and separator', () => {
+  const result = redactSensitiveTextWithCount('{"api_key": "synthetic value with spaces", "db_password":"p w", "secret": 12345, "label": "kept"}');
+
+  assert.equal(
+    result.text,
+    '{"api_key": "[REDACTED_SECRET]", "db_password":"[REDACTED_SECRET]", "secret": [REDACTED_SECRET], "label": "kept"}',
+  );
+  assert.equal(result.count, 3);
+  assert.equal(redactSensitiveTextWithCount('api_key=""').count, 0);
+});
+
+test('cloud-provider token shapes, Basic credentials and URL passwords are redacted', () => {
+  const samples = [
+    'npm_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789',
+    'hf_AbCdEfGhIjKlMnOpQrStUvWxYz0123',
+    'SG.AbCdEfGhIjKlMnOp.QrStUvWxYz0123456789AbCdEfGhIjKlMnOpQrStUvWxYz0123456789',
+    'ya29.a0AfB_byABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+    'glpat-AbCdEfGhIjKlMnOpQrSt',
+    'GOCSPX-AbCdEfGhIjKlMnOpQrStUvWx',
+  ];
+  for (const sample of samples) {
+    const result = redactSensitiveTextWithCount(`value ${sample} end`);
+    assert.equal(result.text, 'value [REDACTED_SECRET] end', sample);
+    assert.equal(result.count, 1);
+  }
+
+  const basic = redactSensitiveTextWithCount('Authorization: Basic dXNlcjpwYXNzd29yZA==');
+  assert.equal(basic.text, 'Authorization: [REDACTED_SECRET]');
+  const url = redactSensitiveTextWithCount('postgres://admin:synthetic-pass@db.example.com:5432/app');
+  assert.equal(url.text, 'postgres://admin:[REDACTED_SECRET]@db.example.com:5432/app');
+  assert.equal(redactSensitiveTextWithCount('Basic knowledge of https://example.com:8080/a@b').count, 0);
+});
+
 test('CSS-hidden content is removed before candidate scoring and structure extraction', () => {
   const hiddenMarker = 'PRIVATE_DRAFT_SHOULD_NOT_LEAVE_PAGE';
   const document = documentFor(`<!doctype html><html><body>

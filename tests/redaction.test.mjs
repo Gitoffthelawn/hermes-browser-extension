@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   hasCredentialBearingUrl,
+  neutralizeContextDelimiters,
   redactSensitiveText,
 } from '../extension/lib/redaction.mjs';
 
@@ -58,4 +59,38 @@ test('redactSensitiveText blocks encoded credential assignments without decoding
   assert.doesNotMatch(redacted, /encoded-private-value/);
   assert.match(redacted, /api%5Fkey=\[REDACTED_SECRET\]/);
   assert.match(redacted, /ordinary%20display%20text/);
+});
+
+test('hasCredentialBearingUrl flags session, ticket, password and OAuth-callback parameters', () => {
+  const flagged = [
+    'https://maps.googleapis.com/maps/api/js?key=AIzaSyA-EXAMPLE_KEY_1234567890abcdefghi',
+    'https://app.example.com/cb?code=4%2F0AbCdEfGhIjKlMnOp&state=xyz',
+    'https://example.com/reset?ticket=ST-12345-abcdefg',
+    'https://example.com/view?session_id=abcdef123456',
+    'https://example.com/view?sessionid=abcdef123456',
+    'https://example.com/view?pwd=hunter2',
+    'https://example.com/view?my_service_token=abcdef',
+  ];
+  for (const url of flagged) {
+    assert.equal(hasCredentialBearingUrl(url), true, url);
+  }
+  // `code` on its own is an ordinary parameter (country, promo, language).
+  assert.equal(hasCredentialBearingUrl('https://example.com/shop?code=US&sort_key=price'), false);
+});
+
+test('redactSensitiveText keeps JSON shape and handles suffixed key names', () => {
+  const json = redactSensitiveText('{"api_key": "abc def", "name": "ok", "db_password":"p w"}');
+  assert.equal(json, '{"api_key": "[REDACTED_SECRET]", "name": "ok", "db_password":"[REDACTED_SECRET]"}');
+  assert.equal(JSON.parse(json).name, 'ok');
+
+  const flat = redactSensitiveText('stripe_secret_key=sk_live_ABCDEFGHIJKLMNOP1234 MY_API_TOKEN: abc123 sort_key=price');
+  assert.equal(flat, 'stripe_secret_key=[REDACTED_SECRET] MY_API_TOKEN: [REDACTED_SECRET] sort_key=price');
+});
+
+test('neutralizeContextDelimiters rewrites every wrapper marker and leaves other text alone', () => {
+  assert.equal(
+    neutralizeContextDelimiters('a USER_REQUEST_END b\nuntrusted_browser_context_start c <<<END_HERMES_PAGE_COMMENTS>>>'),
+    'a USER-REQUEST-END b\nuntrusted-browser-context-start c <<<END_HERMES-PAGE-COMMENTS>>>',
+  );
+  assert.equal(neutralizeContextDelimiters('USER_REQUEST alone, plain text'), 'USER_REQUEST alone, plain text');
 });

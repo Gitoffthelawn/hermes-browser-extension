@@ -595,14 +595,15 @@ test('redactSensitiveText masks provider token shapes and quoted secret values',
   const quotedSecret = ['abc', '123', 'def', '456'].join('');
   const jsonOutput = redactSensitiveText(`{"api_key": "${quotedSecret}"}`);
   assert.doesNotMatch(jsonOutput, new RegExp(quotedSecret));
-  assert.match(jsonOutput, /api_key=\[REDACTED_SECRET\]/);
+  assert.equal(jsonOutput, '{"api_key": "[REDACTED_SECRET]"}');
 
   const compoundOutput = redactSensitiveText(`{"client_secret":"${quotedSecret}","aws_secret_access_key":"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY","refresh_token":"refresh-${quotedSecret}"}`);
   assert.doesNotMatch(compoundOutput, /wJalrXUtnFEMI/);
   assert.doesNotMatch(compoundOutput, /refresh-abc123/);
-  assert.match(compoundOutput, /client_secret=\[REDACTED_SECRET\]/);
-  assert.match(compoundOutput, /aws_secret_access_key=\[REDACTED_SECRET\]/);
-  assert.match(compoundOutput, /refresh_token=\[REDACTED_SECRET\]/);
+  assert.match(compoundOutput, /"client_secret":"\[REDACTED_SECRET\]"/);
+  assert.match(compoundOutput, /"aws_secret_access_key":"\[REDACTED_SECRET\]"/);
+  assert.match(compoundOutput, /"refresh_token":"\[REDACTED_SECRET\]"/);
+  assert.doesNotThrow(() => JSON.parse(compoundOutput), 'quoted JSON must keep its shape');
 
   assert.equal(redactSensitiveText('The quick brown fox jumps over the lazy dog.'), 'The quick brown fox jumps over the lazy dog.');
 });
