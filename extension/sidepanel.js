@@ -10319,7 +10319,17 @@ async function ensureProfileWsConnection({ readyTimeoutMs = 8_000, allowDashboar
     gatewayClient.on('profiles.changed', () => {
       void loadProfiles({ quiet: true });
     });
-    await connectGatewayWithTicket(gatewayClient, baseUrl, ticket.ticket);
+    await connectGatewayWithTicket(gatewayClient, baseUrl, ticket.ticket, {
+      refreshTicket: async () => {
+        const fresh = await mintWsTicket({
+          tabsApi: browserApi.tabs,
+          scriptingApi: browserApi.scripting,
+          baseUrl,
+          tabId: trustedTab.id,
+        });
+        return fresh?.ok ? fresh.ticket : '';
+      },
+    });
     profileWsConnection = { client: gatewayClient, baseUrl, key };
     return profileWsConnection;
   }
@@ -20756,7 +20766,17 @@ async function ensureRemoteWsClient() {
   await refreshContextConsentPrincipal({ dashboardPrincipal: ticket.principal });
   const client = createChatGatewayClient();
   try {
-    await connectGatewayWithTicket(client, baseUrl, ticket.ticket);
+    await connectGatewayWithTicket(client, baseUrl, ticket.ticket, {
+      refreshTicket: async () => {
+        const fresh = await mintWsTicket({
+          tabsApi: browserApi.tabs,
+          scriptingApi: browserApi.scripting,
+          baseUrl,
+          tabId: trustedDashboardTabId,
+        });
+        return fresh?.ok ? fresh.ticket : '';
+      },
+    });
   } catch (error) {
     console.warn('[Hermes] remote: WebSocket connect failed:', error?.message || error);
     throw error;

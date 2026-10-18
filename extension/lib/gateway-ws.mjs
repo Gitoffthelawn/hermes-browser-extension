@@ -216,15 +216,35 @@ export function gatewayWebSocketProtocols(ticket) {
  * Connect with a one-shot dashboard ticket. The ticket goes in
  * Sec-WebSocket-Protocol so it never lands in a URL (proxy and access logs
  * record request targets). A dashboard that predates ticket subprotocol
- * admission refuses the handshake before it opens; only then is the same,
- * still-unspent ticket retried in the query string the older dashboards read.
+ * admission refuses the handshake before it opens, and the query-string
+ * ticket the older dashboards read is tried instead.
+ *
+ * A current dashboard spends the ticket before it checks the request's host and
+ * origin, so a handshake refused after that point leaves the first ticket used
+ * up and looks, from here, exactly like the old dashboard's refusal. Pass
+ * `refreshTicket` (an async function returning a fresh ticket, or '') so the
+ * retry never offers a ticket that may already be spent. Without it the same
+ * ticket is retried, as before.
  */
-export async function connectGatewayWithTicket(client, baseUrl, ticket) {
+export async function connectGatewayWithTicket(client, baseUrl, ticket, { refreshTicket = null } = {}) {
   try {
     return await client.connect(buildDashboardWsEndpoint(baseUrl), gatewayWebSocketProtocols(ticket));
   } catch (error) {
     if (!/WebSocket closed before gateway\.ready and open\b/.test(String(error?.message || ''))) throw error;
-    return client.connect(buildDashboardWsUrl(baseUrl, ticket));
+    let fallbackTicket = ticket;
+    if (typeof refreshTicket === 'function') {
+      let fresh = '';
+      try {
+        fresh = String((await refreshTicket()) || '').trim();
+      } catch {
+        fresh = '';
+      }
+      // No fresh ticket: report the handshake failure itself rather than
+      // presenting a ticket the dashboard has probably consumed.
+      if (!fresh) throw error;
+      fallbackTicket = fresh;
+    }
+    return client.connect(buildDashboardWsUrl(baseUrl, fallbackTicket));
   }
 }
 

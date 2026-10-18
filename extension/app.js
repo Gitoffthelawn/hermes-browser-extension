@@ -806,7 +806,17 @@ async function ensureDashboardConnection() {
     if (dashboardConnection?.client === gatewayClient) dashboardConnection = null;
     dashboardLiveSessionId = '';
   });
-  await connectGatewayWithTicket(gatewayClient, settings.gatewayUrl, ticket.ticket);
+  await connectGatewayWithTicket(gatewayClient, settings.gatewayUrl, ticket.ticket, {
+    refreshTicket: async () => {
+      const fresh = await mintWsTicket({
+        tabsApi: browserApi.tabs,
+        scriptingApi: browserApi.scripting,
+        baseUrl: settings.gatewayUrl,
+        tabId,
+      });
+      return fresh?.ok ? fresh.ticket : '';
+    },
+  });
   dashboardConnection = { client: gatewayClient, origin: desiredOrigin, tabId };
   bindSubagentClient(gatewayClient);
   return dashboardConnection;
