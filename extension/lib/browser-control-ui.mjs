@@ -6,6 +6,7 @@ const VIEW_BEHAVIORS = new Set(['stay', 'follow']);
 
 const ACTION_LABELS = Object.freeze({
   browser_back: 'Going back',
+  browser_batch: 'Running steps',
   browser_click: 'Clicking',
   browser_navigate: 'Navigating',
   browser_press: 'Pressing a key',
