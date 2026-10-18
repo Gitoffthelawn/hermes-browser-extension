@@ -226,13 +226,13 @@ test('Chromium Phase 6 adapter emits trusted click, type, press, scroll, navigat
 
   assert.deepEqual(commandMethods(calls), [
     'DOM.enable', 'DOM.scrollIntoViewIfNeeded', 'DOM.getBoxModel', 'DOM.getNodeForLocation',
-    'Input.dispatchMouseEvent', 'Input.dispatchMouseEvent', 'Input.dispatchMouseEvent',
+    'Runtime.evaluate', 'Input.dispatchMouseEvent', 'Input.dispatchMouseEvent', 'Input.dispatchMouseEvent',
     'DOM.focus', 'DOM.resolveNode', 'Input.insertText',
     'Input.dispatchKeyEvent', 'Input.dispatchKeyEvent',
-    'Page.getLayoutMetrics', 'Input.dispatchMouseEvent', 'Runtime.evaluate',
+    'Page.getLayoutMetrics', 'Runtime.evaluate', 'Input.dispatchMouseEvent', 'Runtime.evaluate',
     'Page.enable', 'Page.navigate',
     'Page.getNavigationHistory', 'Page.navigateToHistoryEntry',
-    'Page.captureScreenshot',
+    'Runtime.evaluate', 'Page.captureScreenshot',
   ]);
   const mouse = calls.find((call) => call[0] === 'command' && call[2] === 'Input.dispatchMouseEvent' && call[3].type === 'mousePressed');
   assert.deepEqual({ x: mouse[3].x, y: mouse[3].y, button: mouse[3].button }, { x: 20, y: 30, button: 'left' });
@@ -853,9 +853,112 @@ test('Chromium scroll falls back to window.scrollBy when the wheel event fails a
   const result = await adapter.execute('browser_scroll', { direction: 'down', amount: 400 }, { scope, signal: openSignal() });
   assert.deepEqual(result, { status: 'scrolled' });
   const evaluations = chromium.calls.filter((call) => call[2] === 'Runtime.evaluate');
-  assert.match(evaluations[0][3].expression, /window\.scrollBy\(\{left:0,top:400,behavior:'auto'\}\)/);
-  assert.doesNotMatch(evaluations[0][3].expression, /down|args|direction|javascript:/i);
-  assert.equal(evaluations.length, 2, 'the position is still read after the fallback');
+  assert.match(evaluations[0][3].expression, /visibilityState/);
+  assert.match(evaluations[1][3].expression, /window\.scrollBy\(\{left:0,top:400,behavior:'auto'\}\)/);
+  assert.doesNotMatch(evaluations[1][3].expression, /down|args|direction|javascript:/i);
+  assert.equal(evaluations.length, 3, 'visibility is probed first and the position is still read after the fallback');
+});
+
+test('Chromium scroll in a hidden tab skips the wheel event, which Chrome would hold until the tab is shown', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  const position = { scrollX: 0, scrollY: 680, maxY: 4_000, atTop: false, atBottom: false };
+  chromium.handlers['Runtime.evaluate'] = ({ expression }) => (
+    /visibilityState/.test(expression) ? { result: { value: true } } : { result: { value: position } }
+  );
+  const adapter = createChromiumCdpAdapter({ browserApi: chromium.api, ...fakeClock() });
+  const result = await adapter.execute('browser_scroll', { direction: 'down' }, { scope, signal: openSignal() });
+  assert.deepEqual(result, { status: 'scrolled', position });
+  assert.deepEqual(mouseEvents(chromium.calls), [], 'no wheel event is queued for a hidden tab');
+  const scrolls = chromium.calls.filter((call) => call[2] === 'Runtime.evaluate' && /window\.scrollBy/.test(call[3].expression));
+  assert.equal(scrolls.length, 1);
+  assert.match(scrolls[0][3].expression, /window\.scrollBy\(\{left:0,top:680,behavior:'auto'\}\)/);
+});
+
+test('Chromium scroll at a ref in a hidden tab scrolls the nearest scrollable ancestor in the page', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  chromium.handlers['Runtime.evaluate'] = ({ expression }) => (
+    /visibilityState/.test(expression) ? { result: { value: true } } : { result: { value: null } }
+  );
+  chromium.handlers['DOM.resolveNode'] = () => ({ object: { objectId: 'object-44' } });
+  const adapter = createChromiumCdpAdapter({ browserApi: chromium.api, ...fakeClock() });
+  await adapter.execute('browser_scroll', { direction: 'down', amount: 300 }, { scope, signal: openSignal(), target: clickTarget });
+  assert.deepEqual(mouseEvents(chromium.calls), []);
+  const call = chromium.calls.find((entry) => entry[2] === 'Runtime.callFunctionOn' && /scrollBy/.test(entry[3].functionDeclaration || ''));
+  assert.ok(call, 'the node scroll helper runs against the resolved element');
+  assert.deepEqual(call[3].arguments, [{ value: 0 }, { value: 300 }]);
+  assert.doesNotMatch(call[3].functionDeclaration, /eval|Function\(/);
+});
+
+function hiddenTabHandlers(chromium) {
+  chromium.handlers['Runtime.evaluate'] = ({ expression }) => (
+    /visibilityState/.test(expression) ? { result: { value: true } } : { result: { value: null } }
+  );
+}
+
+test('Chromium click in a hidden tab sends press and release but not the mouseMoved Chrome would hold', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  hiddenTabHandlers(chromium);
+  const adapter = createChromiumCdpAdapter({ browserApi: chromium.api, ...fakeClock() });
+  const result = await adapter.execute('browser_click', { ref: '@e1' }, { scope, signal: openSignal(), target: clickTarget });
+  assert.equal(result.status, 'clicked');
+  assert.deepEqual(mouseEvents(chromium.calls).map(({ type }) => type), ['mousePressed', 'mouseReleased']);
+});
+
+test('Chromium hover and drag in a hidden tab fail fast with tab_hidden instead of hanging', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  hiddenTabHandlers(chromium);
+  const adapter = createChromiumCdpAdapter({ browserApi: chromium.api, ...fakeClock() });
+  for (const action of ['browser_hover', 'browser_drag']) {
+    await assert.rejects(
+      adapter.execute(action, { ref: '@e1', destination_ref: '@e2' }, {
+        scope, signal: openSignal(), target: clickTarget, destination: { backendDOMNodeId: 45 },
+      }),
+      (error) => error.code === 'tab_hidden' && /browser_tab_activate/.test(error.message),
+    );
+  }
+  assert.deepEqual(mouseEvents(chromium.calls), []);
+});
+
+test('Chromium screenshot of a hidden tab stops waiting for a frame that never comes', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  hiddenTabHandlers(chromium);
+  chromium.handlers['Page.captureScreenshot'] = () => new Promise(() => {});
+  const timers = [];
+  const adapter = createChromiumCdpAdapter({
+    browserApi: chromium.api,
+    ...fakeClock(),
+    setTimer: (callback, ms) => {
+      timers.push(ms);
+      if (ms === 5_000) callback();
+      return timers.length;
+    },
+    clearTimer: () => {},
+  });
+  await assert.rejects(
+    adapter.execute('browser_screenshot', {}, { scope, signal: openSignal() }),
+    (error) => error.code === 'tab_hidden' && /browser_tab_activate/.test(error.message),
+  );
+  assert.ok(timers.includes(5_000));
+});
+
+test('Chromium screenshot of a visible tab is not time-limited', async () => {
+  const { createChromiumCdpAdapter } = await adaptersModule();
+  const chromium = chromiumApis();
+  const timers = [];
+  const adapter = createChromiumCdpAdapter({
+    browserApi: chromium.api,
+    ...fakeClock(),
+    setTimer: (callback, ms) => { timers.push(ms); return timers.length; },
+    clearTimer: () => {},
+  });
+  const result = await adapter.execute('browser_screenshot', {}, { scope, signal: openSignal() });
+  assert.match(result.dataUrl, /^data:image\/png;base64,/);
+  assert.equal(timers.includes(5_000), false);
 });
 
 test('Chromium scroll at a ref scrolls the element into view and wheels over its centre', async () => {
@@ -1203,12 +1306,12 @@ test('Chromium settle gives a loading page the load budget, not the quiet-window
   chromium.tabs.set(7, { ...chromium.tabs.get(7), status: 'loading', url: 'https://example.test/slow' });
   const originalGet = chromium.api.tabs.get;
   chromium.api.tabs.get = async (tabId) => {
-    if (clock.now() >= 3_000) chromium.tabs.set(7, { ...chromium.tabs.get(7), status: 'complete', title: 'Slow page' });
+    if (clock.now() >= 5_000) chromium.tabs.set(7, { ...chromium.tabs.get(7), status: 'complete', title: 'Slow page' });
     return originalGet(tabId);
   };
   const settled = await adapter.settle({ scope, signal: openSignal(), mode: 'dom', timeoutMs: 1_200, loadTimeoutMs: 8_000 });
   assert.deepEqual(settled, { navigated: true, url: 'https://example.test/slow', title: 'Slow page', timedOut: false });
-  assert.ok(clock.now() >= 3_000, 'the page was read only after it finished loading');
+  assert.ok(clock.now() >= 5_000, 'the page was read only after it finished loading');
 
   // The load budget never outlasts what the caller has left.
   chromium.tabs.set(7, { ...chromium.tabs.get(7), status: 'loading' });

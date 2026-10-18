@@ -355,7 +355,7 @@ test('Phase 6 executor rejects an adapter that bypasses the screenshot transport
   assert.deepEqual(result, { ok: false, error: { code: 'screenshot_too_large', message: 'The screenshot exceeds the inline Phase 6 transport cap.' } });
 });
 
-test('Phase 6 keeps the stale_ref and navigation_failed codes adapter errors carry and hides unknown ones', async () => {
+test('Phase 6 keeps the stale_ref, navigation_failed and tab_hidden codes adapter errors carry and hides unknown ones', async () => {
   const { createBrowserControlExecutor } = await executorModule();
   const refs = createBrowserControlRefStore();
   refs.replace({ ...scope, nodes: [{ role: 'button', name: 'Search', backendDOMNodeId: 44 }] });
@@ -377,6 +377,11 @@ test('Phase 6 keeps the stale_ref and navigation_failed codes adapter errors car
   failure = coded('navigation_failed', 'Navigation failed: net::ERR_NAME_NOT_RESOLVED');
   const navigation = await executor.execute(frame('browser_navigate', { url: 'https://nope.invalid/' }), { scope });
   assert.equal(navigation.error.code, 'navigation_failed');
+
+  failure = coded('tab_hidden', 'browser_hover needs the tab to be showing, but it is in the background. Use browser_tab_activate to bring it forward, then try again.');
+  const hidden = await executor.execute(frame('browser_click', { ref: '@e1' }), { scope });
+  assert.equal(hidden.error.code, 'tab_hidden');
+  assert.match(hidden.error.message, /browser_tab_activate/);
 
   failure = coded('debugger_conflict', 'Another debugger controls this tab: x');
   assert.equal((await executor.execute(frame('browser_click', { ref: '@e1' }), { scope })).error.code, 'command_error');

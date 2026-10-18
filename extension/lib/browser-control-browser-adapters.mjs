@@ -12,6 +12,7 @@ const LOAD_POLL_MS = 100;
 const LOAD_START_GRACE_MS = 600;
 const DOM_QUIET_MS = 150;
 const DOM_SETTLE_CAP_MS = 1_200;
+const HIDDEN_CAPTURE_TIMEOUT_MS = 5_000;
 const SCROLL_SETTLE_MS = 120;
 const SCROLL_MIN_PX = 100;
 const SCROLL_MAX_PX = 5_000;
@@ -57,6 +58,27 @@ const CLEAR_FIELD_FUNCTION = `function() {
     selection.addRange(range);
     return true;
   }
+  return false;
+}`;
+// Scrolls the nearest scrollable ancestor of the node (or the window) without
+// input events; used when the tab is hidden and a wheel event would never be
+// acknowledged.
+const SCROLL_NODE_FUNCTION = `function(deltaX, deltaY) {
+  const scrollable = (node, axis) => {
+    const style = getComputedStyle(node);
+    return axis === 'y'
+      ? /(auto|scroll|overlay)/.test(style.overflowY) && node.scrollHeight > node.clientHeight
+      : /(auto|scroll|overlay)/.test(style.overflowX) && node.scrollWidth > node.clientWidth;
+  };
+  let node = this.nodeType === 1 ? this : this.parentElement;
+  while (node && node !== document.documentElement && node !== document.body) {
+    if ((deltaY && scrollable(node, 'y')) || (deltaX && scrollable(node, 'x'))) {
+      node.scrollBy({ left: deltaX, top: deltaY, behavior: 'auto' });
+      return true;
+    }
+    node = node.parentElement;
+  }
+  window.scrollBy({ left: deltaX, top: deltaY, behavior: 'auto' });
   return false;
 }`;
 const CONTAINS_NODE_FUNCTION = 'function(node) { return this === node || this.contains(node); }';
@@ -136,6 +158,23 @@ function codedError(code, message) {
   const error = new Error(message);
   error.code = code;
   return error;
+}
+
+function hiddenTabError(action) {
+  return codedError(
+    'tab_hidden',
+    `${action} needs the tab to be showing, but it is in the background. Use browser_tab_activate to bring it forward, then try again.`,
+  );
+}
+
+// Rejects with makeError() when the promise has not settled in time. The
+// original promise is left to settle on its own.
+function withTimeout(promise, ms, makeError, setTimer, clearTimer) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimer(() => reject(makeError()), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimer(timer));
 }
 
 function defaultSleep(ms) {
@@ -920,6 +959,43 @@ function createChromiumCdpAdapter({
     }
   }
 
+  async function pageIsHidden(send, signal) {
+    try {
+      const evaluated = await send('Runtime.evaluate', {
+        expression: "document.visibilityState === 'hidden'",
+        returnByValue: true,
+      });
+      return evaluated?.result?.value === true;
+    } catch (error) {
+      if (abortError(signal)) throw error;
+      return false;
+    }
+  }
+
+  async function scrollWithoutWheel(send, signal, backendNodeId, deltaX, deltaY) {
+    if (backendNodeId > 0) {
+      try {
+        const resolved = await send('DOM.resolveNode', { backendNodeId });
+        const objectId = String(resolved?.object?.objectId || '');
+        if (objectId) {
+          await send('Runtime.callFunctionOn', {
+            objectId,
+            functionDeclaration: SCROLL_NODE_FUNCTION,
+            arguments: [{ value: deltaX }, { value: deltaY }],
+            returnByValue: true,
+          });
+          return;
+        }
+      } catch (error) {
+        if (abortError(signal)) throw error;
+      }
+    }
+    await send('Runtime.evaluate', {
+      expression: `window.scrollBy({left:${deltaX},top:${deltaY},behavior:'auto'})`,
+      returnByValue: true,
+    });
+  }
+
   async function performScroll({ send, enable }, args, target, signal) {
     const { axis, sign } = scrollDirection(args.direction);
     let metrics = {};
@@ -939,20 +1015,25 @@ function createChromiumCdpAdapter({
     const deltaY = axis === 'y' ? sign * amount : 0;
     let point = { x: viewportWidth / 2, y: viewportHeight / 2 };
     const backendNodeId = Number(target?.backendDOMNodeId);
-    if (Number.isInteger(backendNodeId) && backendNodeId > 0) {
+    const hasNode = Number.isInteger(backendNodeId) && backendNodeId > 0;
+    if (hasNode) {
       await enable('DOM');
       point = await nodeCenter(send, backendNodeId);
     }
-    try {
-      await send('Input.dispatchMouseEvent', {
-        type: 'mouseWheel', x: Math.round(point.x), y: Math.round(point.y), deltaX, deltaY,
-      });
-    } catch (error) {
-      if (abortError(signal)) throw error;
-      await send('Runtime.evaluate', {
-        expression: `window.scrollBy({left:${deltaX},top:${deltaY},behavior:'auto'})`,
-        returnByValue: true,
-      });
+    // A hidden tab never produces frames, so Chrome would hold the wheel event
+    // until the tab is shown again and the action would hang. Scroll through
+    // the page instead.
+    if (await pageIsHidden(send, signal)) {
+      await scrollWithoutWheel(send, signal, hasNode ? backendNodeId : 0, deltaX, deltaY);
+    } else {
+      try {
+        await send('Input.dispatchMouseEvent', {
+          type: 'mouseWheel', x: Math.round(point.x), y: Math.round(point.y), deltaX, deltaY,
+        });
+      } catch (error) {
+        if (abortError(signal)) throw error;
+        await scrollWithoutWheel(send, signal, 0, deltaX, deltaY);
+      }
     }
     await sleep(SCROLL_SETTLE_MS);
     assertNotAborted(signal);
@@ -1028,7 +1109,11 @@ function createChromiumCdpAdapter({
         } else {
           point = pointForArgs(args);
         }
-        await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point, button: 'none', buttons: 0 });
+        // Chrome holds a mouseMoved until the next frame, which a hidden tab
+        // never draws; the press and release are delivered regardless.
+        if (!await pageIsHidden(send, signal)) {
+          await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point, button: 'none', buttons: 0 });
+        }
         await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', buttons: 1, clickCount: 1 });
         await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', buttons: 0, clickCount: 1 });
         return { status: 'clicked', ...(obscured ? { obscured: true } : {}) };
@@ -1039,6 +1124,7 @@ function createChromiumCdpAdapter({
         await enable('DOM');
         const sourcePoint = await nodeCenter(send, sourceNodeId);
         if (action === 'browser_scroll_to') return { status: 'scrolled-to-target' };
+        if (await pageIsHidden(send, signal)) throw hiddenTabError(action);
         await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...sourcePoint, button: 'none', buttons: 0 });
         if (action === 'browser_hover') return { status: 'hovered' };
         const destinationNodeId = Number(destination?.backendDOMNodeId);
@@ -1158,11 +1244,16 @@ function createChromiumCdpAdapter({
           await send('DOM.scrollIntoViewIfNeeded', { backendNodeId });
           clip = screenshotClip(await send('DOM.getBoxModel', { backendNodeId }), args.zoom);
         }
-        const captured = await send('Page.captureScreenshot', {
+        const hidden = await pageIsHidden(send, signal);
+        const capture = send('Page.captureScreenshot', {
           format: 'png',
           fromSurface: true,
           ...(clip ? { clip } : {}),
         });
+        // A hidden tab may never produce the frame a capture waits for.
+        const captured = await (hidden
+          ? withTimeout(capture, HIDDEN_CAPTURE_TIMEOUT_MS, () => hiddenTabError(action), setTimer, clearTimer)
+          : capture);
         return boundedScreenshot(`data:image/png;base64,${String(captured?.data || '')}`);
       }
       throw new Error(`Action ${action} is not implemented by the Chromium adapter.`);
