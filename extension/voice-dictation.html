@@ -58,9 +58,21 @@
         white-space: pre-wrap;
         overflow-wrap: anywhere;
       }
-      .voice-actions { flex-wrap: wrap; }
+      .voice-actions { flex-wrap: nowrap; gap: 8px; align-items: stretch; }
+      .voice-actions button {
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: 42px;
+        box-sizing: border-box;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        white-space: normal;
+        line-height: 1.2;
+      }
       .voice-actions #startVoiceButton {
-        margin-left: auto;
+        margin-left: 0;
         background: var(--hermes-primary-bg);
         color: var(--hermes-primary-fg);
         border-color: var(--hermes-primary-border);

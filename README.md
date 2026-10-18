@@ -198,7 +198,9 @@ Fix:
 
 ### Skills or profiles do not load
 
-Startup shows Skills and Profiles separately. A current Hermes connection can load profiles and skills through its API routes when no dashboard is available. Older connections keep the dashboard path, and a missing route preserves the last loaded details instead of clearing them. A connected gateway does not guarantee that every catalog route is available.
+Startup shows Skills and Profiles separately. A current Hermes connection can load profiles and skills through its API routes when no dashboard is available. Older connections keep the dashboard path, and a missing route preserves the last loaded details instead of clearing them. A connected gateway does not guarantee that every catalog route is available, and each route is advertised on its own.
+
+Images attached earlier in a session load again when the gateway serves its stored files. On a gateway that does not, the panel keeps the previews it still has and shows the file names for the rest.
 
 After the Hermes backend is responding again, reopen the panel or use **Test connection** to retry. Existing skills and profiles are not deleted by a catalog timeout.
 

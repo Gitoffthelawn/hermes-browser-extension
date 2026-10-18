@@ -157,3 +157,37 @@ test('history refresh keeps composer screenshots when Hermes stored a turn envel
   assert.equal(merged[0].attachments[0].name, 'image.png');
   assert.equal(merged[0].attachments[0].dataUrl, TRANSPARENT_PNG_DATA_URL);
 });
+
+test('history media finds images in a turn envelope followed by attached-image lines', () => {
+  const envelope = JSON.stringify({
+    protocol: 'hermes.browser.turn.v2',
+    human_input: { source: 'composer', text: 'look at these' },
+    attachment_context: { items: [{ kind: 'image', label: 'image.png', local_path: '' }] },
+  });
+  const dir = 'C:/Users/someone/.hermes/cache/documents/native-inputs';
+  const first = `${dir}/aaa/api_1.png`;
+  const second = `${dir}/bbb/api_2.png`;
+  const content = `${envelope}\n\n[Image attached at: ${first}]\n[Image attached at: ${second}]\n[screenshot]`;
+  const found = imageRender.extractHistoryMediaAttachments({ role: 'user', content });
+  assert.deepEqual(found.map((item) => item.pathRef), [first, second]);
+  assert.equal(imageRender.parseTurnEnvelope(content)?.human_input?.text, 'look at these');
+  assert.equal(imageRender.parseTurnEnvelope('plain composer text'), null);
+});
+
+test('history media reads Windows paths from attached-image lines', () => {
+  const winPath = ['C:', 'Users', 'someone', '.hermes', 'cache', 'documents', 'native-inputs', 'aaa', 'api_1.png'].join(String.fromCharCode(92));
+  const envelope = JSON.stringify({ protocol: 'hermes.browser.turn.v2', human_input: { source: 'composer', text: 'win' } });
+  const found = imageRender.extractHistoryMediaAttachments({ role: 'user', content: `${envelope}\n\n[Image attached at: ${winPath}]` });
+  assert.deepEqual(found.map((item) => item.pathRef), [winPath]);
+  assert.equal(found[0].name, 'api_1.png');
+});
+
+test('local image previews survive a reload when the stored turn has trailing attachment lines', () => {
+  const text = 'look at these';
+  const envelope = JSON.stringify({ protocol: 'hermes.browser.turn.v2', human_input: { source: 'composer', text } });
+  const remote = { role: 'user', content: `${envelope}\n\n[Image attached at: C:/x/.hermes/cache/a.png]` };
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const local = [{ role: 'user', content: text, attachments: [{ kind: 'image', name: 'a.png', dataUrl: png }] }];
+  const [kept] = imageRender.preserveUserImageAttachments([remote], local);
+  assert.equal(imageRender.normalizeUserImageAttachments(kept.attachments).length, 1);
+});
