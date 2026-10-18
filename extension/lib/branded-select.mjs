@@ -1,6 +1,8 @@
 // Custom listbox for native selects whose OS popup cannot use the panel scrollbar.
 // The original select stays in the DOM so existing change handlers and tests keep working.
 
+let anonymousSelectCount = 0;
+
 export function mountBrandedSelect(select, { previewFont, language = false } = {}) {
   if (!select) return null;
   if (select.brandedSelect) {
@@ -13,14 +15,17 @@ export function mountBrandedSelect(select, { previewFont, language = false } = {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'branded-select-button';
-  button.id = `${select.id}Button`;
+  // A select without an id still needs unique ids for its button and list, or
+  // every such select shares "Button" and "List" and aria-controls is ambiguous.
+  const baseId = select.id || `brandedSelect${anonymousSelectCount += 1}`;
+  button.id = `${baseId}Button`;
   button.setAttribute('aria-haspopup', 'listbox');
   button.setAttribute('aria-expanded', 'false');
   const list = document.createElement('div');
   list.className = 'branded-select-list';
   list.hidden = true;
   list.setAttribute('role', 'listbox');
-  list.id = `${select.id}List`;
+  list.id = `${baseId}List`;
   button.setAttribute('aria-controls', list.id);
   root.append(button, list);
   select.after(root);
