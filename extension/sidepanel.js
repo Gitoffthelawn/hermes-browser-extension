@@ -259,6 +259,7 @@ import { extractYouTubeVideoId } from './lib/transcript.mjs';
 import {
   buildDashboardWsUrl,
   buildDashboardWsUrlWithCredential,
+  connectGatewayWithTicket,
   buildSessionModelSwitchRequest,
   createGatewayClient,
   establishGatewaySession,
@@ -10205,7 +10206,7 @@ async function ensureProfileWsConnection({ readyTimeoutMs = 8_000, allowDashboar
     gatewayClient.on('profiles.changed', () => {
       void loadProfiles({ quiet: true });
     });
-    await gatewayClient.connect(buildDashboardWsUrl(baseUrl, ticket.ticket));
+    await connectGatewayWithTicket(gatewayClient, baseUrl, ticket.ticket);
     profileWsConnection = { client: gatewayClient, baseUrl, key };
     return profileWsConnection;
   }
@@ -20431,10 +20432,9 @@ async function ensureRemoteWsClient() {
     throw error;
   }
   await refreshContextConsentPrincipal({ dashboardPrincipal: ticket.principal });
-  const wsUrl = buildDashboardWsUrl(baseUrl, ticket.ticket);
   const client = createGatewayClient();
   try {
-    await client.connect(wsUrl);
+    await connectGatewayWithTicket(client, baseUrl, ticket.ticket);
   } catch (error) {
     console.warn('[Hermes] remote: WebSocket connect failed:', error?.message || error);
     throw error;

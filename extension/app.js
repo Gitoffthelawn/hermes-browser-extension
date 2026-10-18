@@ -195,7 +195,7 @@ import {
   sessionContextFailureRecovery,
   turnRequestFailureState,
 } from './lib/turn-recovery.mjs';
-import { buildDashboardWsUrl, buildDashboardWsUrlWithCredential, buildSessionListParams, buildSessionModelSwitchRequest, createGatewayClient, establishGatewaySession, normalizeGatewayHistoryMessages, runtimeModelFromSessionStatus, WS_EVENTS, WS_METHODS } from './lib/gateway-ws.mjs';
+import { buildDashboardWsUrlWithCredential, connectGatewayWithTicket, buildSessionListParams, buildSessionModelSwitchRequest, createGatewayClient, establishGatewaySession, normalizeGatewayHistoryMessages, runtimeModelFromSessionStatus, WS_EVENTS, WS_METHODS } from './lib/gateway-ws.mjs';
 import { createDashboardStreamWatchdog, dashboardWatchdogTimeoutAction, matchesDashboardSessionEvent, shouldReattachDashboardStream } from './lib/dashboard-stream-watchdog.mjs';
 import { isTrustedDashboardOrigin, mintWsTicket, originOf, ticketFailureHelp } from './lib/dashboard-bridge.mjs';
 import {
@@ -725,7 +725,7 @@ async function ensureDashboardConnection() {
     if (dashboardConnection?.client === gatewayClient) dashboardConnection = null;
     dashboardLiveSessionId = '';
   });
-  await gatewayClient.connect(buildDashboardWsUrl(settings.gatewayUrl, ticket.ticket));
+  await connectGatewayWithTicket(gatewayClient, settings.gatewayUrl, ticket.ticket);
   dashboardConnection = { client: gatewayClient, origin: desiredOrigin, tabId };
   bindSubagentClient(gatewayClient);
   return dashboardConnection;
