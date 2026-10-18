@@ -20,7 +20,7 @@ Voice dictation uses the API transcription route first, then the dashboard route
 
 ### Native Hermes computer use is not working
 
-Hermes Browser Extension does not request browser-control permissions and does not drive pages itself. Native desktop control comes from Hermes Agent's `computer_use` toolset via `cua-driver`.
+Hermes Browser Extension does not control your desktop. Chromium builds request the `debugger` permission only for opt-in Hermes Control, which drives tabs you attach; Firefox builds omit it. Native desktop control is separate and comes from Hermes Agent's `computer_use` toolset via `cua-driver`.
 
 On the machine running Hermes, verify computer use directly:
 

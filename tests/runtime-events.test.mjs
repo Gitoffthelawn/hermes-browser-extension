@@ -53,6 +53,41 @@ test('normalizeBrowserRuntimeEvent maps current Hermes stream aliases to stable 
   assert.match(finished.preview, /Authorization: (?:Bearer \[REDACTED_BEARER\]|\*\*\*|\[REDACTED\])/);
 });
 
+test('upstream REST tool.completed and tool.failed finish the tool row instead of becoming unknown', async () => {
+  const { normalizeToolActivity } = await import('../extension/lib/common.mjs');
+  const { mergeToolCallActivity } = await import('../extension/lib/tool-call-group.mjs');
+
+  const completed = normalizeBrowserRuntimeEvent({ type: 'tool.completed', data: { message_id: 'm1', tool_name: 'read_file', preview: 'README.md' } });
+  assert.equal(completed.name, 'tool.finished');
+  assert.equal(completed.status, 'completed');
+  assert.equal(completed.toolName, 'read_file');
+
+  const failed = normalizeBrowserRuntimeEvent({ type: 'tool.failed', data: { message_id: 'm1', tool_name: 'terminal', preview: 'exit 1' } });
+  assert.equal(failed.name, 'tool.finished');
+  assert.equal(failed.status, 'failed');
+  assert.equal(failed.toolName, 'terminal');
+
+  // An explicit status from the payload still wins.
+  assert.equal(normalizeBrowserRuntimeEvent({ type: 'tool.failed', data: { tool_name: 'x', status: 'error' } }).status, 'error');
+
+  // End to end: started then completed/failed leave one finished row per call.
+  let calls = [];
+  for (const event of [
+    { type: 'tool.started', data: { tool_name: 'read_file' } },
+    { type: 'tool.completed', data: { tool_name: 'read_file' } },
+    { type: 'tool.started', data: { tool_name: 'terminal' } },
+    { type: 'tool.failed', data: { tool_name: 'terminal' } },
+  ]) calls = mergeToolCallActivity(calls, normalizeToolActivity(normalizeBrowserRuntimeEvent(event)));
+  assert.deepEqual(calls.map((call) => [call.rawName, call.status]), [['read_file', 'completed'], ['terminal', 'failed']]);
+});
+
+test('unknown runtime events keep the payload status', () => {
+  const unknown = normalizeBrowserRuntimeEvent({ type: 'hermes.future.event', data: { status: 'Running', message: 'hi' } });
+  assert.equal(unknown.name, 'runtime.unknown');
+  assert.equal(unknown.status, 'running');
+  assert.equal(normalizeBrowserRuntimeEvent({ type: 'hermes.future.event', data: {} }).status, '');
+});
+
 test('final assistant.completed media content wins over raw deltas and run transcript history', () => {
   const rawMedia = 'Yep.\n\nMEDIA:C:\\Users\\Jaybo\\generated.png';
   const deliveredImage = 'Yep.\n\n![image](data:image/png;base64,aGVybWVz)';

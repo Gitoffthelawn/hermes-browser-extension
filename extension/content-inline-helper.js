@@ -73,10 +73,22 @@
     return [0, 2, 4].map((offset) => Number.parseInt(expanded.slice(offset, offset + 2), 16)).join(',');
   }
 
+  // Page scripts can dispatch synthetic events at any node they can reach, so
+  // every Assist control only reacts to events the browser itself produced
+  // (a real click, key press, or toggle by the user).
+  function trustedOnly(handler) {
+    return function trustedHandler(event, ...rest) {
+      if (!event || event.isTrusted !== true) return undefined;
+      return handler.call(this, event, ...rest);
+    };
+  }
+
   const host = make('div');
   host.id = 'hermes-inline-draft-host';
   host.setAttribute('data-hermes-owned', 'true');
-  const shadow = host.attachShadow({ mode: 'open' });
+  // Closed root: page scripts must not be able to reach Assist's controls or read
+// results (reply text, chat title) back out of its DOM.
+  const shadow = host.attachShadow({ mode: 'closed' });
   const style = make('style');
   style.textContent = `
     :host { all:initial; position:fixed; z-index:2147483646; inset:0; pointer-events:none; --hb-surface:#0d0d0d; --hb-paper:#171717; --hb-blue:#e5e5e5; --hb-fg:#f1f1f1; --hb-accent:#c9c9c9; --hb-logo:#0d0d0d; --hb-logo-bg:#f5f5f5; --hb-line:color-mix(in srgb,var(--hb-blue) 24%,transparent); --hb-muted:color-mix(in srgb,var(--hb-blue) 68%,transparent); --hb-soft:color-mix(in srgb,var(--hb-accent) 12%,var(--hb-paper)); --hermes-fg-rgb:241,241,241; --hermes-line-strong:rgba(229,229,229,0.78); --hermes-text-zoom:1; font-family:"Segoe UI",Arial,sans-serif; color-scheme:dark; }
@@ -625,9 +637,9 @@
       contextToggle.type = 'checkbox';
       contextToggle.checked = usesVisibleContext;
       contextToggle.setAttribute('aria-label', translateUiText(`Use visible ${profile.label} context`));
-      contextToggle.addEventListener('change', () => {
+      contextToggle.addEventListener('change', trustedOnly(() => {
         void persistSiteContextMode(profile.adapterId, contextToggle.checked ? 'visible' : 'draft');
-      });
+      }));
       contextSetting.append(contextCopy, contextToggle);
       nodes.push(contextSetting);
       if (usesVisibleContext && profile.contextPolicy.warning) nodes.push(make('p', 'privacy', profile.contextPolicy.warning));
@@ -639,7 +651,7 @@
       const actionButton = button(`action${index === 0 ? ' primary' : ''}`, action.label);
       actionButton.dataset.actionId = action.id;
       actionButton.appendChild(make('small', '', action.detail || action.instruction || 'Use this field only'));
-      actionButton.addEventListener('click', () => beginAction(action));
+      actionButton.addEventListener('click', trustedOnly(() => beginAction(action)));
       actionsNode.appendChild(actionButton);
     });
     const localLabel = make('span', 'section-label', 'Instant tools · no model call');
@@ -648,7 +660,7 @@
       const actionButton = button('action', action.label);
       actionButton.dataset.actionId = action.id;
       actionButton.appendChild(make('small', '', action.detail));
-      actionButton.addEventListener('click', () => runLocalAction(action));
+      actionButton.addEventListener('click', trustedOnly(() => runLocalAction(action)));
       localNode.appendChild(actionButton);
     });
     const customLabel = make('span', 'section-label', 'Or tell Hermes exactly what you need');
@@ -662,14 +674,14 @@
       if (!text) return custom.focus();
       beginAction({ id: 'custom', label: text.slice(0, 1000), detail: 'Custom instruction', mode: 'draft-copy-only' });
     };
-    custom.addEventListener('keydown', (event) => {
+    custom.addEventListener('keydown', trustedOnly((event) => {
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
         event.preventDefault();
         event.stopPropagation();
         submitCustom();
       }
-    });
-    customGo.addEventListener('click', submitCustom);
+    }));
+    customGo.addEventListener('click', trustedOnly(submitCustom));
     customRow.append(custom, customGo);
     const setting = make('label', 'setting');
     const settingCopy = make('span');
@@ -685,7 +697,7 @@
     toggle.type = 'checkbox';
     toggle.checked = supportsSafeApply && autoReplace;
     toggle.disabled = !supportsSafeApply;
-    toggle.addEventListener('change', () => { autoReplace = toggle.checked; });
+    toggle.addEventListener('change', trustedOnly(() => { autoReplace = toggle.checked; }));
     setting.append(settingCopy, toggle);
     nodes.push(label, actionsNode, localLabel, localNode, customLabel, customRow, setting);
     setBody(...nodes);
@@ -725,10 +737,10 @@
       copy.append(make('strong', '', route.title), make('small', '', route.detail));
       if (route.tag) copy.appendChild(make('span', 'tag', route.tag));
       routeButton.append(make('span', 'route-num', route.num), copy, make('span', 'arrow', '→'));
-      routeButton.addEventListener('click', async () => {
+      routeButton.addEventListener('click', trustedOnly(async () => {
         if (rememberRoute) await persistDefaultRoute(route.route);
         await requestDraft(pendingAction, route.route);
-      });
+      }));
       return routeButton;
     });
     const rememberSetting = make('label', 'setting');
@@ -737,7 +749,7 @@
     const rememberToggle = make('input', 'toggle');
     rememberToggle.type = 'checkbox';
     rememberToggle.checked = rememberRoute;
-    rememberToggle.addEventListener('change', () => { rememberRoute = rememberToggle.checked; });
+    rememberToggle.addEventListener('change', trustedOnly(() => { rememberRoute = rememberToggle.checked; }));
     rememberSetting.append(rememberCopy, rememberToggle);
     const privacy = make('p', 'privacy');
     privacy.append('Background runs stay in session history under ', make('strong', '', 'Inline assist'), '. They receive this bounded field snapshot—not other form values.');
@@ -790,7 +802,7 @@
     const title = make('h2', 'route-title', 'Assist could not run');
     const detail = make('p', 'status', reason || 'Hermes could not create this draft.');
     const back = button('action', 'Back to actions');
-    back.addEventListener('click', renderAssist);
+    back.addEventListener('click', trustedOnly(renderAssist));
     setBody(title, detail, back);
   }
 
@@ -894,10 +906,10 @@
     const copyButton = button('', 'Copy');
     const open = button('', 'Open session');
     open.disabled = !resultSessionId;
-    keep.addEventListener('click', applyResult);
-    undo.addEventListener('click', undoResult);
-    copyButton.addEventListener('click', copyResult);
-    open.addEventListener('click', renderOpenSessionChoices);
+    keep.addEventListener('click', trustedOnly(applyResult));
+    undo.addEventListener('click', trustedOnly(undoResult));
+    copyButton.addEventListener('click', trustedOnly(copyResult));
+    open.addEventListener('click', trustedOnly(renderOpenSessionChoices));
     actions.append(keep, undo, copyButton);
     if (resultSessionId) actions.append(open);
     const setting = make('label', 'setting');
@@ -911,7 +923,7 @@
     toggle.type = 'checkbox';
     toggle.checked = !copyOnly && autoReplace;
     toggle.disabled = copyOnly;
-    toggle.addEventListener('change', () => { autoReplace = toggle.checked; });
+    toggle.addEventListener('change', trustedOnly(() => { autoReplace = toggle.checked; }));
     setting.append(settingCopy, toggle);
     setBody(success, card, label, preview, actions, setting);
   }
@@ -964,7 +976,7 @@
       const copy = make('span');
       copy.append(make('strong', '', option.title), make('small', '', option.detail));
       routeButton.append(make('span', 'route-num', option.num), copy, make('span', 'arrow', '→'));
-      routeButton.addEventListener('click', () => {
+      routeButton.addEventListener('click', trustedOnly(() => {
         if (option.surface === 'web') {
           setBody(
             make('h2', 'route-title', 'A new surface is being worked on'),
@@ -974,11 +986,11 @@
           return;
         }
         openResultSession(option.surface);
-      });
+      }));
       return routeButton;
     });
     const back = button('action', 'Back to result');
-    back.addEventListener('click', () => renderResult());
+    back.addEventListener('click', trustedOnly(() => renderResult()));
     setBody(title, note, ...options, back);
   }
 
@@ -1009,6 +1021,7 @@
   }
 
   function onKey(event) {
+    if (event.isTrusted !== true) return;
     if (event.key === 'Escape') hidePanel();
   }
 
@@ -1017,6 +1030,7 @@
   }
 
   function onLauncherPointerDown(event) {
+    if (event.isTrusted !== true) return;
     event.preventDefault();
     event.stopPropagation();
     try {
@@ -1027,6 +1041,7 @@
   }
 
   function togglePanel(event) {
+    if (event.isTrusted !== true) return;
     event.preventDefault();
     event.stopPropagation();
     if (!panel.hidden) {
@@ -1087,7 +1102,7 @@
   launcher.addEventListener('pointerdown', onLauncherPointerDown);
   launcher.addEventListener('mousedown', onLauncherPointerDown);
   launcher.addEventListener('click', togglePanel);
-  close.addEventListener('click', hidePanel);
+  close.addEventListener('click', trustedOnly(hidePanel));
   browserApi.runtime.onMessage.addListener(onResult);
   browserApi.storage.onChanged.addListener(onStorageChanged);
   const unsubscribeI18n = i18n.subscribe(rerenderLocalizedView);

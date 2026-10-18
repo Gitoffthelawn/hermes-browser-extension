@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Chrome / Edge / Chromium 114+ side panel | Yes | Primary public support target. |
 | Brave / Comet / Chromium forks | Best-effort | Must expose the Chromium Side Panel API. |
-| Firefox | Install from [AMO](https://addons.mozilla.org/en-US/firefox/addon/hermes-browser-extension/) (Firefox 142+) | Chat and context only. Real-tab attach is Chromium-only; the Firefox package omits the debugger permission. |
+| Firefox | Install from [AMO](https://addons.mozilla.org/firefox/addon/hermes-browser-extension/) (Firefox 142+) | Chat and context only. Real-tab attach is Chromium-only; the Firefox package omits the debugger permission. |
 | Safari | Not shipped | No Safari package is included. |
 | Local Hermes API server | Yes | Default path: `http://127.0.0.1:8642`. |
 | Hermes Cloud | Yes, Trusted Dashboard Attach | Requires an active signed-in HTTPS Hermes Cloud agent tab. Chat-only. |

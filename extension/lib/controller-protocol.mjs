@@ -175,10 +175,14 @@ export function controllerRegistrationFor({ family, baseUrl, identity } = {}) {
     };
   }
   if (family === CONTROLLER_TRANSPORT_FAMILIES.CLOUD_TICKET_WS) {
+    // Upstream BrowserControllerRegisterParams (extra=forbid) has no `product`
+    // field, so the gateway-RPC call omits it. The REST registration keeps it.
+    // eslint-disable-next-line no-unused-vars
+    const { product, ...params } = registrationPayload(identity);
     return {
       transport: TRANSPORT_GATEWAY_RPC,
       method: CONTROLLER_METHODS.register,
-      params: registrationPayload(identity),
+      params,
     };
   }
   throw new Error(`Unsupported controller transport family: ${String(family || '')}`);

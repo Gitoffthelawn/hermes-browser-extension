@@ -18,6 +18,25 @@ export const WAKE_MESSAGES = Object.freeze({
   turnReply: 'HERMES_WAKE_TURN_REPLY',
 });
 
+// The only settings a WAKE_SET_ENABLED message may change. Everything else in
+// hermesBrowserSettings (gateway URL, API key, browser-control flags, ...) is
+// owned by its own settings paths and is never taken from a message payload.
+export const WAKE_SETTING_KEYS = Object.freeze([
+  'wakeWordPhrase',
+  'wakeWordPreferNative',
+  'wakeWordBrowserFallback',
+  'wakeWordSpeakReplies',
+]);
+
+export function pickWakeSettings(settings = {}) {
+  const source = settings && typeof settings === 'object' ? settings : {};
+  const picked = {};
+  for (const key of WAKE_SETTING_KEYS) {
+    if (Object.hasOwn(source, key)) picked[key] = source[key];
+  }
+  return picked;
+}
+
 function booleanSetting(value, fallback) {
   return typeof value === 'boolean' ? value : fallback;
 }

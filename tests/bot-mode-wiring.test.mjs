@@ -84,7 +84,7 @@ test('both Browser surfaces pass explicit profiles on list, history, create, and
   assert.match(sidepanelSource, /WS_METHODS\.sessionList,\s*\{[^}]*profile:/s);
   assert.match(sidepanelSource, /WS_METHODS\.sessionHistory,\s*\{[^}]*profile:/s);
   assert.match(sidepanelSource, /establishGatewaySession\(\{[^}]*profile:/s);
-  assert.match(appSource, /WS_METHODS\.sessionList,\s*\{[^}]*profile:/s);
+  assert.match(appSource, /WS_METHODS\.sessionList,\s*(?:buildSessionListParams\(\s*)?\{[^}]*profile:/s);
   assert.match(appSource, /WS_METHODS\.sessionHistory,\s*\{[^}]*profile:/s);
   assert.match(appSource, /establishGatewaySession\(\{[^}]*profile:/s);
 });

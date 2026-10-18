@@ -202,6 +202,13 @@ export function buildDashboardWsUrlWithCredential(baseUrl, credentialName, crede
   return `${scheme}//${parsed.host}${prefix}/api/ws?${credentialName}=${encodeURIComponent(String(credentialValue || ''))}`;
 }
 
+// Upstream SessionListParams (extra=forbid) accepts only profile, title, limit
+// and include_hidden. Sending anything else (e.g. `offset`) fails the call with
+// a 4000 invalid-params error, so keep this the single place that builds them.
+export function buildSessionListParams({ limit = 200, profile = '' } = {}) {
+  return { limit, profile: String(profile || '') };
+}
+
 export function buildSessionModelSwitchRequest({ sessionId = '', model = '', provider = '' } = {}) {
   const normalizedSessionId = String(sessionId || '').trim();
   const normalizedModel = String(model || '').trim();

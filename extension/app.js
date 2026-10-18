@@ -195,7 +195,7 @@ import {
   sessionContextFailureRecovery,
   turnRequestFailureState,
 } from './lib/turn-recovery.mjs';
-import { buildDashboardWsUrl, buildDashboardWsUrlWithCredential, buildSessionModelSwitchRequest, createGatewayClient, establishGatewaySession, normalizeGatewayHistoryMessages, runtimeModelFromSessionStatus, WS_EVENTS, WS_METHODS } from './lib/gateway-ws.mjs';
+import { buildDashboardWsUrl, buildDashboardWsUrlWithCredential, buildSessionListParams, buildSessionModelSwitchRequest, createGatewayClient, establishGatewaySession, normalizeGatewayHistoryMessages, runtimeModelFromSessionStatus, WS_EVENTS, WS_METHODS } from './lib/gateway-ws.mjs';
 import { createDashboardStreamWatchdog, dashboardWatchdogTimeoutAction, matchesDashboardSessionEvent, shouldReattachDashboardStream } from './lib/dashboard-stream-watchdog.mjs';
 import { isTrustedDashboardOrigin, mintWsTicket, originOf, ticketFailureHelp } from './lib/dashboard-bridge.mjs';
 import {
@@ -830,7 +830,7 @@ async function loadDashboardSessionMessages(storedSessionId, options = {}) {
 
 async function listDashboardSessions() {
   const connection = await ensureDashboardConnection();
-  const result = await connection.client.request(WS_METHODS.sessionList, { limit: 200, offset: 0, profile: settings.activeProfile || '' });
+  const result = await connection.client.request(WS_METHODS.sessionList, buildSessionListParams({ limit: 200, profile: settings.activeProfile }));
   return applySessionModelBindings(normalizeHermesSessions(result), settings.sessionModelBindings);
 }
 

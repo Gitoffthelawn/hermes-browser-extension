@@ -4,6 +4,7 @@ Thanks to everyone who has contributed to Hermes Browser Extension.
 
 | Contributor | Contribution |
 | --- | --- |
+| [Gitoffthelawn](https://github.com/Gitoffthelawn) | README wording that shows Firefox support and AMO links that no longer hard-code a locale, folded and corrected from [PR #121](https://github.com/abundantbeing/hermes-browser-extension/pull/121). |
 | [chrisworksai](https://github.com/chrisworksai) | Respect `HERMES_HOME` when locating the Hermes data directory in Windows setup, integrated from [PR #111](https://github.com/abundantbeing/hermes-browser-extension/pull/111). |
 | [xxkingstuggle](https://github.com/xxkingstuggle) | Exclude local distribution signing keys from source control in [PR #109](https://github.com/abundantbeing/hermes-browser-extension/pull/109). |
 | [KeyArgo](https://github.com/KeyArgo) | Stream handling fix for OpenAI-style SSE chunks that end with a terminal full-message payload; folded from [PR #12](https://github.com/abundantbeing/hermes-browser-extension/pull/12). |

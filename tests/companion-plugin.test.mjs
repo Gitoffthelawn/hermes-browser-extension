@@ -398,6 +398,32 @@ assert store.control_status_for_owner(owner(turn="turn-missing"))["control"]["av
 malformed = store.put_bcp_v2(envelope({"availability": "available", "tab_id": "41", "controller_id": FORBIDDEN}), owner(turn="turn-malformed"))
 assert store.control_status_for_owner(owner(turn="turn-malformed"))["control"]["availability"] == "unknown"
 
+# Control that was off for the turn is recorded as "not_requested", not "unknown", and carries no authority fields.
+off_control = {
+    "route": "extension-controller",
+    "availability": "not_requested",
+    "isolated_fallback": "forbidden",
+    "reason": "control_off",
+    "message": "Hermes Control is off for this turn.",
+    "controller_id": FORBIDDEN,
+    "tab_id": 41,
+}
+store.put_bcp_v2(envelope(off_control), owner(turn="turn-off"))
+off_status = store.control_status_for_owner(owner(turn="turn-off"))["control"]
+assert off_status == {
+    "availability": "not_requested",
+    "lease_owned": False,
+    "controller_id": "",
+    "browser_profile_id": "",
+    "tab_id": 0,
+    "frame_id": 0,
+    "document_generation": 0,
+}
+assert FORBIDDEN not in json.dumps(off_status)
+# The same availability without the controller route stays fail-closed unknown.
+store.put_bcp_v2(envelope({"availability": "not_requested", "route": "other", "isolated_fallback": "forbidden"}), owner(turn="turn-off-badroute"))
+assert store.control_status_for_owner(owner(turn="turn-off-badroute"))["control"]["availability"] == "unknown"
+
 # The tool is owner-authorized and explicitly historical-only.
 hooks.set_store(store)
 tools.set_store(store)

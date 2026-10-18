@@ -18,7 +18,7 @@ Browser-native side panel for [Hermes Agent](https://hermes-agent.nousresearch.c
 
 ## What it is
 
-Hermes Browser Extension is not a browser chatbot. It is a Chrome/Edge/Chromium side panel for the real Hermes Agent runtime. Choose a local gateway, attach to a signed-in Hermes Cloud agent tab, or connect to a self-hosted remote API/dashboard. Local and remote API connections can use the models, tools, skills, sessions, memory, and MCP servers already configured in Hermes; Cloud and dashboard-ticket connections are intentionally Chat-only.
+Hermes Browser Extension is not a browser chatbot. It is a Chromium side panel or Firefox sidebar for the real Hermes Agent runtime; tab control is Chromium-only. Choose a local gateway, attach to a signed-in Hermes Cloud agent tab, or connect to a self-hosted remote API/dashboard. Local and remote API connections can use the models, tools, skills, sessions, memory, and MCP servers already configured in Hermes; Cloud and dashboard-ticket connections are intentionally Chat-only.
 
 - **Bot Mode** brings your Hermes agent roster into the panel: switch agents, edit profiles, and run group chats where several agents reply in one room. **Current group-chat limitation:** page-context delivery is not yet reliable; do not assume group bots can see the active page. Hermes Control is not shown in group chats. Individual bot chats retain their existing page-context and control behavior. Chat-only and remote group turns do not capture page context.
 - **File attachments** show one card per file per message. Open previews the file, Open on computer reveals the original file's containing folder through local Hermes, and Save downloads a copy.
@@ -51,13 +51,22 @@ Screenshots use the Mono theme in Dark mode.
 - Hermes Agent installed and working.
 - For Local or Remote API mode: Hermes Gateway/API server enabled locally or on a reachable remote machine. Hermes Cloud instead requires a signed-in HTTPS agent tab.
 - Node.js 20+.
-- Chrome, Edge, Brave, Comet, or another Chromium browser with Side Panel API support (Chrome 116+ baseline). Firefox 142+ is supported via [AMO](https://addons.mozilla.org/en-US/firefox/addon/hermes-browser-extension/), the Mozilla Add-ons listing. `npm run build:firefox` is for local/dev Firefox builds only.
+- Chrome, Edge, Brave, Comet, or another Chromium browser with Side Panel API support (Chrome 116+ baseline). Firefox 142+ is supported via [AMO](https://addons.mozilla.org/firefox/addon/hermes-browser-extension/), the Mozilla Add-ons listing. `npm run build:firefox` is for local/dev Firefox builds only.
 
 ## Firefox scope
 
 Hermes Browser Extension on Firefox is a chat-and-context client: pairing, the side panel, streaming replies, attachments, and page-context capture all work, but real-tab attach ("Hermes Control") is Chromium-only. Firefox WebExtensions have no equivalent to Chromium's `debugger` API, so the Firefox package omits that permission and the panel reports Control unavailable with an explanation instead of failing silently.
 
 If you need Hermes to click, type, scroll, or operate tabs on your behalf, load the extension in Chrome, Edge, Brave, or another Chromium browser. The full compatibility matrix is in [guides/connection-guide.md](./guides/connection-guide.md).
+
+## Hermes Control
+
+Hermes Control lets Hermes operate a tab you attach. It is opt-in, off until you turn it on, and Chromium-only.
+
+- **The attached tab is announced to the model.** Each turn tells Hermes the tab is ready and lists its interactive elements with refs, so the first click works without a separate snapshot or navigate step.
+- **Every action returns the updated page.** Click, type, scroll, and navigate give back a compact, redacted view of the page with fresh refs, so Hermes can chain steps.
+- **One debugger session per attached tab.** Chrome shows its debugging banner while a tab is attached. The session detaches when you detach the tab, pause or turn off control, or after 60 seconds without a command.
+- **Approvals still gate risky actions.** Consequential or privileged actions wait for your approval, and restricted pages and sensitive fields stay blocked.
 
 ## Quick start
 
@@ -88,7 +97,7 @@ After code updates, run `npm run build` again and click **Reload** on the Hermes
 
 ### 3. Install in Firefox
 
-1. Open [AMO](https://addons.mozilla.org/en-US/firefox/addon/hermes-browser-extension/) in Firefox.
+1. Open [AMO](https://addons.mozilla.org/firefox/addon/hermes-browser-extension/) in Firefox.
 2. Click **Add to Firefox** and confirm the permission prompt.
 3. The extension opens in the Firefox sidebar (Ctrl+Shift+H).
 
@@ -163,8 +172,8 @@ Hermes Browser Extension is intentionally conservative in v0.3.0:
 - Strong bearer/API key required for API access.
 - Page content is wrapped as untrusted context before it reaches Hermes.
 - Credential-bearing URLs are omitted from active, selected, open-tab, pinned-scope, prompt, receipt, and payload-hash surfaces.
-- Read-only browser context capture and no autonomous page control. Hermes Assist may insert a reviewed draft into a supported focused composer only after an explicit user action; it never clicks Send/Post/Submit, navigates, checks out, or performs browser-control workflows.
-- No `debugger`, `nativeMessaging`, `cookies`, `history`, or `bookmarks` permissions. `downloads` is limited to explicit user-requested generated-image/artifact saves.
+- Page context capture is read-only. Page control exists only through opt-in Hermes Control on Chromium, which acts on tabs you attach and pauses risky actions for approval. Hermes Assist may insert a reviewed draft into a supported focused composer only after an explicit user action; it never clicks Send/Post/Submit, navigates, checks out, or performs browser-control workflows.
+- Chromium builds request `debugger` for opt-in Hermes Control; Firefox builds omit it. No `nativeMessaging`, `cookies`, `history`, or `bookmarks` permissions. `downloads` is limited to explicit user-requested generated-image/artifact saves.
 - Restricted pages include browser internals, extension pages, and obvious banking/crypto/password/payment/health/government-tax categories.
 
 See [`SECURITY.md`](SECURITY.md), [`PERMISSIONS.md`](PERMISSIONS.md), [`DATA-FLOW.md`](DATA-FLOW.md), and [`PRIVACY.md`](PRIVACY.md) for details.

@@ -236,6 +236,7 @@ test('Cloud connector uses trusted dashboard mint, credential-free gateway subpr
   assert.equal(register.method, 'browser.controller.register');
   assert.equal(register.params.session_id, 'live-session-2');
   assert.equal(register.params.controller_id, 'controller-fixture');
+  assert.equal('product' in register.params, false, 'gateway-RPC register must not send product');
   socket.message({ id: register.id, result: { scope: { session_id: 'live-session-2' } } });
   const connection = await connecting;
 

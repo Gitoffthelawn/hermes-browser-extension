@@ -7,6 +7,7 @@ import {
   isLoopbackDashboardUrl,
   normalizeWakeStatus,
   normalizeWakeWordSettings,
+  pickWakeSettings,
 } from './wake-word.mjs';
 import { getBrowserApi } from './browser-api.mjs';
 
@@ -360,7 +361,7 @@ export function createWakeBackgroundController({
 
   async function setEnabled(enabled, settings = {}) {
     const stored = await chromeApi.storage.local.get('hermesBrowserSettings');
-    const merged = { ...(stored?.hermesBrowserSettings || {}), ...settings, wakeWordEnabled: Boolean(enabled) };
+    const merged = { ...(stored?.hermesBrowserSettings || {}), ...pickWakeSettings(settings), wakeWordEnabled: Boolean(enabled) };
     await chromeApi.storage.local.set({ hermesBrowserSettings: merged });
     return configureSerialized(merged);
   }

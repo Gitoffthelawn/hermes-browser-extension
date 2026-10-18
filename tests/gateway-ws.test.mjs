@@ -6,6 +6,7 @@ import {
   buildDashboardWsEndpoint,
   buildDashboardWsUrl,
   buildDashboardWsUrlWithCredential,
+  buildSessionListParams,
   buildSessionModelSwitchRequest,
   classifyGatewayFrame,
   createGatewayClient,
@@ -402,4 +403,15 @@ test('gateway client rejects pending requests when the socket closes', async () 
   const pending = client.request('session.list', {});
   FakeWebSocket.last.close();
   await assert.rejects(pending, /closed/i);
+});
+
+test('session.list params match the upstream SessionListParams contract (no offset)', () => {
+  assert.deepEqual(buildSessionListParams({ limit: 200, profile: 'work' }), { limit: 200, profile: 'work' });
+  assert.deepEqual(buildSessionListParams({ profile: undefined }), { limit: 200, profile: '' });
+  const allowed = new Set(['profile', 'title', 'limit', 'include_hidden']);
+  for (const key of Object.keys(buildSessionListParams({ limit: 5, profile: 'p' }))) assert.ok(allowed.has(key), `${key} is not an upstream session.list field`);
+
+  const app = readFileSync(new URL('../extension/app.js', import.meta.url), 'utf8');
+  assert.match(app, /request\(WS_METHODS\.sessionList, buildSessionListParams\(/);
+  assert.doesNotMatch(app, /sessionList,\s*\{[^}]*offset/);
 });

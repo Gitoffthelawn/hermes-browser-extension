@@ -4,6 +4,9 @@
 
 ### Added
 
+- Hermes Control keeps one debugger session per attached tab instead of attaching around every action. It detaches after 60 seconds idle, when the tab is released or paused, and on Turn off, and re-attaches once if Chrome reports the session was lost. Chrome shows its debugging banner while a tab is attached.
+- Hermes Control returns the updated page with every action. Click, type, press, scroll, navigate, back, fill, select, scroll-to, and hover settle briefly and return a compact, redacted list of actionable elements with fresh refs, so Hermes can chain actions without a snapshot in between. `browser_snapshot` returns the same view.
+- When Hermes Control is attached, each turn tells the model the tab is ready and lists its interactive elements with refs, so the first click works without a navigate or snapshot call. With several attached tabs, commands default to the tab of the latest turn. The controller advertises fill and select.
 - Sessions highlights running chats and follows live replies and tool activity on supported gateways, including chats started outside the browser panel.
 - Tool calls are grouped behind a compact disclosure. Individual calls can be expanded, and live refreshes keep the list open and preserve its scroll position. Thinking stays in its message card and cycles through compact expressions.
 - Everforest, Classic Hermes, and Anti-Nous themes, each with light and dark palettes. Anti-Nous combines crimson and berry accents with navy reading panels and fine gold trim; its light palette uses white panels and crimson controls.
@@ -16,6 +19,8 @@
 
 ### Changed
 
+- The README intro now says Hermes runs in a Chromium side panel or Firefox sidebar and that tab control is Chromium-only, and has a short Hermes Control section. AMO links no longer hard-code `/en-US/`. Thanks to @Gitoffthelawn (#121).
+- README, troubleshooting, and PERMISSIONS.md now say that Chromium builds request `debugger` for opt-in Hermes Control and Firefox builds omit it. PERMISSIONS.md lists `unlimitedStorage` and `declarativeNetRequestWithHostAccess`, and no longer lists an `audioCapture` permission the extension never requests.
 - Nous Light uses a white shell with Nous Blue (#0000F2) text, borders and buttons. The background art stays as a faint watermark, and the start screen is white with a blue logo.
 - Light-theme user messages are a soft tint of the theme colour with a clear outline, so "What Hermes saw" and code stay readable in every light theme. System notices sit on a solid surface.
 - The README is shorter: version-by-version notes point to the changelog and releases, and remote setup plus extended troubleshooting moved to guides/connection-guide.md and guides/troubleshooting.md. The visual tour has fresh Mono Dark screenshots, including Bot Mode group chats and profile editing.
@@ -26,6 +31,12 @@
 
 ### Fixed
 
+- Hermes Web no longer fails to list sessions on current Hermes: `session.list` was sent with an `offset` that Hermes rejects.
+- Browser control over Hermes Cloud registers again: the cloud registration no longer sends a `product` field that Hermes rejects. Local and remote API registration still send it.
+- Tool rows finish instead of duplicating on current Hermes streams: `tool.completed` and `tool.failed` now mark the call completed or failed.
+- Hermes Assist can no longer be driven by the page you are on. Its panel is now sealed from page scripts and only reacts to your own clicks and key presses, so a page cannot open it, send instructions to your chat, or read the reply or chat title.
+- Messages that only the extension's own pages send (wake word, context menus, theme marketplace, loopback fetch, Hermes Web, YouTube transcripts) are refused from content scripts. The wake word message can only change wake settings, not the Gateway URL, API key, or Hermes Control.
+- Hermes Control no longer shows as unavailable when a turn simply did not request it (`not_requested` in the companion plugin's context store).
 - Current Hermes connections load profiles, avatars, group chats, and saved bot history through the API routes the unified gateway exposes. When the dashboard is unavailable, existing profile details stay visible and named profiles still try their own skill catalogs.
 - Older chats can be continued after current Hermes accepts API turns only for supported session sources. The panel keeps the composer available when another session is running, and explains a long wait instead of leaving it looking stalled.
 - Voice dictation checks the available transcription route before recording and falls back when the dashboard route cannot be used. A slow browser speech download no longer leaves the microphone click waiting indefinitely.
