@@ -62,5 +62,6 @@ test('the side panel adds the note once, after the transcript is saved or commit
   assert.match(notice, /addMessage\('system', t\('session\.long_shared_notice'/);
   assert.match(notice, /\{ persist: false \}/, 'the note is not written into the transcript store');
   assert.match(notice, /activeGroupProjection/);
+  assert.match(notice, /loadedSessionContextEstimate\?\.sessionId !== sessionId/, 'the count must belong to the session that is open');
   assert.match(source, /const LONG_SESSION_NOTICE_STORAGE_KEY = 'hermesBrowserLongSessionNoticeSeen';/);
 });

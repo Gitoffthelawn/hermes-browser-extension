@@ -18775,6 +18775,9 @@ async function trimAndSaveMessages() {
 async function noteLongSharedSessionIfDue() {
   const sessionId = String(settings.sessionId || '').trim();
   if (!sessionId || activeGroupProjection || longSessionNoticeHandledId === sessionId) return;
+  // The open transcript only describes this session once it was loaded for it.
+  // During a session switch the old transcript can still be in memory.
+  if (loadedSessionContextEstimate?.sessionId !== sessionId) return;
   const messageCount = messages.filter((message) => ['user', 'assistant'].includes(message?.role)).length;
   if (messageCount <= LONG_SESSION_NOTICE_THRESHOLD) return;
   try {
