@@ -195,7 +195,7 @@ import {
   sessionContextFailureRecovery,
   turnRequestFailureState,
 } from './lib/turn-recovery.mjs';
-import { buildDashboardWsUrl, buildDashboardWsUrlWithCredential, buildSessionListParams, buildSessionModelSwitchRequest, createGatewayClient, establishGatewaySession, normalizeGatewayHistoryMessages, runtimeModelFromSessionStatus, WS_EVENTS, WS_METHODS } from './lib/gateway-ws.mjs';
+import { buildDashboardWsUrl, buildDashboardWsUrlWithCredential, buildSessionCompressParams, buildSessionListParams, buildSessionModelSwitchRequest, createGatewayClient, establishGatewaySession, interruptGatewaySession, isUnknownMethodError, normalizeGatewayHistoryMessages, normalizeSessionCompressResult, runtimeModelFromSessionStatus, WS_EVENTS, WS_METHODS } from './lib/gateway-ws.mjs';
 import { createDashboardStreamWatchdog, dashboardWatchdogTimeoutAction, matchesDashboardSessionEvent, shouldReattachDashboardStream } from './lib/dashboard-stream-watchdog.mjs';
 import { isTrustedDashboardOrigin, mintWsTicket, originOf, ticketFailureHelp } from './lib/dashboard-bridge.mjs';
 import {
@@ -219,12 +219,15 @@ import {
   RUN_CONTROL_REQUEST_TIMEOUT_MS,
   RUN_STATUS_POLL_MS,
   RUN_TERMINAL_CONFIRM_TIMEOUT_MS,
+  RUN_UNCONFIRMED_REASONS,
   acknowledgeStopRequest,
+  activeRunIdFromSessionPayload,
   beginRunControl,
   canSwitchActiveSession,
   dashboardTerminalStatus,
   markRunStreamClosed,
   markRunTerminal,
+  markRunUnconfirmed,
   markStopRequestFailed,
   markTerminalTimeout,
   requestRunStop,
@@ -1443,7 +1446,7 @@ async function streamDashboardPromptAttempt(connection, sessionId, prompt, { sig
 
 async function loadGatewayCapabilities() {
   if (usesDashboardTicketTransport() && dashboardConnection?.client?.readyState === 1) {
-    gatewayCapabilities = dashboardWsGatewayCapabilities({ health: true, source: 'dashboard-ws' });
+    gatewayCapabilities = dashboardWsGatewayCapabilities({ health: true, source: 'dashboard-ws', readyPayload: dashboardConnection.client.readyPayload });
     renderInlineAssistModelOptions();
     return gatewayCapabilities;
   }
@@ -4624,6 +4627,23 @@ async function steerCurrentDraft() {
   }
 }
 
+// Newer Hermes builds report the in-flight run on the session itself. Older
+// ones do not, and the answer is then simply "unknown".
+async function resolveActiveRunIdFromSession() {
+  const sessionId = String(activeSessionId || '').trim();
+  if (!sessionId) return '';
+  try {
+    const response = await runControlRequestWithTimeout(
+      (signal) => client.fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, { method: 'GET', signal }),
+      { timeoutMs: RUN_CONTROL_REQUEST_TIMEOUT_MS },
+    );
+    if (!response.ok) return '';
+    return activeRunIdFromSessionPayload(await client.readJson(response));
+  } catch {
+    return '';
+  }
+}
+
 async function reconcileWebRunTerminal({ stopRequested = false, dashboardSessionId = '', expectedGeneration = runControlGeneration } = {}) {
   const reconciliationRunId = String(activeRunId || '');
   let dashboardStatusClient = dashboardConnection?.client || null;
@@ -4689,6 +4709,15 @@ async function retryWebRunTerminalStatus() {
   const expectedGeneration = runControlGeneration;
   els.webRetryRunStatusButton.disabled = true;
   try {
+    if (!activeRunId && !usesDashboardTicketTransport()) {
+      // Stop never learned a run id. Ask the session for it before polling.
+      const resolvedRunId = await resolveActiveRunIdFromSession();
+      if (!runControlGenerationMatches(expectedGeneration, runControlGeneration)) return false;
+      if (resolvedRunId) {
+        activeRunId = resolvedRunId;
+        activeRunControl = withRunControlId(activeRunControl, resolvedRunId);
+      }
+    }
     await reconcileWebRunTerminal({
       stopRequested: activeRunControl.controlStatus === 'accepted',
       expectedGeneration,
@@ -4778,7 +4807,7 @@ async function stopActiveRun() {
   }
   activeRunControl = requestRunStop(activeRunControl);
   const stopGeneration = runControlGeneration;
-  const stopRunId = String(activeRunId || '');
+  let stopRunId = String(activeRunId || '');
   const ownedDashboardSessionId = String(dashboardLiveSessionId || '').trim();
   const ownedStoredId = String(activeRunControl.sessionId || '').trim();
   els.composerStatus.textContent = translateUiText('Stopping Hermes…');
@@ -4791,17 +4820,48 @@ async function stopActiveRun() {
       dashboardSessionId = ownedDashboardSessionId || (await resumeDashboardRecoverySession(connection, ownedStoredId)).liveId;
       if (!webRunIsViewed()) return false;
       if (!dashboardSessionId) throw new Error('The active Dashboard session is not available yet.');
-      await runControlRequestWithTimeout(
-        () => connection.client.request(WS_METHODS.sessionInterrupt, { session_id: dashboardSessionId }),
-        { timeoutMs: RUN_CONTROL_REQUEST_TIMEOUT_MS },
-      );
+      const interrupted = await interruptGatewaySession({
+        client: connection.client,
+        sessionId: dashboardSessionId,
+        storedSessionId: ownedStoredId || connection.wsStoredSessionId,
+        withTimeout: (operation) => runControlRequestWithTimeout(operation, { timeoutMs: RUN_CONTROL_REQUEST_TIMEOUT_MS }),
+        restFallback: stopRunId ? async () => {
+          const response = await runControlRequestWithTimeout(
+            (signal) => client.fetch(`/v1/runs/${encodeURIComponent(stopRunId)}/stop`, { method: 'POST', signal }),
+            { timeoutMs: RUN_CONTROL_REQUEST_TIMEOUT_MS },
+          );
+          const payload = await client.readJson(response);
+          if (response.ok) return { ok: true };
+          const terminalStatus = runStopFailureTerminalStatus({ httpStatus: response.status, payload });
+          if (terminalStatus) return { terminalStatus };
+          throw new Error(payload?.error?.message || payload?.error || payload?.message || `Hermes stop failed (${response.status})`);
+        } : null,
+      });
       if (!runControlGenerationMatches(stopGeneration, runControlGeneration)) return false;
+      if (interrupted.via === 'rest' && interrupted.result?.terminalStatus) {
+        activeRunControl = markRunTerminal(activeRunControl, interrupted.result.terminalStatus);
+        els.composerStatus.textContent = translateUiText('Hermes stopped · writer released');
+        await settleWebRunTerminal();
+        return true;
+      }
     } else {
       if (!stopRunId) {
+        // The server may already have admitted the turn, so aborting the local
+        // stream proves nothing about the run. Hold it as unconfirmed unless
+        // the session itself can name the run.
         activeAbortController?.abort();
-        activeRunControl = markRunTerminal(activeRunControl, 'cancelled');
-        els.composerStatus.textContent = translateUiText('Hermes stopped before server run identity');
-        return true;
+        stopRunId = await resolveActiveRunIdFromSession();
+        if (!runControlGenerationMatches(stopGeneration, runControlGeneration)) return false;
+        if (!stopRunId) {
+          const noRunIdDetail = t('run.stop_unconfirmed_no_run_id');
+          activeRunControl = markRunUnconfirmed(activeRunControl, RUN_UNCONFIRMED_REASONS.RUN_ID_UNKNOWN, noRunIdDetail);
+          els.composerStatus.textContent = `${t('run.stop_unconfirmed_title')}: ${noRunIdDetail}`;
+          renderWebRunControlRecovery();
+          updateBusyControls();
+          return false;
+        }
+        activeRunId = stopRunId;
+        activeRunControl = withRunControlId(activeRunControl, stopRunId);
       }
       if (!gatewayCapabilities.runStop || !gatewayCapabilities.runStatus) {
         throw new Error('Connected Hermes runtime does not explicitly advertise both run Stop and run status.');
@@ -5177,6 +5237,7 @@ async function createSession({ title: requestedTitle = '', hidden = false } = {}
 async function compactActiveSessionContext({ automaticRecovery = false } = {}) {
   if (!activeSessionId) return { ok: false, reason: 'no-session' };
   if (!gatewayCapabilities.sessionCompress) return { ok: false, reason: 'route-unavailable' };
+  if (usesDashboardTicketTransport()) return compactDashboardSessionContext();
   try {
     const response = await client.fetch(`/api/sessions/${encodeURIComponent(activeSessionId)}/compress`, {
       method: 'POST',
@@ -5197,6 +5258,23 @@ async function compactActiveSessionContext({ automaticRecovery = false } = {}) {
     return { ok: true, sessionId: activeSessionId, payload };
   } catch (error) {
     return { ok: false, reason: 'request-failed', error };
+  }
+}
+
+// Dashboard WebSocket transport: there is no REST /compress route, so the
+// session's own session.compress verb does the work on the live runtime.
+async function compactDashboardSessionContext() {
+  try {
+    const connection = await ensureDashboardConnection();
+    const liveId = dashboardLiveSessionId || (await resumeDashboardRecoverySession(connection, activeSessionId)).liveId;
+    const result = normalizeSessionCompressResult(
+      await connection.client.request(WS_METHODS.sessionCompress, buildSessionCompressParams({ sessionId: liveId })),
+    );
+    if (!result.ok) return { ok: false, reason: result.reason, error: new Error(result.detail || 'Hermes did not complete the compaction.') };
+    renderContextWindow();
+    return { ok: true, sessionId: activeSessionId, payload: result.payload };
+  } catch (error) {
+    return { ok: false, reason: isUnknownMethodError(error) ? 'route-unavailable' : 'request-failed', error };
   }
 }
 

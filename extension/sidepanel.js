@@ -259,10 +259,14 @@ import { extractYouTubeVideoId } from './lib/transcript.mjs';
 import {
   buildDashboardWsUrl,
   buildDashboardWsUrlWithCredential,
+  buildSessionCompressParams,
   buildSessionModelSwitchRequest,
   createGatewayClient,
   establishGatewaySession,
+  interruptGatewaySession,
+  isUnknownMethodError,
   normalizeGatewayHistoryMessages,
+  normalizeSessionCompressResult,
   remoteStoredSessionIdForGateway,
   runtimeModelFromSessionStatus,
   WS_EVENTS,
@@ -503,13 +507,17 @@ import {
   RUN_CONTROL_REQUEST_TIMEOUT_MS,
   RUN_STATUS_POLL_MS,
   RUN_TERMINAL_CONFIRM_TIMEOUT_MS,
+  RUN_UNCONFIRMED_REASONS,
   acknowledgeStopRequest,
+  activeRunIdFromSessionPayload,
   beginRunControl,
   canRecoverStaleDashboardRunControl,
   canSwitchActiveSession,
+  controllerStopSummary,
   dashboardTerminalStatus,
   markRunStreamClosed,
   markRunTerminal,
+  markRunUnconfirmed,
   markStopRequestFailed,
   markTerminalTimeout,
   requestRunStop,
@@ -4050,6 +4058,7 @@ async function loadGatewayCapabilities({ quiet = false, publicOnly = false, heal
     setGatewayCapabilities(dashboardWsGatewayCapabilities({
       source: isRemoteWsMode() ? 'remote-dashboard' : 'dashboard-ws',
       health: connection?.client?.readyState === 1,
+      readyPayload: connection?.client?.readyPayload,
     }));
     return gatewayCapabilities;
   }
@@ -5272,6 +5281,15 @@ async function retryActiveRunTerminalStatus() {
   const expectedGeneration = runControlGeneration;
   els.retryRunStatusButton.disabled = true;
   try {
+    if (!activeRunId && !usesDashboardWsChatTransport()) {
+      // Stop never learned a run id. Ask the session for it before polling.
+      const resolvedRunId = await resolveActiveRunIdFromSession();
+      if (!runControlGenerationMatches(expectedGeneration, runControlGeneration)) return false;
+      if (resolvedRunId) {
+        activeRunId = resolvedRunId;
+        activeRunControl = withRunControlId(activeRunControl, resolvedRunId);
+      }
+    }
     await reconcileActiveRunTerminal({
       stopRequested: activeRunControl.controlStatus === 'accepted',
       expectedGeneration,
@@ -5354,8 +5372,14 @@ async function stopCurrentTurn() {
   if (liveAttach?.sessionId === String(settings.sessionId || '').trim()) {
     const attach = liveAttach;
     try {
-      await attach.client.request(WS_METHODS.sessionInterrupt, { session_id: attach.liveId });
+      await interruptGatewaySession({
+        client: attach.client,
+        sessionId: attach.liveId,
+        storedSessionId: attach.sessionId,
+        withTimeout: (operation) => runControlRequestWithTimeout(operation, { timeoutMs: RUN_CONTROL_REQUEST_TIMEOUT_MS }),
+      });
       attach.stopRequested = true;
+      attach.userStopped = true;
       if (queuedTurn?.sessionId === attach.sessionId) { queuedTurn.autoSend = false; renderQueueNotice(); }
       setStatus('warn', 'Stop accepted', 'Waiting for Hermes to confirm the run has stopped.');
       void reconcileAttachedLiveSession();
@@ -5381,9 +5405,17 @@ async function stopCurrentTurn() {
     updateComposerBusyState();
     return false;
   };
-  const stopRunId = String(activeRunId || '');
+  let stopRunId = String(activeRunId || '');
   setStatus('warn', 'Stopping Hermes', stopRunId ? `Interrupt requested for ${stopRunId}` : 'Interrupting the active Hermes session');
   let dashboardSessionId = '';
+  // Hermes already reports the run as gone: the writer can be released.
+  const releaseAlreadyTerminal = async (terminalStatus) => {
+    activeRunControl = markRunTerminal(activeRunControl, terminalStatus);
+    const cancelledDetail = await cancelBrowserControlAfterConfirmedStop();
+    setStatus('ok', 'Hermes stopped', `The runtime no longer reports this run as active, so Browser released the held writer.${cancelledDetail ? ` ${cancelledDetail}` : ''}`, { translateDetail: false });
+    await settleActiveRunTerminal();
+    return true;
+  };
   try {
     if (dashboardTransport) {
       const connection = await ensureActiveDashboardWsConnection();
@@ -5392,17 +5424,43 @@ async function stopCurrentTurn() {
       dashboardSessionId = await ensureRemoteWsSession(connection);
       if (!stopIsCurrent()) return cancelUnsentStop();
       if (!runControlGenerationMatches(stopGeneration, runControlGeneration)) return false;
-      await runControlRequestWithTimeout(
-        () => connection.client.request(WS_METHODS.sessionInterrupt, { session_id: dashboardSessionId }),
-        { timeoutMs: RUN_CONTROL_REQUEST_TIMEOUT_MS },
-      );
+      const interrupted = await interruptGatewaySession({
+        client: connection.client,
+        sessionId: dashboardSessionId,
+        storedSessionId: connection.wsStoredSessionId,
+        withTimeout: (operation) => runControlRequestWithTimeout(operation, { timeoutMs: RUN_CONTROL_REQUEST_TIMEOUT_MS }),
+        restFallback: stopRunId ? async () => {
+          const response = await runControlRequestWithTimeout(
+            (signal) => apiFetch(`/v1/runs/${encodeURIComponent(stopRunId)}/stop`, { method: 'POST', signal }),
+            { timeoutMs: RUN_CONTROL_REQUEST_TIMEOUT_MS },
+          );
+          const payload = await readJsonResponse(response);
+          if (response.ok) return { ok: true };
+          const terminalStatus = runStopFailureTerminalStatus({ httpStatus: response.status, payload });
+          if (terminalStatus) return { terminalStatus };
+          throw new Error(payload?.error?.message || payload?.error || payload?.message || `Hermes stop failed (${response.status})`);
+        } : null,
+      });
       if (!runControlGenerationMatches(stopGeneration, runControlGeneration)) return false;
+      if (interrupted.via === 'rest' && interrupted.result?.terminalStatus) return await releaseAlreadyTerminal(interrupted.result.terminalStatus);
     } else {
       if (!stopRunId) {
+        // The server may already have admitted the turn, so aborting the local
+        // stream proves nothing about the run. Hold it as unconfirmed unless
+        // the session itself can name the run.
         activeAbortController?.abort();
-        activeRunControl = markRunTerminal(activeRunControl, 'cancelled');
-        setStatus('ok', 'Hermes stopped', 'Browser cancelled the turn before Hermes published a server run identity.');
-        return true;
+        stopRunId = await resolveActiveRunIdFromSession();
+        if (!runControlGenerationMatches(stopGeneration, runControlGeneration)) return false;
+        if (!stopRunId) {
+          const noRunIdDetail = t('run.stop_unconfirmed_no_run_id');
+          activeRunControl = markRunUnconfirmed(activeRunControl, RUN_UNCONFIRMED_REASONS.RUN_ID_UNKNOWN, noRunIdDetail);
+          setStatus('warn', t('run.stop_unconfirmed_title'), noRunIdDetail, { translateTitle: false, translateDetail: false });
+          renderRunControlRecovery();
+          updateComposerBusyState();
+          return false;
+        }
+        activeRunId = stopRunId;
+        activeRunControl = withRunControlId(activeRunControl, stopRunId);
       }
       if (!gatewayCapabilities.runStop || !gatewayCapabilities.runStatus) {
         throw new Error('Connected Hermes runtime does not explicitly advertise both run Stop and run status.');
@@ -5416,12 +5474,7 @@ async function stopCurrentTurn() {
       if (!runControlGenerationMatches(stopGeneration, runControlGeneration)) return false;
       if (!response.ok) {
         const staleTerminal = runStopFailureTerminalStatus({ httpStatus: response.status, payload });
-        if (staleTerminal) {
-          activeRunControl = markRunTerminal(activeRunControl, staleTerminal);
-          setStatus('ok', 'Hermes stopped', 'The runtime no longer reports this run as active, so Browser released the held writer.');
-          await settleActiveRunTerminal();
-          return true;
-        }
+        if (staleTerminal) return await releaseAlreadyTerminal(staleTerminal);
         throw new Error(payload?.error?.message || payload?.error || payload?.message || `Hermes stop failed (${response.status})`);
       }
     }
@@ -5445,9 +5498,47 @@ async function stopCurrentTurn() {
     setStatus('warn', 'Runtime stop unconfirmed', `Hermes accepted Stop, but terminal confirmation timed out. Browser kept the run identity and queued turns remain held: ${error?.message || String(error)}`, { translateDetail: false });
     return false;
   }
-  setStatus('ok', 'Hermes stopped', 'Terminal cancellation confirmed and the session writer was released.');
+  const cancelledDetail = await cancelBrowserControlAfterConfirmedStop();
+  setStatus('ok', 'Hermes stopped', `Terminal cancellation confirmed and the session writer was released.${cancelledDetail ? ` ${cancelledDetail}` : ''}`, { translateDetail: false });
   await settleActiveRunTerminal();
   return true;
+}
+
+// Newer Hermes builds report the in-flight run on the session itself. Older
+// ones do not, and the answer is then simply "unknown".
+async function resolveActiveRunIdFromSession() {
+  const sessionId = String(settings.sessionId || '').trim();
+  if (!sessionId) return '';
+  try {
+    const response = await runControlRequestWithTimeout(
+      (signal) => apiFetch(`/api/sessions/${encodeSessionId(sessionId)}`, { method: 'GET', signal }),
+      { timeoutMs: RUN_CONTROL_REQUEST_TIMEOUT_MS },
+    );
+    if (!response.ok) return '';
+    return activeRunIdFromSessionPayload(await readJsonResponse(response));
+  } catch {
+    return '';
+  }
+}
+
+// A confirmed run Stop also cancels the Hermes Control commands still queued or
+// executing, so a tab action cannot outlive the run that requested it. Returns
+// a sentence for the status line, or '' when there was nothing to report.
+async function cancelBrowserControlAfterConfirmedStop() {
+  if (settings.browserControlEnabled !== true && !(Number(browserControlStatus?.pendingCommands) > 0)) return '';
+  let summary;
+  try {
+    summary = controllerStopSummary(await browserControlMessage('HERMES_CONTROLLER_STOP'));
+  } catch {
+    summary = controllerStopSummary(null);
+  }
+  void refreshBrowserControlStatus().catch(() => null);
+  if (!summary.ok) return t('run.stop_controller_unreachable');
+  return summary.cancelled > 0 ? t('run.stop_cancelled_commands', { count: summary.cancelled }) : '';
+}
+
+function announceControlCancellation(detail = '') {
+  if (detail) showOperationToast({ kind: 'warn', title: t('run.stop_controller_toast'), detail });
 }
 
 function browserCommandsForSurface(surface = 'sidepanel') {
@@ -16587,6 +16678,7 @@ async function attachLiveSessionIfRunning(sessionId, { scopeRevisionId = scopeRe
     if (generation !== liveAttachGeneration) return;
     const attach = liveAttach;
     if (attach && status !== 'completed') attach.stopRequested = true;
+    if (attach?.userStopped) void cancelBrowserControlAfterConfirmedStop().then(announceControlCancellation);
     liveSessionRows.delete(target);
     const finalText = text;
     // Paint the final text before tearing down the updater.
@@ -19930,6 +20022,7 @@ async function compactCurrentSessionContext({ automaticRecovery = false } = {}) 
     if (!automaticRecovery) setStatus('warn', 'Context compaction unavailable', 'The connected Hermes runtime does not advertise native session compaction.');
     return { ok: false, reason: 'route-unavailable' };
   }
+  if (usesDashboardWsChatTransport()) return compactDashboardSessionContext({ automaticRecovery });
   const button = els.contextCompactButton;
   if (button) {
     button.disabled = true;
@@ -19962,6 +20055,43 @@ async function compactCurrentSessionContext({ automaticRecovery = false } = {}) 
     await loadSessions({ quiet: true });
     return { ok: true, sessionId: compactedSessionId || settings.sessionId, payload };
   } catch (error) {
+    setStatus('warn', 'Context compaction failed', error?.message || String(error), { translateDetail: false });
+    return { ok: false, reason: 'request-failed', error };
+  } finally {
+    renderContextWindow();
+  }
+}
+
+// Dashboard WebSocket transport: there is no REST /compress route, so the
+// session's own session.compress verb does the work on the live runtime.
+async function compactDashboardSessionContext({ automaticRecovery = false } = {}) {
+  const button = els.contextCompactButton;
+  if (button) {
+    button.disabled = true;
+    button.textContent = translateUiText('Compacting…');
+  }
+  try {
+    const connection = await ensureActiveDashboardWsConnection();
+    const sessionId = await ensureRemoteWsSession(connection);
+    const result = normalizeSessionCompressResult(
+      await connection.client.request(WS_METHODS.sessionCompress, buildSessionCompressParams({ sessionId })),
+    );
+    if (!result.ok) {
+      const detail = result.detail || (result.reason === 'busy'
+        ? 'Hermes is already compacting this session or the session is busy.'
+        : 'Hermes did not complete the compaction.');
+      setStatus('warn', 'Context compaction failed', detail, { translateDetail: false });
+      return { ok: false, reason: result.reason, error: new Error(detail) };
+    }
+    setStatus('ok', automaticRecovery ? 'Context recovered' : 'Context compacted', result.detail || 'Hermes compacted the active session context.', { translateDetail: false });
+    await clearContextDeliveryState();
+    await loadSessions({ quiet: true });
+    return { ok: true, sessionId: settings.sessionId, payload: result.payload };
+  } catch (error) {
+    if (isUnknownMethodError(error)) {
+      setStatus('warn', 'Context compaction unavailable', 'The connected Hermes gateway does not serve session.compress.');
+      return { ok: false, reason: 'route-unavailable', error };
+    }
     setStatus('warn', 'Context compaction failed', error?.message || String(error), { translateDetail: false });
     return { ok: false, reason: 'request-failed', error };
   } finally {

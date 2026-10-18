@@ -16,6 +16,14 @@ export const RUN_TERMINAL_STATUSES = Object.freeze({
   CANCELLED: 'cancelled',
 });
 
+export const RUN_UNCONFIRMED_REASONS = Object.freeze({
+  RUN_ID_UNKNOWN: 'run-id-unknown',
+});
+
+const RUN_UNCONFIRMED_DETAIL = Object.freeze({
+  [RUN_UNCONFIRMED_REASONS.RUN_ID_UNKNOWN]: 'Hermes has not reported a run id for this turn, so Browser cannot confirm the run stopped. The session writer and queued messages stay held until Hermes confirms a terminal state.',
+});
+
 const TERMINAL = new Set(Object.values(RUN_TERMINAL_STATUSES));
 
 function freeze(state) {
@@ -70,6 +78,22 @@ export function markStopRequestFailed(state, detail = '') {
     phase: RUN_CONTROL_PHASES.UNCONFIRMED,
     controlStatus: 'failed',
     detail: String(detail || 'stop request was not acknowledged'),
+  });
+}
+
+/**
+ * Stop was requested but Hermes cannot say what happened to the run, for
+ * example because no run id was ever published. The writer stays held and the
+ * state is never reported as stopped; only a terminal confirmation releases it.
+ */
+export function markRunUnconfirmed(state, reason = '', detail = '') {
+  if (!state || state.phase === RUN_CONTROL_PHASES.TERMINAL) return state;
+  return freeze({
+    ...state,
+    phase: RUN_CONTROL_PHASES.UNCONFIRMED,
+    controlStatus: 'unconfirmed',
+    writerLease: 'held',
+    detail: String(detail || RUN_UNCONFIRMED_DETAIL[reason] || 'Hermes has not confirmed the stop.'),
   });
 }
 
@@ -158,6 +182,29 @@ export function runStopFailureTerminalStatus({ httpStatus = 0, payload = null } 
   return ['run_not_found', 'run_not_running', 'run_finished', 'not_found'].includes(code)
     ? RUN_TERMINAL_STATUSES.CANCELLED
     : '';
+}
+
+/** Run id a session payload reports for its in-flight run, or an empty string. */
+export function activeRunIdFromSessionPayload(payload = {}) {
+  const candidates = [
+    payload?.active_run_id,
+    payload?.session?.active_run_id,
+    payload?.data?.active_run_id,
+    payload?.run?.id,
+    payload?.session?.run_id,
+  ];
+  for (const candidate of candidates) {
+    const value = String(candidate ?? '').trim();
+    if (value && /^[A-Za-z0-9._:-]{1,200}$/.test(value)) return value;
+  }
+  return '';
+}
+
+/** What a controller Stop reported: how many pending Hermes Control commands it cancelled. */
+export function controllerStopSummary(result = null) {
+  if (!result || typeof result !== 'object' || result.ok === false) return { ok: false, cancelled: 0 };
+  const cancelled = Number(result.cancelled);
+  return { ok: true, cancelled: Number.isInteger(cancelled) && cancelled > 0 ? cancelled : 0 };
 }
 
 export function runControlGenerationMatches(expectedGeneration, currentGeneration) {
