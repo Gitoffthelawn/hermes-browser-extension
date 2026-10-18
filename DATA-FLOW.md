@@ -61,7 +61,7 @@ v0.3.0 emits typed `hermes.browser.turn.v2` envelopes with owner/conversation/se
 
 ## Controller and artifact flow
 
-When Hermes Control is enabled, the extension registers one authenticated controller and acquires explicit leases for selected tabs. Commands are bound to the controller, browser profile, lease owner, tab, frame, and document generation. Browser-bound turns do not fall back to another browser backend. Sensitive targets and restricted URLs fail closed; consequential and privileged actions pause for explicit approval.
+When Hermes Control is enabled, the extension registers one authenticated controller and attaches the selected tabs. Commands are bound to the controller, browser profile, attachment owner, tab, frame, and document generation. Browser-bound turns do not fall back to another browser backend. Sensitive targets and restricted URLs fail closed; consequential and privileged actions pause for explicit approval.
 
 Artifact upload/download is scoped, TTL-bounded, checksum-verified, and one-shot. Durable controller and companion records contain metadata and redacted receipts only, not page bytes or raw command payloads. It can also expose sanitized context metadata to the optional companion plugin. The plugin cache is process-local, owner-scoped, TTL-bounded, and consume-on-read. It stores safe metadata such as protocol id, payload hash, context scope, active-tab origin, section availability/counts, redaction count, and bounded event diagnostics. It does not store raw page text, selected text, full tab URLs, cookies, tokens, or browser-control channels.
 

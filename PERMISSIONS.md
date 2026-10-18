@@ -11,7 +11,7 @@ This document describes the permission model of the current release. Chromium bu
 | `activeTab` | Lets the extension inspect the currently active tab after the user opens/uses the side panel. |
 | `alarms` | Maintains bounded service-worker lifecycle and wake/reconnect timers. |
 | `contextMenus` | Provides user-invoked Hermes actions from the browser context menu. |
-| `debugger` | Enables opt-in, leased-tab browser control through the Chromium DevTools Protocol. The controller attaches only while control is enabled, keeps one session per leased tab while it is in use, and detaches when the lease ends or pauses, when control stops, or after 60 seconds without a command. |
+| `debugger` | Enables opt-in Hermes Control through the Chromium DevTools Protocol. The controller attaches only while control is enabled, keeps one session per attached tab while it is in use, and detaches when the tab is detached, when control pauses or stops, or after 60 seconds without a command. |
 | `declarativeNetRequestWithHostAccess` | Lets the extension manage session network rules for loopback Hermes servers, which are cross-origin to extension pages. It is limited to the host permissions below and does not read or block page traffic; the extension currently installs no active rules, and loopback dashboard requests go through the service worker instead. |
 | `downloads` | Saves or opens returned files only after the user explicitly picks an action on a returned-file card: Save opens the browser's save dialog, and Open on computer downloads the file and hands it to the OS default application. It is not used to inspect download history. |
 | `offscreen` | Hosts bounded extension-owned wake/listener support where Chromium requires an offscreen document. It has no browser-control authority. |
@@ -46,7 +46,7 @@ These host permissions let the side panel read context from normal web pages and
 The extension still blocks browser-internal and sensitive categories in code, including:
 
 - `chrome://`, `edge://`, `devtools://`, extension pages, and similar browser/internal schemes.
-- unapproved local files. Approved `file://` documents use a separate explicit gate and remain bound to the exact leased tab/document.
+- unapproved local files. Approved `file://` documents use a separate explicit gate and remain bound to the exact attached tab and document.
 - obvious banking, crypto wallet, password manager, checkout/payment, health, and government tax/account URLs.
 
 ## Permissions not requested
@@ -59,7 +59,7 @@ Hermes Browser Extension does **not** request:
 - `bookmarks`
 - password-manager permissions
 
-Browser control is disabled by default. When enabled, it applies only to explicitly leased tabs, uses exact document-generation checks, blocks sensitive fields and restricted pages, and pauses consequential or privileged actions for explicit approval. Hermes Assist remains review-first and never submits a draft by itself.
+Hermes Control is off by default. When on, it applies only to tabs you explicitly attach, uses exact document-generation checks, blocks sensitive fields and restricted pages, and pauses consequential or privileged actions for explicit approval. Hermes Assist remains review-first and never submits a draft by itself.
 
 ## Related docs
 

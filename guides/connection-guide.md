@@ -16,7 +16,7 @@
 | Browser Context Protocol | Yes | Typed `hermes.browser.turn.v2` envelopes, with the v1 payload compatibility path. |
 | Hermes Assist | Yes, site-aware preview/review | 31 writing environments. Never submits. |
 | Page comments | Yes | Attach menu. Queues beside Ask Hermes. |
-| Browser control | Yes (Experimental) | Opt-in MV3 controller with per-tab leases and explicit approval gates. Requires compatible Hermes Agent controller support. |
+| Hermes Control | Yes (Experimental) | Opt-in MV3 controller that acts only on tabs you attach, with explicit approval gates. Requires compatible Hermes Agent controller support. |
 | `nativeMessaging` | No | Not requested or required. |
 
 

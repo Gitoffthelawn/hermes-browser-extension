@@ -1715,6 +1715,11 @@ body.startup-active .startup-actions #startupConnectButton:not([hidden]):focus-v
   padding-inline: 12px 34px;
   font-size: calc(12px * var(--hermes-text-zoom, 1));
 }
+.browser-control-field > small {
+  color: var(--hermes-muted);
+  font: 400 calc(12px * var(--hermes-text-zoom, 1))/1.45 var(--hermes-font-ui);
+}
+.browser-control-field > small[hidden] { display: none; }
 .browser-control-view { margin: 0; padding: 0; border: 0; gap: 14px; }
 .browser-control-view > div {
   display: grid;
@@ -1945,6 +1950,14 @@ html[data-hermes-mode="light"] .browser-control-dialog { --control-accent: color
 .browser-control-tab-option:has(:checked) { border-color: color-mix(in srgb, var(--hermes-accent) 45%, var(--hermes-line)); background: color-mix(in srgb, var(--hermes-accent) 9%, var(--hermes-paper)); }
 .browser-control-tab-option:has(:focus-visible) { outline: 2px solid var(--hermes-accent); outline-offset: -2px; }
 .browser-control-tab-option input { flex: 0 0 16px; width: 16px; height: 16px; min-height: 0; margin: 0; accent-color: var(--control-accent); }
+.browser-control-tab-option input:disabled { cursor: not-allowed; }
+.browser-control-tab-option.is-restricted { cursor: not-allowed; opacity: 0.72; }
+.browser-control-tab-option .browser-control-tab-text { display: grid; gap: 2px; min-width: 0; white-space: normal; }
+.browser-control-tab-option .browser-control-tab-text small {
+  color: var(--hermes-muted);
+  font: 400 calc(11px * var(--hermes-text-zoom, 1))/1.4 var(--hermes-font-ui);
+  overflow-wrap: anywhere;
+}
 .browser-control-tab-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .browser-control-tab-list::-webkit-scrollbar-thumb {
   background: rgba(var(--hermes-ink-rgb), 0.45);
