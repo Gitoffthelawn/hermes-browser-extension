@@ -1698,7 +1698,8 @@ body.startup-active .startup-actions #startupConnectButton:not([hidden]):focus-v
   min-width: 0;
 }
 .browser-control-field > span,
-.browser-control-view legend {
+.browser-control-view legend,
+.browser-control-tabs legend {
   color: var(--hermes-muted);
   margin-bottom: 8px;
   font: 650 calc(13px * var(--hermes-text-zoom, 1))/1.3 var(--hermes-font-ui);
@@ -1734,6 +1735,7 @@ body.startup-active .startup-actions #startupConnectButton:not([hidden]):focus-v
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   text-align: center;
   border-radius: var(--radius);
   font: 650 calc(13px * var(--hermes-text-zoom, 1))/1.25 var(--hermes-font-ui);
@@ -1758,9 +1760,8 @@ body.startup-active .startup-actions #startupConnectButton:not([hidden]):focus-v
 }
 
 .browser-control-strip[hidden] { display: none; }
-/* Attached-tab status: the same glass card language as the notification toast.
-   Tone (ok / warn / neutral) tints the icon tile and border; everything reads
-   from theme tokens so it holds on every theme in light and dark. */
+/* Attached-tab status inside the Hermes Control dialog. Tone (ok / warn / neutral)
+   tints the border; everything reads from theme tokens so it holds in every theme. */
 .browser-control-strip {
   --strip-tone: var(--hermes-muted);
   position: relative;
@@ -1771,38 +1772,30 @@ body.startup-active .startup-actions #startupConnectButton:not([hidden]):focus-v
   margin: 0 0 10px;
   padding: 11px 38px 11px 12px;
   border: 1px solid color-mix(in srgb, var(--strip-tone) 34%, var(--hermes-line-strong, var(--hermes-ink)));
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--hermes-paper) 78%, transparent);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
-  backdrop-filter: blur(14px) saturate(1.2);
+  border-radius: var(--radius);
+  background: var(--hermes-paper);
   color: var(--hermes-ink);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16), 0 1px 0 color-mix(in srgb, var(--hermes-ink) 8%, transparent) inset;
+  box-shadow: none;
 }
 .browser-control-strip[data-tone="ok"] { --strip-tone: var(--hermes-accent, var(--hermes-ink)); }
-.browser-control-strip[data-tone="warn"] { --strip-tone: #d5a43f; }
+.browser-control-strip[data-tone="warn"] { --strip-tone: var(--hermes-warning); }
+/* Close button: the Settings close icon (.settings-close-icon), a 30px square with a 1px line. */
 .browser-control-dismiss {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 26px;
-  min-width: 26px;
-  height: 26px;
-  min-height: 26px;
-  padding: 0;
+  top: 12px;
+  right: 10px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: color-mix(in srgb, var(--hermes-ink) 72%, transparent);
-}
-.browser-control-dismiss:hover,
-.browser-control-dismiss:focus-visible {
-  border: 0;
-  background: color-mix(in srgb, var(--hermes-ink) 12%, transparent);
+  border: 1px solid var(--hermes-line-strong);
+  border-radius: var(--radius);
+  background: var(--hermes-paper);
   color: var(--hermes-ink);
-  outline: none;
 }
 .browser-control-signal {
   width: 32px;
@@ -1829,14 +1822,6 @@ body.startup-active .startup-actions #startupConnectButton:not([hidden]):focus-v
   font: 400 calc(12px * var(--hermes-text-zoom, 1))/1.4 var(--hermes-font-ui);
 }
 .browser-control-strip-actions { justify-content: flex-end; align-items: center; }
-.browser-control-strip-actions .browser-control-action {
-  min-height: 30px;
-  padding: 5px 12px;
-  border-radius: 10px;
-  font: 600 calc(12px * var(--hermes-text-zoom, 1))/1 var(--hermes-font-ui);
-  letter-spacing: 0;
-  text-transform: none;
-}
 .browser-control-strip-actions .browser-control-action.icon-only {
   width: 30px;
   min-width: 30px;
@@ -1849,7 +1834,10 @@ body.startup-active .startup-actions #startupConnectButton:not([hidden]):focus-v
 /* Chromium does not hide SVGs via [hidden] by default; force it. */
 .browser-control-action svg[hidden] { display: none !important; }
 
-/* Browser control: live state lighting, not a second source of controller truth. */
+/* Browser control: live state lighting, not a second source of controller truth.
+   The Hermes Control window takes the Hermes Control section of Settings (.browser-control-card,
+   .browser-control-kicker, .browser-control-state, .browser-control-config, .browser-control-action)
+   and keeps a frosted surface over the chat. */
 .browser-control-dialog:not([open]) { display: none; }
 .browser-control-dialog {
   --control-accent: var(--hermes-accent);
@@ -1863,64 +1851,91 @@ body.startup-active .startup-actions #startupConnectButton:not([hidden]):focus-v
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  padding: 22px;
-  border: 1px solid color-mix(in srgb, var(--control-energy) 42%, var(--hermes-panel-border));
-  border-radius: 16px;
-  background:
-    radial-gradient(ellipse at 12% 0%, color-mix(in srgb, var(--control-energy) 10%, transparent), transparent 64%),
-    color-mix(in srgb, var(--hermes-paper) 92%, transparent);
+  padding: 16px;
+  border: 1px solid var(--hermes-line-strong);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--hermes-paper) 82%, transparent);
   color: var(--hermes-ink);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
   backdrop-filter: blur(14px) saturate(1.2);
-  box-shadow: 0 18px 56px rgba(var(--hermes-shadow-rgb), 0.24),
-    0 0 28px color-mix(in srgb, var(--control-energy) 12%, transparent),
-    inset 0 1px 0 color-mix(in srgb, var(--control-energy) 24%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, currentColor 10%, transparent);
+}
+/* Reduced transparency and forced colours: an opaque surface with no blur. */
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  .browser-control-dialog {
+    background: var(--hermes-paper);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 .browser-control-dialog:is([data-state="ready"], [data-state="active"]) { --control-energy: var(--control-accent); }
 html[data-hermes-mode="light"] .browser-control-dialog { --control-accent: color-mix(in srgb, var(--hermes-accent) 35%, var(--hermes-ink)); }
 .browser-control-dialog[data-state="approval"] { --control-energy: var(--danger); }
-.browser-control-flare {
-  position: absolute;
-  inset: 0 22% auto;
-  height: 110px;
-  pointer-events: none;
-  opacity: 0;
-  background: linear-gradient(110deg, transparent 22%, color-mix(in srgb, var(--control-accent) 25%, transparent) 48%, transparent 72%);
-  transform: translateX(-35%);
+/* The sparkle flare and the top energy line are retired; the status chip carries the state. */
+.browser-control-dialog .browser-control-flare,
+.browser-control-dialog .browser-control-energy { display: none; }
+
+/* Status line: a square label like the Settings READY chip, with the live dot inside it. */
+.browser-control-dialog .browser-control-strip-copy {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  gap: 6px;
+  padding: 0;
 }
-.browser-control-flare::before, .browser-control-flare::after {
-  content: "";
-  position: absolute;
-  inset: 24px 38px auto auto;
-  width: 12px;
-  height: 12px;
-  background: var(--control-accent);
-  clip-path: polygon(50% 0%, 60% 38%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0% 50%, 40% 38%);
+.browser-control-dialog .browser-control-strip-copy strong {
+  grid-area: 1 / 1;
+  display: block;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 6px 12px 6px 28px;
+  border: 1px solid var(--hermes-line-strong);
+  background: rgba(var(--hermes-ink-rgb), 0.05);
+  color: var(--hermes-muted);
+  font: 650 calc(12px * var(--hermes-text-zoom, 1))/1 var(--hermes-font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
-.browser-control-flare::after { inset: 58px 68px auto auto; width: 7px; height: 7px; }
-.browser-control-dialog.is-energized .browser-control-flare { animation: control-flare 650ms cubic-bezier(0.23, 1, 0.32, 1) both; }
-@keyframes control-flare {
-  0% { opacity: 0; transform: translateX(-35%); }
-  25% { opacity: 0.85; }
-  100% { opacity: 0; transform: translateX(35%); }
+.browser-control-dialog:is([data-state="ready"], [data-state="active"]) .browser-control-strip-copy strong,
+.browser-control-dialog[data-state="approval"] .browser-control-strip-copy strong {
+  border-color: var(--control-energy);
+  background: color-mix(in srgb, var(--control-energy) 14%, transparent);
+  color: var(--control-energy);
 }
-.browser-control-dialog .browser-control-strip-copy { position: relative; padding-inline-start: 18px; }
 .browser-control-dialog .browser-control-live-indicator {
-  position: absolute;
-  inset-inline-start: 0;
-  top: 7px;
+  grid-area: 1 / 1;
+  position: relative;
+  z-index: 1;
+  align-self: center;
+  justify-self: start;
   width: 7px;
   height: 7px;
-  margin: 0;
+  margin: 0 0 0 12px;
   border-radius: 50%;
   background: var(--control-energy);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--control-energy) 45%, transparent);
 }
 .browser-control-dialog:is([data-state="ready"], [data-state="active"]) .browser-control-live-indicator { animation: control-heartbeat 2.8s ease-in-out infinite; }
 .browser-control-dialog[data-state="active"] .browser-control-live-indicator { animation-duration: 1.6s; }
 @keyframes control-heartbeat { 0%, 100% { opacity: 0.75; } 50% { opacity: 1; } }
+.browser-control-dialog .browser-control-strip-copy strong,
+.browser-control-dialog .browser-control-strip-copy span {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* Detail line: mono helper text, as on the Settings card. */
+.browser-control-dialog .browser-control-strip-copy > span:not(.browser-control-live-indicator) {
+  grid-area: 2 / 1;
+  justify-self: stretch;
+  margin-top: 0;
+  color: var(--hermes-muted);
+  font: calc(11px * var(--hermes-text-zoom, 1))/1.45 var(--hermes-font-mono);
+}
+
 .browser-control-tabs { min-width: 0; margin: 0; padding: 0; border: 0; }
 .browser-control-tabs[hidden] { display: none; }
-.browser-control-tabs legend { margin-block-end: 8px; color: var(--hermes-muted); font-size: calc(12px * var(--hermes-text-zoom, 1)); }
 .browser-control-tab-list {
   display: grid;
   gap: 6px;
@@ -1936,7 +1951,7 @@ html[data-hermes-mode="light"] .browser-control-dialog { --control-accent: color
   min-width: 0;
   padding: 10px;
   border: 1px solid var(--hermes-line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: color-mix(in srgb, var(--hermes-ink) 3%, transparent);
   color: var(--hermes-ink);
   font: 400 calc(12px * var(--hermes-text-zoom, 1))/1.4 var(--hermes-font-ui);
@@ -1962,53 +1977,31 @@ html[data-hermes-mode="light"] .browser-control-dialog { --control-accent: color
   justify-content: center;
 }
 .browser-control-apply-scope[aria-busy="true"] { opacity: 0.6; }
+/* The backdrop stays dimmed and blurred behind the frosted window. */
 .browser-control-dialog::backdrop {
   background: rgba(var(--hermes-fg-rgb), 0.22);
   backdrop-filter: blur(6px);
 }
 .browser-control-dialog.is-pointer-open[open] { animation: control-dialog-enter 180ms cubic-bezier(0.23, 1, 0.32, 1); }
 @keyframes control-dialog-enter { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: none; } }
-.browser-control-energy {
-  position: absolute;
-  inset: 0 18px auto;
-  height: 2px;
-  overflow: hidden;
-  pointer-events: none;
-  background: linear-gradient(90deg, transparent, var(--control-energy), transparent);
-  opacity: 0.65;
-}
-.browser-control-energy::after {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 32%;
-  background: linear-gradient(90deg, transparent, var(--hermes-ink), transparent);
-  opacity: 0;
-}
-.browser-control-dialog[data-state="active"] .browser-control-energy::after { animation: control-energy-pass 3.2s linear infinite; }
-@keyframes control-energy-pass {
-  0% { opacity: 0; transform: translateX(-110%); }
-  12% { opacity: 0.85; }
-  65% { opacity: 0.85; }
-  80%, 100% { opacity: 0; transform: translateX(420%); }
-}
-.browser-control-dialog-title {
-  margin: 0 30px 18px 0;
-  font: 500 calc(28px * var(--hermes-text-zoom, 1))/1.1 var(--hermes-font-display);
+
+/* Title: the Settings Hermes Control heading (.browser-control-kicker), on one line. */
+.browser-control-dialog .browser-control-dialog-title {
+  margin: 0 40px 10px 0;
+  /* --control-accent darkens the accent in light modes, where some themes' accent is too pale for a heading. */
+  color: var(--control-accent);
+  font: 500 calc(16px * var(--hermes-text-zoom, 1))/1.15 var(--hermes-font-display);
   font-synthesis: none;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   overflow-wrap: anywhere;
   outline: none;
-}
-html[data-hermes-font-profile="signature"] .browser-control-dialog-title {
-  font-size: calc(34px * var(--hermes-text-zoom, 1));
-  letter-spacing: 0.04em;
 }
 .browser-control-dialog .browser-control-strip {
   position: static;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  gap: 18px;
+  gap: 16px;
   margin: 0;
   padding: 0;
   border: 0;
@@ -2017,33 +2010,11 @@ html[data-hermes-font-profile="signature"] .browser-control-dialog-title {
   backdrop-filter: none;
   box-shadow: none;
 }
-.browser-control-dialog .browser-control-strip-copy { gap: 6px; }
-.browser-control-dialog .browser-control-strip-copy strong,
-.browser-control-dialog .browser-control-strip-copy span {
-  overflow: visible;
-  text-overflow: clip;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-.browser-control-dialog .browser-control-strip-copy strong { font-size: calc(15px * var(--hermes-text-zoom, 1)); }
-.browser-control-dialog .browser-control-strip-copy span { font-size: calc(12px * var(--hermes-text-zoom, 1)); line-height: 1.5; }
 .browser-control-dialog-config {
   grid-column: 1 / -1;
   grid-row: 2;
-  padding-block: 16px;
-  border-block: 1px solid var(--hermes-line);
-}
-.browser-control-dialog-config small {
-  color: var(--hermes-muted);
-  font: 400 calc(12px * var(--hermes-text-zoom, 1))/1.45 var(--hermes-font-ui);
-}
-.browser-control-dialog-config .branded-select-button {
-  min-height: 40px;
-  border-radius: 8px;
-  padding-inline: 12px 36px;
-  font: 500 calc(13px * var(--hermes-text-zoom, 1))/1.4 var(--hermes-font-ui);
-  color: var(--hermes-ink);
-  background: rgba(var(--hermes-ink-rgb), 0.035);
+  padding: 0;
+  border: 0;
 }
 .browser-control-dialog-config .branded-select-option:is([aria-selected="true"], :hover, :focus-visible) {
   color: var(--hermes-ink);
@@ -2052,28 +2023,44 @@ html[data-hermes-font-profile="signature"] .browser-control-dialog-title {
 .browser-control-dialog .browser-control-strip-actions {
   grid-column: 1 / -1;
   grid-row: 3;
+  display: flex;
+  align-items: stretch;
   justify-content: flex-start;
   gap: 8px;
 }
-.browser-control-dialog .browser-control-action {
-  min-height: 38px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  gap: 7px;
-  font: 600 calc(13px * var(--hermes-text-zoom, 1))/1.3 var(--hermes-font-ui);
-  letter-spacing: 0;
+/* Buttons are the Settings buttons (.browser-control-action); only the layout is set here. */
+.browser-control-dialog .browser-control-strip-actions .browser-control-action {
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* Settings sizes its controls through .settings-dialog (the label eyebrow weight and the
+   default signature profile's control sizes). The window takes the same values, so its
+   select and buttons match the Settings card in every profile. */
+.browser-control-dialog label { font-weight: 700; }
+html[data-hermes-font-profile="signature"] .browser-control-dialog label {
+  font-size: calc(13px * var(--hermes-text-zoom, 1));
+  letter-spacing: 0.01em;
+  line-height: 1.4;
   text-transform: none;
 }
-.browser-control-dialog .browser-control-action[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--control-accent) 12%, var(--hermes-paper));
-  border-color: var(--control-accent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--control-accent) 36%, transparent);
+html[data-hermes-font-profile="signature"] .browser-control-dialog button {
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+  text-transform: none;
+}
+html[data-hermes-font-profile="signature"] .browser-control-dialog .browser-control-action {
+  font-size: calc(13px * var(--hermes-text-zoom, 1));
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 .browser-control-dialog .browser-control-action:not(.secondary) {
   background: var(--hermes-primary-bg, var(--hermes-ink));
   color: var(--hermes-primary-fg, var(--hermes-paper));
 }
-.browser-control-dialog .browser-control-dismiss { inset: 20px 18px auto auto; }
+html[data-hermes-font-profile="signature"] .browser-control-dialog .browser-control-action {
+  font-size: calc(13px * var(--hermes-text-zoom, 1));
+  letter-spacing: 0.03em;
+}
 .browser-control-dialog .browser-control-dismiss:focus-visible { outline: 2px solid var(--hermes-accent); outline-offset: 2px; }
 .browser-control-tooltip {
   position: fixed;
@@ -2083,7 +2070,7 @@ html[data-hermes-font-profile="signature"] .browser-control-dialog-title {
   box-sizing: border-box;
   padding: 12px 14px;
   border: 1px solid var(--hermes-line-strong);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--hermes-paper);
   color: var(--hermes-ink);
   box-shadow: 0 8px 28px rgba(var(--hermes-shadow-rgb), 0.24);
@@ -2094,9 +2081,7 @@ html[data-hermes-font-profile="signature"] .browser-control-dialog-title {
 }
 @media (prefers-reduced-motion: reduce) {
   .browser-control-dialog.is-pointer-open[open],
-  .browser-control-dialog.is-energized .browser-control-flare,
-  .browser-control-dialog:is([data-state="ready"], [data-state="active"]) .browser-control-live-indicator,
-  .browser-control-dialog[data-state="active"] .browser-control-energy::after { animation: none; }
+  .browser-control-dialog:is([data-state="ready"], [data-state="active"]) .browser-control-live-indicator { animation: none; }
 }
 @media (max-width: 560px) {
   .browser-control-strip { grid-template-columns: 32px minmax(0, 1fr); align-items: start; }
@@ -4425,7 +4410,7 @@ textarea:focus, input:focus, select:focus { border-color: var(--hermes-accent); 
   display: inline-grid;
   place-items: center;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: var(--hermes-ink);
   background: transparent;
   box-shadow: none;
