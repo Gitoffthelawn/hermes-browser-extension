@@ -4,6 +4,7 @@ Thanks to everyone who has contributed to Hermes Browser Extension.
 
 | Contributor | Contribution |
 | --- | --- |
+| [Alex130988](https://github.com/Alex130988) | Approval card for dangerous-command gates and its translated strings, rebuilt as a per-request, per-session approval and clarify queue from [PR #122](https://github.com/abundantbeing/hermes-browser-extension/pull/122). |
 | [Gitoffthelawn](https://github.com/Gitoffthelawn) | README wording that shows Firefox support and AMO links that no longer hard-code a locale, folded and corrected from [PR #121](https://github.com/abundantbeing/hermes-browser-extension/pull/121). |
 | [chrisworksai](https://github.com/chrisworksai) | Respect `HERMES_HOME` when locating the Hermes data directory in Windows setup, integrated from [PR #111](https://github.com/abundantbeing/hermes-browser-extension/pull/111). |
 | [xxkingstuggle](https://github.com/xxkingstuggle) | Exclude local distribution signing keys from source control in [PR #109](https://github.com/abundantbeing/hermes-browser-extension/pull/109). |

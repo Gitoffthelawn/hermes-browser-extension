@@ -1023,6 +1023,46 @@
     "message": "जब Hermes काम कर रहा हो",
     "description": "Runtime interface message browser_control.while_working"
   },
+  "runtime_clarify_expired": {
+    "message": "This question was already answered or expired.",
+    "description": "Runtime interface message clarify.expired"
+  },
+  "runtime_clarify_kicker": {
+    "message": "QUESTION FROM HERMES",
+    "description": "Runtime interface message clarify.kicker"
+  },
+  "runtime_clarify_multi_hint": {
+    "message": "Select every option that applies.",
+    "description": "Runtime interface message clarify.multi_hint"
+  },
+  "runtime_clarify_placeholder": {
+    "message": "Type your answer",
+    "description": "Runtime interface message clarify.placeholder"
+  },
+  "runtime_clarify_send": {
+    "message": "Send answer",
+    "description": "Runtime interface message clarify.send"
+  },
+  "runtime_clarify_send_failed": {
+    "message": "Could not send your answer: {error}",
+    "description": "Runtime interface message clarify.send_failed"
+  },
+  "runtime_clarify_sent": {
+    "message": "Answer sent",
+    "description": "Runtime interface message clarify.sent"
+  },
+  "runtime_clarify_title": {
+    "message": "Hermes needs an answer",
+    "description": "Runtime interface message clarify.title"
+  },
+  "runtime_clarify_waiting": {
+    "message": "Waiting for your answer",
+    "description": "Runtime interface message clarify.waiting"
+  },
+  "runtime_clarify_waiting_detail": {
+    "message": "Hermes paused this turn until you answer the question card.",
+    "description": "Runtime interface message clarify.waiting_detail"
+  },
   "runtime_commands_click_or_enter": {
     "message": "चलाने के लिए क्लिक करें या Enter दबाएँ।",
     "description": "Runtime interface message commands.click_or_enter"
@@ -1415,6 +1455,74 @@
     "message": "सतह",
     "description": "Runtime interface message diagnostics.surface"
   },
+  "runtime_exec_approval_cancelled": {
+    "message": "Hermes withdrew this request.",
+    "description": "Runtime interface message exec_approval.cancelled"
+  },
+  "runtime_exec_approval_choice_help": {
+    "message": "Approve once runs this command a single time. Session allows matching commands until this session ends. Always saves a permanent rule for matching commands.",
+    "description": "Runtime interface message exec_approval.choice_help"
+  },
+  "runtime_exec_approval_countdown": {
+    "message": "{time} left to answer",
+    "description": "Runtime interface message exec_approval.countdown"
+  },
+  "runtime_exec_approval_edit_title": {
+    "message": "Proposed file change",
+    "description": "Runtime interface message exec_approval.edit_title"
+  },
+  "runtime_exec_approval_edit_truncated": {
+    "message": "Showing the first part of the change.",
+    "description": "Runtime interface message exec_approval.edit_truncated"
+  },
+  "runtime_exec_approval_expired": {
+    "message": "यह स्वीकृति पहले ही उत्तरित हो चुकी है या समाप्त हो गई है।",
+    "description": "Runtime interface message exec_approval.expired"
+  },
+  "runtime_exec_approval_hint": {
+    "message": "कमांड चलाने के लिए यहाँ उत्तर दें। बिना उत्तर के अनुरोध समाप्त हो जाने पर कमांड नहीं चलेगी।",
+    "description": "Runtime interface message exec_approval.hint"
+  },
+  "runtime_exec_approval_info_only": {
+    "message": "This gateway does not accept answers from the browser. Answer in Hermes, or the request will expire and the command will not run.",
+    "description": "Runtime interface message exec_approval.info_only"
+  },
+  "runtime_exec_approval_kicker": {
+    "message": "कमांड स्वीकृति",
+    "description": "Runtime interface message exec_approval.kicker"
+  },
+  "runtime_exec_approval_other_session": {
+    "message": "A request in another session is waiting for your answer. Switch to that session to respond.",
+    "description": "Runtime interface message exec_approval.other_session"
+  },
+  "runtime_exec_approval_queue_more": {
+    "message": "{count} more waiting",
+    "description": "Runtime interface message exec_approval.queue_more"
+  },
+  "runtime_exec_approval_send_failed": {
+    "message": "आपका निर्णय भेजा नहीं जा सका: {error}",
+    "description": "Runtime interface message exec_approval.send_failed"
+  },
+  "runtime_exec_approval_sent": {
+    "message": "Decision sent",
+    "description": "Runtime interface message exec_approval.sent"
+  },
+  "runtime_exec_approval_sent_detail": {
+    "message": "Hermes received your decision and is continuing.",
+    "description": "Runtime interface message exec_approval.sent_detail"
+  },
+  "runtime_exec_approval_title": {
+    "message": "Hermes एक कमांड चलाना चाहता है",
+    "description": "Runtime interface message exec_approval.title"
+  },
+  "runtime_exec_approval_waiting": {
+    "message": "Waiting for your approval",
+    "description": "Runtime interface message exec_approval.waiting"
+  },
+  "runtime_exec_approval_waiting_detail": {
+    "message": "Hermes paused this turn until you answer the approval card. If it expires unanswered, the command will not run.",
+    "description": "Runtime interface message exec_approval.waiting_detail"
+  },
   "runtime_fulltab_handoff_opened_from": {
     "message": "{source} से खोला गया।",
     "description": "Runtime interface message fulltab.handoff.opened_from"
@@ -1642,6 +1750,26 @@
   "runtime_run_stop": {
     "message": "■ रुकें",
     "description": "Runtime interface message run.stop"
+  },
+  "runtime_run_stop_cancelled_commands": {
+    "message": "Cancelled {count} pending browser-control commands.",
+    "description": "Runtime interface message run.stop_cancelled_commands"
+  },
+  "runtime_run_stop_controller_toast": {
+    "message": "Hermes Control",
+    "description": "Runtime interface message run.stop_controller_toast"
+  },
+  "runtime_run_stop_controller_unreachable": {
+    "message": "Browser could not reach Hermes Control to cancel pending browser actions.",
+    "description": "Runtime interface message run.stop_controller_unreachable"
+  },
+  "runtime_run_stop_unconfirmed_no_run_id": {
+    "message": "Hermes has not reported a run id for this turn, so Browser cannot confirm the run stopped. The session writer and queued messages stay held until Hermes confirms a terminal state.",
+    "description": "Runtime interface message run.stop_unconfirmed_no_run_id"
+  },
+  "runtime_run_stop_unconfirmed_title": {
+    "message": "Stop not confirmed",
+    "description": "Runtime interface message run.stop_unconfirmed_title"
   },
   "runtime_runtime_fast_mode_toggle": {
     "message": "फ़ास्ट मोड {state}",
@@ -2154,6 +2282,14 @@
   "runtime_ui_approve_document_access": {
     "message": "Approve document access",
     "description": "Runtime interface message ui.approve_document_access"
+  },
+  "runtime_ui_artifact_open_on_computer_blocked": {
+    "message": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
+    "description": "Runtime interface message ui.artifact.open_on_computer.blocked"
+  },
+  "runtime_ui_artifact_open_on_computer_confirm": {
+    "message": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+    "description": "Runtime interface message ui.artifact.open_on_computer.confirm"
   },
   "runtime_ui_artifacts": {
     "message": "कलाकृतियों",

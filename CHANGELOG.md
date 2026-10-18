@@ -4,6 +4,9 @@
 
 ### Added
 
+- Approval and clarify requests from Hermes appear as a card above the composer in the side panel and the full view: Approve once, Session, Always or Reject (Reject is focused by default), the command or file-edit diff, and a countdown. Clarify questions take options, multi-select, free text or Skip. A flagged command no longer stalls a turn for up to 300 seconds, and nothing is approved automatically. Thanks to @Alex130988 (#122).
+- The dashboard WebSocket answers Hermes server requests, closes a card when Hermes cancels it, and shows requests that are still open after a reconnect.
+- A batched browser-control action runs up to 20 steps as one command, each through the same safety checks and approvals as a single action, with one page snapshot at the end. It stays inactive until Hermes adds a matching tool.
 - Hermes Control keeps one debugger session per attached tab instead of attaching around every action. It detaches after 60 seconds idle, when the tab is released or paused, and on Turn off, and re-attaches once if Chrome reports the session was lost. Chrome shows its debugging banner while a tab is attached.
 - Hermes Control returns the updated page with every action. Click, type, press, scroll, navigate, back, fill, select, scroll-to, and hover settle briefly and return a compact, redacted list of actionable elements with fresh refs, so Hermes can chain actions without a snapshot in between. `browser_snapshot` returns the same view.
 - When Hermes Control is attached, each turn tells the model the tab is ready and lists its interactive elements with refs, so the first click works without a navigate or snapshot call. With several attached tabs, commands default to the tab of the latest turn. The controller advertises fill and select.
@@ -19,6 +22,9 @@
 
 ### Changed
 
+- While Hermes waits on you, the status line reads "Waiting for your approval" or "Waiting for your answer" instead of "Still waiting on the model".
+- Hermes Control approvals are bound to the exact element and value they were requested for, so an approval for one target cannot be used for another with the same label.
+- Dashboard WebSocket tickets travel in the Sec-WebSocket-Protocol header instead of the URL, with a one-time fallback for older dashboards. Extension pages set a stricter content security policy.
 - The README intro now says Hermes runs in a Chromium side panel or Firefox sidebar and that tab control is Chromium-only, and has a short Hermes Control section. AMO links no longer hard-code `/en-US/`. Thanks to @Gitoffthelawn (#121).
 - README, troubleshooting, and PERMISSIONS.md now say that Chromium builds request `debugger` for opt-in Hermes Control and Firefox builds omit it. PERMISSIONS.md lists `unlimitedStorage` and `declarativeNetRequestWithHostAccess`, and no longer lists an `audioCapture` permission the extension never requests.
 - Nous Light uses a white shell with Nous Blue (#0000F2) text, borders and buttons. The background art stays as a faint watermark, and the start screen is white with a blue logo.
@@ -31,6 +37,14 @@
 
 ### Fixed
 
+- Stop no longer says "Hermes stopped" before Hermes has confirmed it. A turn without a confirmed run id is held as unconfirmed, with your draft and queued messages kept (#69).
+- Stop on dashboard and attached sessions sends the execution generation Hermes requires, retries once on a stale generation, falls back to stopping the run by id, and cancels pending Hermes Control commands (#69). Hermes Web stops the same way.
+- Context compaction works over the dashboard WebSocket instead of always starting a new session.
+- Approval decisions are sent with request_id and execution_generation, which current Hermes requires.
+- Redaction catches prefixed and suffixed secret names, more token shapes, Basic authorization headers and passwords in connection URLs, and keeps quoted JSON intact. Page text can no longer close the untrusted-context block early.
+- Gateway-derived values in side panel markup are escaped, and the HTML sanitizer fails closed when no DOM is available.
+- The full view asks before opening a returned file with your computer's default app, and never hands programs or scripts to it.
+- Clear stored token also clears the legacy token, and the companion journal file is created readable only by you.
 - Hermes Web no longer fails to list sessions on current Hermes: `session.list` was sent with an `offset` that Hermes rejects.
 - Hermes Control no longer leaves Chrome's debugging banner behind: releasing a tab, and a periodic sweep, now detach a debugger session that a restarted or suspended service worker had forgotten. Cancelling the banner during a command is no longer silently undone by a re-attach, and two commands that hit the same stale session share one re-attach instead of one of them failing.
 - Hermes Control results are safer and more reliable: a navigation that lands on a restricted page (banking, checkout, and so on) no longer reports that page's title, text typed into a field is never part of the page text, a slow navigation is read after it finishes loading (not half way), the page is read back only until 28 seconds into a command so the Hermes gateway's 30-second timeout cannot turn a completed action into a failure, and navigating to a different `#/route` of the same app is no longer skipped as "already open".
