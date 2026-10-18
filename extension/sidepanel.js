@@ -272,6 +272,7 @@ import {
   isUnknownMethodError,
   normalizeGatewayHistoryMessages,
   normalizeSessionCompressResult,
+  readGatewaySessionStatus,
   remoteStoredSessionIdForGateway,
   runtimeModelFromSessionStatus,
   WS_EVENTS,
@@ -517,6 +518,7 @@ import {
   activeRunIdFromSessionPayload,
   beginRunControl,
   canRecoverStaleDashboardRunControl,
+  canReleaseUnconfirmedRun,
   canSwitchActiveSession,
   controllerStopSummary,
   dashboardTerminalStatus,
@@ -779,6 +781,7 @@ const els = {
   runControlRecovery: $('#runControlRecovery'),
   runControlRecoveryDetail: $('#runControlRecoveryDetail'),
   retryRunStatusButton: $('#retryRunStatusButton'),
+  releaseRunButton: $('#releaseRunButton'),
   discardHeldQueueButton: $('#discardHeldQueueButton'),
   sendButton: $('#sendButton'),
   pageCommentTrayButton: $('#pageCommentTrayButton'),
@@ -5238,7 +5241,7 @@ async function reconcileActiveRunTerminal({ stopRequested = false, dashboardSess
       if (!sessionId) throw new Error('The active Dashboard session is unavailable for terminal reconciliation.');
       const connection = await ensureActiveDashboardWsConnection();
       return runControlRequestWithTimeout(
-        () => connection.client.request(WS_METHODS.sessionStatus, { session_id: sessionId }),
+        () => readGatewaySessionStatus(connection.client, sessionId, { storedSessionId: connection.wsStoredSessionId }),
         { timeoutMs: RUN_CONTROL_REQUEST_TIMEOUT_MS },
       );
     }
@@ -5280,6 +5283,20 @@ function renderRunControlRecovery() {
     : 'Hermes has not confirmed a terminal run state. Retry status before starting another turn.';
   els.retryRunStatusButton.disabled = false;
   els.discardHeldQueueButton.disabled = !queuedTurn;
+  // Without a run id there is nothing for Retry to ask about, so the person
+  // may release the hold themselves once they have looked at Hermes.
+  if (els.releaseRunButton) els.releaseRunButton.hidden = !canReleaseUnconfirmedRun(activeRunControl);
+}
+
+// The hold has no other way out when Stop never learned a run id. Never taken on
+// the person's behalf: it runs only from the Release button.
+async function releaseUnconfirmedRun() {
+  if (!canReleaseUnconfirmedRun(activeRunControl)) return false;
+  activeRunControl = markRunTerminal(activeRunControl, 'cancelled');
+  setStatus('warn', t('run.stop_unconfirmed_title'), t('run.release_detail'), { translateTitle: false, translateDetail: false });
+  renderRunControlRecovery();
+  await settleActiveRunTerminal();
+  return true;
 }
 
 async function retryActiveRunTerminalStatus() {
@@ -21719,6 +21736,8 @@ async function askHermes(userText, turnAttachments = [...attachments], turnOptio
 
   let didSend = false;
   let streamTerminalStatus = '';
+  // The stream ended because Stop closed it. That says nothing about the run.
+  let streamAborted = false;
   let streamView = null;
   // Declared outside the turn's try block so the terminal error paths can also
   // drain whatever the reveal still holds before the bubble is disposed.
@@ -22011,6 +22030,7 @@ async function askHermes(userText, turnAttachments = [...attachments], turnOptio
       );
     } catch (streamError) {
       if (isAbortError(streamError)) {
+        streamAborted = true;
         answer = liveText ? `${liveText}\n\n[stopped by user]` : '[stopped by user]';
       } else if (streamError?.hermesSetupFailure) {
         streamView.update(`Hermes setup issue.\n${streamError.message}`);
@@ -22112,6 +22132,9 @@ ${streamError.message}`);
     if (
       runControlGenerationMatches(turnRunControlGeneration, runControlGeneration)
       && [RUN_CONTROL_PHASES.RUNNING, RUN_CONTROL_PHASES.STOPPING, RUN_CONTROL_PHASES.UNCONFIRMED].includes(activeRunControl?.phase)
+      // A stream that Stop closed proves nothing about the run: Stop itself holds
+      // or confirms it, and must not be turned into "completed" from here.
+      && !(streamAborted && activeRunControl.phase !== RUN_CONTROL_PHASES.RUNNING)
     ) {
       activeRunControl = markRunTerminal(activeRunControl, streamTerminalStatus || 'completed');
     }
@@ -23568,6 +23591,7 @@ function bindEvents() {
     stopCurrentTurn();
   });
   els.retryRunStatusButton?.addEventListener('click', () => { void retryActiveRunTerminalStatus(); });
+  els.releaseRunButton?.addEventListener('click', () => { void releaseUnconfirmedRun(); });
   els.discardHeldQueueButton?.addEventListener('click', discardHeldQueuedTurn);
   els.pageCommentTrayButton?.addEventListener('click', () => {
     if (!els.pageCommentTray) return;

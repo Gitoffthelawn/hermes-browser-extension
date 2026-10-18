@@ -198,7 +198,7 @@ import {
   sessionContextFailureRecovery,
   turnRequestFailureState,
 } from './lib/turn-recovery.mjs';
-import { buildDashboardWsUrlWithCredential, buildSessionCompressParams, buildSessionListParams, buildSessionModelSwitchRequest, connectGatewayWithTicket, createGatewayClient, establishGatewaySession, interruptGatewaySession, isUnknownMethodError, normalizeGatewayHistoryMessages, normalizeSessionCompressResult, runtimeModelFromSessionStatus, WS_EVENTS, WS_METHODS } from './lib/gateway-ws.mjs';
+import { buildDashboardWsUrlWithCredential, buildSessionCompressParams, buildSessionListParams, buildSessionModelSwitchRequest, connectGatewayWithTicket, createGatewayClient, establishGatewaySession, interruptGatewaySession, isUnknownMethodError, normalizeGatewayHistoryMessages, normalizeSessionCompressResult, readGatewaySessionStatus, runtimeModelFromSessionStatus, WS_EVENTS, WS_METHODS } from './lib/gateway-ws.mjs';
 import { createDashboardStreamWatchdog, dashboardWatchdogTimeoutAction, matchesDashboardSessionEvent, shouldReattachDashboardStream } from './lib/dashboard-stream-watchdog.mjs';
 import { isTrustedDashboardOrigin, mintWsTicket, originOf, ticketFailureHelp } from './lib/dashboard-bridge.mjs';
 import {
@@ -226,6 +226,7 @@ import {
   acknowledgeStopRequest,
   activeRunIdFromSessionPayload,
   beginRunControl,
+  canReleaseUnconfirmedRun,
   canSwitchActiveSession,
   dashboardTerminalStatus,
   markRunStreamClosed,
@@ -417,6 +418,7 @@ const els = {
   webRunControlRecovery: $('#webRunControlRecovery'),
   webRunControlRecoveryDetail: $('#webRunControlRecoveryDetail'),
   webRetryRunStatusButton: $('#webRetryRunStatusButton'),
+  webReleaseRunButton: $('#webReleaseRunButton'),
   webDiscardHeldQueueButton: $('#webDiscardHeldQueueButton'),
   steerDraft: $('#steerDraft'),
 };
@@ -4749,7 +4751,7 @@ async function reconcileWebRunTerminal({ stopRequested = false, dashboardSession
         dashboardStatusSessionId = identity.liveId;
       }
       return runControlRequestWithTimeout(
-        () => connection.client.request(WS_METHODS.sessionStatus, { session_id: dashboardStatusSessionId }),
+        () => readGatewaySessionStatus(connection.client, dashboardStatusSessionId, { storedSessionId: activeSessionId }),
         { timeoutMs: RUN_CONTROL_REQUEST_TIMEOUT_MS },
       );
     }
@@ -4791,6 +4793,20 @@ function renderWebRunControlRecovery() {
     : 'Hermes has not confirmed a terminal run state. Retry status before starting another turn.';
   els.webRetryRunStatusButton.disabled = false;
   els.webDiscardHeldQueueButton.disabled = !queuedTurn;
+  // Without a run id there is nothing for Retry to ask about, so the person
+  // may release the hold themselves once they have looked at Hermes.
+  if (els.webReleaseRunButton) els.webReleaseRunButton.hidden = !canReleaseUnconfirmedRun(activeRunControl);
+}
+
+// The hold has no other way out when Stop never learned a run id. Never taken on
+// the person's behalf: it runs only from the Release button.
+async function releaseUnconfirmedWebRun() {
+  if (!canReleaseUnconfirmedRun(activeRunControl)) return false;
+  activeRunControl = markRunTerminal(activeRunControl, 'cancelled');
+  els.composerStatus.textContent = `${t('run.stop_unconfirmed_title')}: ${t('run.release_detail')}`;
+  renderWebRunControlRecovery();
+  await settleWebRunTerminal();
+  return true;
 }
 
 async function retryWebRunTerminalStatus() {
@@ -6194,6 +6210,7 @@ els.stopRun.addEventListener('click', () => {
   stopActiveRun().catch((error) => { els.composerStatus.textContent = error?.message || String(error); });
 });
 els.webRetryRunStatusButton?.addEventListener('click', () => { void retryWebRunTerminalStatus(); });
+els.webReleaseRunButton?.addEventListener('click', () => { void releaseUnconfirmedWebRun(); });
 els.webDiscardHeldQueueButton?.addEventListener('click', discardWebHeldQueuedTurn);
 els.attachButton.addEventListener('click', () => toggleAttachMenu());
 els.quickAttach.addEventListener('click', () => toggleAttachMenu(true));

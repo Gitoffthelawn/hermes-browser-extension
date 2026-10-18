@@ -411,6 +411,8 @@ export default Object.freeze({
   "run.stop_controller_unreachable": "Browser could not reach Hermes Control to cancel pending browser actions.",
   "run.stop_unconfirmed_no_run_id": "Hermes has not reported a run id for this turn, so Browser cannot confirm the run stopped. The session writer and queued messages stay held until Hermes confirms a terminal state.",
   "run.stop_unconfirmed_title": "Stop not confirmed",
+  "run.release": "Release",
+  "run.release_detail": "Browser released the composer without Hermes confirming the stop. Check the session before sending another message.",
   "runtime.fast_mode_toggle": "快速模式 {state}",
   "runtime.model_control_title": "{model} · {options}。更改模型和运行时选项。",
   "runtime.options_heading": "运行时选项",

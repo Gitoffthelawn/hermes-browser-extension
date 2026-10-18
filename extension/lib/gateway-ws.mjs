@@ -34,6 +34,9 @@ export const WS_METHODS = Object.freeze({
   promptSubmit: 'prompt.submit',
   sessionInterrupt: 'session.interrupt',
   sessionCompress: 'session.compress',
+  // Live sessions in this process with their run state; the one session read a
+  // session-authority gateway still serves (it answers -32601 to session.status).
+  sessionActiveList: 'session.active_list',
   sessionSteer: 'session.steer',
   promptBtw: 'prompt.btw',
   contextBreakdown: 'session.context_breakdown',
@@ -411,6 +414,36 @@ export function normalizeSessionCompressResult(result = null) {
 export function isUnknownMethodError(error) {
   return Number(error?.rpcCode ?? error?.code) === -32601
     || String(error?.data?.reason || '').toLowerCase() === 'unknown_method';
+}
+
+/**
+ * Read whether a live session is still running. `session.status` answers with
+ * rendered text ("Agent Running: Yes"); a session authority does not serve it at
+ * all (-32601), so there its `session.active_list` row carries the run state
+ * (idle | starting | working | waiting), and a session that list leaves out is
+ * read from the resume snapshot. Anything unreadable throws, so a caller waiting
+ * for Stop to land keeps the run held instead of assuming it ended.
+ */
+export async function readGatewaySessionStatus(client, sessionId, { storedSessionId = '' } = {}) {
+  const target = String(sessionId || '').trim();
+  if (!client?.request || !target) throw new Error('A live Hermes session is required to read its status.');
+  try {
+    return await client.request(WS_METHODS.sessionStatus, { session_id: target });
+  } catch (error) {
+    if (client.readyPayload?.session_authority !== true || !isUnknownMethodError(error)) throw error;
+  }
+  const stored = String(storedSessionId || target).trim();
+  const listed = await client.request(WS_METHODS.sessionActiveList, { current_session_id: stored });
+  const row = (Array.isArray(listed?.sessions) ? listed.sessions : [])
+    .find((item) => item && [item.id, item.session_key].some((id) => id === target || id === stored));
+  if (row) {
+    const state = String(row.status || '').trim().toLowerCase();
+    return { status: state === 'idle' ? 'idle' : 'running', source: WS_METHODS.sessionActiveList };
+  }
+  const snapshot = await client.request(WS_METHODS.sessionResume, { session_id: stored, omit_messages: true });
+  const state = String(snapshot?.execution_state || '').trim().toLowerCase();
+  const idle = snapshot?.running === false && (!state || state === 'idle' || state === 'terminal');
+  return { status: idle ? 'idle' : 'running', source: WS_METHODS.sessionResume };
 }
 
 // Classify an inbound frame so callers don't reimplement the JSON-RPC shape.
