@@ -579,7 +579,7 @@ import {
   transportRequiresApiKey,
   transportUsesDashboardTicket,
 } from './lib/connection-modes.mjs';
-import { CONNECTION_ACTIONS, connectionActionForSettings } from './lib/connection-dispatch.mjs';
+import { CONNECTION_ACTIONS, connectionActionForSettings, unsavedGatewayUrlForConnect } from './lib/connection-dispatch.mjs';
 import { assertCloudAgentTabStillMatches, resolveActiveCloudAgentTab } from './lib/cloud-agent-tab.mjs';
 import {
   CONNECTION_STATES,
@@ -21423,8 +21423,43 @@ async function connectTicketTransport({ cloud = false } = {}) {
   }
 }
 
+// Connect to Hermes must use the gateway URL the panel shows. Test connection
+// saves the form before it runs, but Connect did not, so a URL typed into the
+// settings form was ignored until Save. Adopt that URL in memory for this
+// attempt; it is written to storage only when the connection succeeds, as before.
+function adoptUnsavedGatewayUrlForConnect() {
+  const nextUrl = unsavedGatewayUrlForConnect({
+    savedUrl: settings.gatewayUrl,
+    typedUrl: els.gatewayUrlInput?.value,
+    savedConnectionMode: settings.connectionMode,
+    formConnectionMode: els.connectionModeInput?.value || settings.connectionMode,
+    savedGatewayMode: settings.gatewayMode,
+    formGatewayMode: els.gatewayModeInput?.value || settings.gatewayMode,
+  });
+  if (!nextUrl) return;
+  settings = {
+    ...settings,
+    gatewayUrl: nextUrl,
+    trustedDashboardOrigin: isTrustedDashboardOrigin(nextUrl, settings.trustedDashboardOrigin)
+      ? settings.trustedDashboardOrigin
+      : '',
+  };
+  // A live socket and any in-flight attempt belong to the previous URL.
+  connectionController.cancel('connection settings changed');
+  try {
+    remoteWsConnection?.client?.close();
+  } catch {
+    /* ignore */
+  }
+  remoteWsConnection = null;
+  profileWsConnection?.client?.close?.();
+  profileWsConnection = null;
+  if (!settings.trustedDashboardOrigin) trustedDashboardTabId = null;
+}
+
 async function connectToHermes() {
   settings = migrateConnectionSettings(settings);
+  adoptUnsavedGatewayUrlForConnect();
   const action = connectionActionForSettings(settings);
   if (action === CONNECTION_ACTIONS.CLOUD_ACTIVE_TAB_ATTACH) return connectTicketTransport({ cloud: true });
   if (action === CONNECTION_ACTIONS.REMOTE_DASHBOARD_ATTACH) return connectTicketTransport({ cloud: false });
