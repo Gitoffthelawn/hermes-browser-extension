@@ -469,6 +469,8 @@ export default Object.freeze({
   "ui.keep_restricted": "Keep restricted",
   "ui.local_document_access": "LOCAL DOCUMENT ACCESS",
   "ui.artifacts": "Artifacts",
+  "ui.artifact.open_on_computer.confirm": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+  "ui.artifact.open_on_computer.blocked": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
   "ui.ask": "Ask",
   "ui.ask.about.any.page.hermes.sees.the.active.tab.selected.text.pag.b2a32c39": "Ask about any page. Hermes sees the active tab, selected text, page context, and open tabs.",
   "ui.ask.every.time": "Ask every time",

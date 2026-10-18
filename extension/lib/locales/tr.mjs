@@ -475,6 +475,8 @@ export default Object.freeze({
   "ui.approval.opened.approve.hermes.browser.extension.then.return.here": "Onay açıldı. Hermes Browser Extensionnı onaylayın ve ardından buraya geri dönün.",
   "ui.approve": "Onayla",
   "ui.artifacts": "Yapıtlar",
+  "ui.artifact.open_on_computer.confirm": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+  "ui.artifact.open_on_computer.blocked": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
   "ui.ask": "Sor",
   "ui.ask.about.any.page.hermes.sees.the.active.tab.selected.text.pag.b2a32c39": "Herhangi bir sayfa hakkında bilgi isteyin. Hermes etkin sekmeyi, seçilen metni, sayfa içeriğini ve açık sekmeleri görür.",
   "ui.ask.every.time": "Her zaman sor",

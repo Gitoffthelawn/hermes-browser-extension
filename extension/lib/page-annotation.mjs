@@ -1,4 +1,4 @@
-import { redactSensitiveText } from './redaction.mjs';
+import { neutralizeContextDelimiters, redactSensitiveText } from './redaction.mjs';
 import { hasCredentialBearingUrl } from './redaction.mjs';
 
 export const PAGE_ANNOTATION_SCHEMA_VERSION = 1;
@@ -75,10 +75,10 @@ export function compactPageAnnotationIdentity(snapshot = {}) {
   }
   return {
     css,
-    html: clip(redactSensitiveText(snapshot.html || ''), MAX_HTML),
-    selector: clip(snapshot.selector || snapshot.tag || 'div', MAX_SELECTOR),
+    html: clip(neutralizeContextDelimiters(redactSensitiveText(snapshot.html || '')), MAX_HTML),
+    selector: clip(neutralizeContextDelimiters(snapshot.selector || snapshot.tag || 'div'), MAX_SELECTOR),
     tag: String(snapshot.tag || 'div').toLowerCase(),
-    text: clip(redactSensitiveText(snapshot.text || ''), MAX_TEXT),
+    text: clip(neutralizeContextDelimiters(redactSensitiveText(snapshot.text || '')), MAX_TEXT),
   };
 }
 

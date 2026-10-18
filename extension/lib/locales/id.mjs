@@ -475,6 +475,8 @@ export default Object.freeze({
   "ui.approval.opened.approve.hermes.browser.extension.then.return.here": "Persetujuan dibuka. Setujui Hermes Browser Extension, lalu kembali ke sini.",
   "ui.approve": "Menyetujui",
   "ui.artifacts": "Artefak",
+  "ui.artifact.open_on_computer.confirm": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+  "ui.artifact.open_on_computer.blocked": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
   "ui.ask": "Bertanya",
   "ui.ask.about.any.page.hermes.sees.the.active.tab.selected.text.pag.b2a32c39": "Tanyakan tentang halaman mana pun. Hermes melihat tab aktif, teks yang dipilih, konteks halaman, dan tab terbuka.",
   "ui.ask.every.time": "Tanyakan setiap saat",

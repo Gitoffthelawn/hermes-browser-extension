@@ -453,6 +453,8 @@ export default Object.freeze({
   "ui.approval.opened.approve.hermes.browser.extension.then.return.here": "已打开批准窗口。请批准 Hermes 浏览器扩展，然后返回此处。",
   "ui.approve": "批准",
   "ui.artifacts": "制品",
+  "ui.artifact.open_on_computer.confirm": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+  "ui.artifact.open_on_computer.blocked": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
   "ui.ask": "询问",
   "ui.ask.about.any.page.hermes.sees.the.active.tab.selected.text.pag.b2a32c39": "可询问任何页面。Hermes 可看到活动标签页、选中文本、页面上下文和打开的标签页。",
   "ui.ask.every.time": "每次都询问",

@@ -1,7 +1,7 @@
 /**
  * Shared secret redaction helpers for browser-context surfaces.
  */
-import { redactSensitiveTextWithCount } from './content-extraction-core.mjs';
+import { isSensitiveAssignmentKey, redactSensitiveTextWithCount } from './content-extraction-core.mjs';
 
 const CREDENTIAL_URL_PARAMETER_NAMES = new Set([
   'apikey',
@@ -31,7 +31,20 @@ const CREDENTIAL_URL_PARAMETER_NAMES = new Set([
   'credential',
   'signature',
   'sig',
+  'pwd',
+  'passphrase',
+  'sessionid',
+  'sessid',
+  'phpsessid',
+  'jsessionid',
+  'ticket',
+  'apisecret',
+  'accesskey',
+  'secretkey',
 ]);
+// OAuth callbacks carry a one-time `code` next to `state`. `code` alone is far
+// too common (country, promo and language codes) to treat as a credential.
+const OAUTH_CALLBACK_PARAMETER_NAMES = ['code', 'state'];
 
 function decodedUrlLayers(value = '') {
   const layers = [String(value || '')];
@@ -66,6 +79,20 @@ function credentialParameterNames(value = '') {
   return names;
 }
 
+const CONTEXT_DELIMITER_RE = /(?:USER_REQUEST|UNTRUSTED_BROWSER_CONTEXT)_(?:START|END)|HERMES_PAGE_COMMENTS/gi;
+
+/**
+ * Page-derived text is placed between fixed delimiter lines
+ * (USER_REQUEST_START/END, UNTRUSTED_BROWSER_CONTEXT_START/END, the page
+ * comment wrapper). Page text that spells one of those markers could close the
+ * untrusted block early and forge the section after it, so every marker is
+ * rewritten (case-insensitively, wherever it appears) into a form no parser or
+ * reader treats as a delimiter. Ordinary text is returned unchanged.
+ */
+export function neutralizeContextDelimiters(value = '') {
+  return String(value ?? '').replace(CONTEXT_DELIMITER_RE, (marker) => marker.replaceAll('_', '-'));
+}
+
 export function redactSensitiveText(value = '') {
   return redactSensitiveTextWithCount(value).text;
 }
@@ -87,5 +114,11 @@ export function hasCredentialBearingUrl(value = '') {
     ...credentialParameterNames(parsed.search),
     ...credentialParameterNames(parsed.hash),
   ]);
-  return [...names].some((name) => CREDENTIAL_URL_PARAMETER_NAMES.has(name));
+  if ([...names].some((name) => CREDENTIAL_URL_PARAMETER_NAMES.has(name) || isSensitiveAssignmentKey(name))) return true;
+  if (OAUTH_CALLBACK_PARAMETER_NAMES.every((name) => names.has(name))) return true;
+  // A recognisable secret shape (for example `?key=AIza...`) is credential
+  // bearing whatever the parameter is called.
+  return [parsed.search, parsed.hash].some((part) => (
+    decodedUrlLayers(part).some((layer) => redactSensitiveTextWithCount(layer).count > 0)
+  ));
 }

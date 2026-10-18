@@ -8,10 +8,11 @@
 // input (raw HTML, javascript: URLs, attribute breakouts) is neutralized.
 //
 // Non-DOM contexts (MV3 service worker) cannot run DOMPurify; the module
-// fails closed to the renderer's own escaping there rather than throwing.
+// fails closed there rather than throwing or returning unsanitized markup: the
+// input is returned as escaped plain text, never as live HTML.
 
 import createDOMPurify from './vendor/purify.es.mjs';
-import { renderMarkdown } from './common.mjs';
+import { escapeHtml, renderMarkdown } from './common.mjs';
 
 let purifyInstance = null;
 
@@ -41,12 +42,12 @@ function getPurifier() {
 /**
  * Sanitize an HTML string with DOMPurify defaults.
  * @param {string} html raw HTML to sanitize
- * @returns {string} sanitized HTML (input unchanged when no DOM is available)
+ * @returns {string} sanitized HTML (escaped plain text when no DOM is available)
  */
 export function sanitizeHtml(html = '') {
   const instance = getPurifier();
   const value = String(html ?? '');
-  return instance ? instance.sanitize(value, SANITIZE_OPTIONS) : value;
+  return instance ? instance.sanitize(value, SANITIZE_OPTIONS) : escapeHtml(value);
 }
 
 /**
@@ -55,7 +56,7 @@ export function sanitizeHtml(html = '') {
  * @returns {string} sanitized HTML
  */
 export function renderMarkdownSafe(value = '') {
-  const html = renderMarkdown(value);
   const instance = getPurifier();
-  return instance ? instance.sanitize(html, SANITIZE_OPTIONS) : html;
+  if (!instance) return escapeHtml(value);
+  return instance.sanitize(renderMarkdown(value), SANITIZE_OPTIONS);
 }

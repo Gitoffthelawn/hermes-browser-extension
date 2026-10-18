@@ -9,6 +9,7 @@ import {
   buildSessionListParams,
   buildSessionModelSwitchRequest,
   classifyGatewayFrame,
+  connectGatewayWithTicket,
   createGatewayClient,
   establishGatewaySession,
   gatewayWebSocketProtocols,
@@ -113,6 +114,53 @@ test('gateway controller admission uses a credential-free endpoint and ticket su
   FakeWebSocket.last._open();
   FakeWebSocket.last._message({ method: 'event', params: { type: 'gateway.ready', payload: {} } });
   await connecting;
+});
+
+test('dashboard tickets are offered in Sec-WebSocket-Protocol, not in the URL', async () => {
+  const client = createGatewayClient({ WebSocketImpl: FakeWebSocket });
+  const connecting = connectGatewayWithTicket(client, 'https://dashboard.example/hermes', 'ticket-fixture');
+  assert.equal(FakeWebSocket.last.url, 'wss://dashboard.example/hermes/api/ws');
+  assert.equal(FakeWebSocket.last.url.includes('ticket'), false);
+  assert.deepEqual(FakeWebSocket.last.protocols, ['hermes-gateway-v1', 'hermes-gateway-ticket.ticket-fixture']);
+  FakeWebSocket.last._open();
+  FakeWebSocket.last._message({ method: 'event', params: { type: 'gateway.ready', payload: {} } });
+  await connecting;
+});
+
+test('an older dashboard that refuses the subprotocol handshake gets the query ticket once', async () => {
+  const sockets = [];
+  class Recording extends FakeWebSocket {
+    constructor(url, protocols) {
+      super(url, protocols);
+      sockets.push(this);
+    }
+  }
+  const client = createGatewayClient({ WebSocketImpl: Recording });
+  const connecting = connectGatewayWithTicket(client, 'http://127.0.0.1:9119', 'old-ticket');
+  assert.equal(sockets.length, 1);
+  sockets[0]._emit('close', { code: 1006 });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(sockets.length, 2);
+  assert.equal(sockets[1].url, 'ws://127.0.0.1:9119/api/ws?ticket=old-ticket');
+  sockets[1]._open();
+  sockets[1]._message({ method: 'event', params: { type: 'gateway.ready', payload: {} } });
+  await connecting;
+});
+
+test('a failure after the socket opened is not retried with the ticket in the URL', async () => {
+  const sockets = [];
+  class Recording extends FakeWebSocket {
+    constructor(url, protocols) {
+      super(url, protocols);
+      sockets.push(this);
+    }
+  }
+  const client = createGatewayClient({ WebSocketImpl: Recording });
+  const connecting = connectGatewayWithTicket(client, 'http://127.0.0.1:9119', 'spent-ticket');
+  sockets[0]._open();
+  sockets[0]._emit('close', { code: 4401, reason: 'ticket_invalid' });
+  await assert.rejects(connecting, /code 4401/);
+  assert.equal(sockets.length, 1);
 });
 
 test('loopback dashboard WebSockets use the injected session token instead of an OAuth ticket', () => {

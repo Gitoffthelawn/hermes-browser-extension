@@ -192,6 +192,22 @@ export function gatewayWebSocketProtocols(ticket) {
   return ['hermes-gateway-v1', `hermes-gateway-ticket.${cleanTicket}`];
 }
 
+/**
+ * Connect with a one-shot dashboard ticket. The ticket goes in
+ * Sec-WebSocket-Protocol so it never lands in a URL (proxy and access logs
+ * record request targets). A dashboard that predates ticket subprotocol
+ * admission refuses the handshake before it opens; only then is the same,
+ * still-unspent ticket retried in the query string the older dashboards read.
+ */
+export async function connectGatewayWithTicket(client, baseUrl, ticket) {
+  try {
+    return await client.connect(buildDashboardWsEndpoint(baseUrl), gatewayWebSocketProtocols(ticket));
+  } catch (error) {
+    if (!/WebSocket closed before gateway\.ready and open\b/.test(String(error?.message || ''))) throw error;
+    return client.connect(buildDashboardWsUrl(baseUrl, ticket));
+  }
+}
+
 export function buildDashboardWsUrlWithCredential(baseUrl, credentialName, credentialValue) {
   if (credentialName !== 'ticket' && credentialName !== 'token') {
     throw new Error('Dashboard WebSocket credential must be a ticket or token.');

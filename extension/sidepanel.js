@@ -260,6 +260,7 @@ import { extractYouTubeVideoId } from './lib/transcript.mjs';
 import {
   buildDashboardWsUrl,
   buildDashboardWsUrlWithCredential,
+  connectGatewayWithTicket,
   buildSessionModelSwitchRequest,
   createGatewayClient,
   establishGatewaySession,
@@ -7165,14 +7166,14 @@ function renderCustomThemeCards(activeTheme) {
       ? customThemeText('custom_theme.confirm_delete', 'Confirm delete')
       : customThemeText('custom_theme.delete_theme', 'Delete');
     return `
-      <div class="custom-theme-card-shell ${selected ? 'selected' : ''}" data-custom-theme-id="${record.id}">
-        <button class="custom-theme-card-select" type="button" data-theme="${record.id}" role="radio" aria-checked="${selected}" aria-label="${escapeHtml(record.document.name)}: ${escapeHtml(userInstalled)}">
+      <div class="custom-theme-card-shell ${selected ? 'selected' : ''}" data-custom-theme-id="${escapeHtml(record.id)}">
+        <button class="custom-theme-card-select" type="button" data-theme="${escapeHtml(record.id)}" role="radio" aria-checked="${selected}" aria-label="${escapeHtml(record.document.name)}: ${escapeHtml(userInstalled)}">
           ${customThemePreviewMarkup(record.document.colors)}
           <span class="custom-theme-card-copy"><strong>${escapeHtml(record.document.name)}</strong><small>${escapeHtml(userInstalled)}</small></span>
         </button>
         <span class="custom-theme-card-actions">
-          <button type="button" data-custom-theme-export="${record.id}" aria-label="${escapeHtml(exportLabel)} ${escapeHtml(record.document.name)}">${escapeHtml(exportLabel)}</button>
-          <button class="danger-action" type="button" data-custom-theme-delete="${record.id}" aria-label="${escapeHtml(deleteLabel)} ${escapeHtml(record.document.name)}">${escapeHtml(deleteLabel)}</button>
+          <button type="button" data-custom-theme-export="${escapeHtml(record.id)}" aria-label="${escapeHtml(exportLabel)} ${escapeHtml(record.document.name)}">${escapeHtml(exportLabel)}</button>
+          <button class="danger-action" type="button" data-custom-theme-delete="${escapeHtml(record.id)}" aria-label="${escapeHtml(deleteLabel)} ${escapeHtml(record.document.name)}">${escapeHtml(deleteLabel)}</button>
         </span>
       </div>
     `;
@@ -8552,7 +8553,7 @@ function renderModelRuntimeOptions() {
   `).join('');
   els.modelOptionsList.innerHTML = `
     <div class="model-options-heading">${assistTarget ? 'Hermes Assist options' : roomTarget ? 'Bot options' : 'Options'}</div>
-    ${roomStatusText ? `<p class="model-options-note" role="status">${roomStatusText}</p>` : ''}
+    ${roomStatusText ? `<p class="model-options-note" role="status">${escapeHtml(roomStatusText)}</p>` : ''}
     <button class="model-toggle-option" type="button" data-toggle="thinking" aria-pressed="${String(thinkingEnabled)}"${roomLocked ? ' disabled' : ''}>
       <span>Thinking</span><strong class="toggle-switch ${thinkingEnabled ? 'on' : ''}" aria-hidden="true"></strong>
     </button>
@@ -8889,7 +8890,7 @@ function renderContextWindow(userText = els.input?.value || '') {
     [translateUiText('Page text'), stats.parts.pageText],
   ];
   els.contextBreakdown.innerHTML = rows.map(([label, part]) => `
-    <dt>${label}</dt>
+    <dt>${escapeHtml(label)}</dt>
     <dd title="${part.enabled ? 'included' : 'disabled'}">${part.enabled ? `${formatNumber(part.estimatedTokens)} tok · ${formatNumber(part.chars)} chars` : 'disabled'}</dd>
   `).join('');
 }
@@ -10206,7 +10207,7 @@ async function ensureProfileWsConnection({ readyTimeoutMs = 8_000, allowDashboar
     gatewayClient.on('profiles.changed', () => {
       void loadProfiles({ quiet: true });
     });
-    await gatewayClient.connect(buildDashboardWsUrl(baseUrl, ticket.ticket));
+    await connectGatewayWithTicket(gatewayClient, baseUrl, ticket.ticket);
     profileWsConnection = { client: gatewayClient, baseUrl, key };
     return profileWsConnection;
   }
@@ -13721,7 +13722,16 @@ function classicShapeIsDark(color = '') {
   }
 }
 
-function classicShapeSvg(shape = 'squircle', color = 'hsl(180 68% 58%)') {
+// The colour is interpolated into SVG attributes and may come from a stored or
+// gateway-provided avatar choice, so only plain CSS colour syntax is let through.
+const CLASSIC_SHAPE_DEFAULT_COLOR = 'hsl(180 68% 58%)';
+function classicShapeSafeColor(color) {
+  const value = String(color || '').trim();
+  return /^(?:#[0-9a-f]{3,8}|(?:hsla?|rgba?)\([0-9a-z .,%/+-]{1,60}\)|[a-z]{3,20})$/i.test(value) ? value : CLASSIC_SHAPE_DEFAULT_COLOR;
+}
+
+function classicShapeSvg(shape = 'squircle', requestedColor = CLASSIC_SHAPE_DEFAULT_COLOR) {
+  const color = classicShapeSafeColor(requestedColor);
   const body = {
     circle: `<circle cx="20" cy="20" r="17.5" fill="${color}"/>`,
     blob: `<path d="M20 4.5 C11 4.5 4.2 10 4.6 18 C5 26.5 11 35.5 20 35.5 C29 35.5 35.8 29 35.4 20 C35 11 29.5 4.5 20 4.5 Z" fill="${color}"/>`,
@@ -20507,10 +20517,9 @@ async function ensureRemoteWsClient() {
     throw error;
   }
   await refreshContextConsentPrincipal({ dashboardPrincipal: ticket.principal });
-  const wsUrl = buildDashboardWsUrl(baseUrl, ticket.ticket);
   const client = createGatewayClient();
   try {
-    await client.connect(wsUrl);
+    await connectGatewayWithTicket(client, baseUrl, ticket.ticket);
   } catch (error) {
     console.warn('[Hermes] remote: WebSocket connect failed:', error?.message || error);
     throw error;

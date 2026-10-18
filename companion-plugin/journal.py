@@ -287,14 +287,18 @@ class BrowserContextJournal:
         payload = ("\n".join(lines) + ("\n" if lines else "")).encode("utf-8")
         temp = path.with_name(f"{path.name}.tmp")
         try:
-            with open(temp, "wb") as handle:
+            # Create the file owner-only from the start so the payload is never
+            # readable under a permissive umask, even briefly; a stale temp file
+            # left by an earlier crash is tightened before anything is written.
+            descriptor = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, JOURNAL_FILE_MODE)
+            with os.fdopen(descriptor, "wb") as handle:
+                try:
+                    os.chmod(temp, JOURNAL_FILE_MODE)
+                except OSError:
+                    pass
                 handle.write(payload)
                 handle.flush()
                 os.fsync(handle.fileno())
-            try:
-                os.chmod(temp, JOURNAL_FILE_MODE)
-            except OSError:
-                pass
             os.replace(temp, path)
             try:
                 os.chmod(path, JOURNAL_FILE_MODE)

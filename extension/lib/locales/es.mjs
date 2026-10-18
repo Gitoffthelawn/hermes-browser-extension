@@ -475,6 +475,8 @@ export default Object.freeze({
   "ui.approval.opened.approve.hermes.browser.extension.then.return.here": "Aprobación abierta. Apruebe Hermes Browser Extension y luego regrese aquí.",
   "ui.approve": "Aprobar",
   "ui.artifacts": "Artefactos",
+  "ui.artifact.open_on_computer.confirm": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+  "ui.artifact.open_on_computer.blocked": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
   "ui.ask": "preguntar",
   "ui.ask.about.any.page.hermes.sees.the.active.tab.selected.text.pag.b2a32c39": "Pregunta por cualquier página. Hermes ve la pestaña activa, el texto seleccionado, el contexto de la página y las pestañas abiertas.",
   "ui.ask.every.time": "pregunta cada vez",

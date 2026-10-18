@@ -273,6 +273,21 @@ test('clearing an API token falls back to ticket-based dashboard transport for r
   assert.equal(legacyRemoteApi.gatewayMode, 'remote-dashboard');
 });
 
+test('clearing the stored token also drops the legacy agentToken credential', () => {
+  const cleared = connectionSettingsAfterTokenClear({
+    connectionSchemaVersion: CONNECTION_SCHEMA_VERSION,
+    connectionMode: 'remote',
+    connectionTransport: CONNECTION_TRANSPORTS.REMOTE_API,
+    apiKey: 'current-token',
+    agentToken: 'legacy-token',
+  });
+  assert.equal(cleared.apiKey, '');
+  assert.equal(cleared.agentToken, '');
+  // The side panel merges the result over stored settings, so the key must be
+  // present (empty) rather than simply omitted.
+  assert.equal(JSON.stringify({ agentToken: 'legacy-token', ...cleared }).includes('legacy-token'), false);
+});
+
 test('clearStoredToken applies the post-clear transport fallback and re-runs readiness on transport change', () => {
   const clearBody = sidepanelSource.match(/async function clearStoredToken\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
   assert.match(clearBody, /connectionSettingsAfterTokenClear\(settings\)/);

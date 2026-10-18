@@ -475,6 +475,8 @@ export default Object.freeze({
   "ui.approval.opened.approve.hermes.browser.extension.then.return.here": "เปิดการอนุมัติแล้ว อนุมัติ Hermes Browser Extension แล้วกลับมาที่นี่",
   "ui.approve": "อนุมัติ",
   "ui.artifacts": "อาร์ติแฟกต์",
+  "ui.artifact.open_on_computer.confirm": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+  "ui.artifact.open_on_computer.blocked": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
   "ui.ask": "ถาม",
   "ui.ask.about.any.page.hermes.sees.the.active.tab.selected.text.pag.b2a32c39": "ถามเพจอะไรก็ได้ Hermes เห็นแท็บที่ใช้งานอยู่ ข้อความที่เลือก บริบทของหน้า และแท็บที่เปิดอยู่",
   "ui.ask.every.time": "ถามทุกครั้ง",
