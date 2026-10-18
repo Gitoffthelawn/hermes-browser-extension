@@ -58,6 +58,17 @@ function isLowSurrogate(point) {
   return code >= 0xdc00 && code <= 0xdfff;
 }
 
+// What the live bubble should show for a pacer frame, or null to leave it as it
+// is. A frame with nothing revealed that closes the run (flush or finish with
+// no pushed text) must not repaint: it would blank a notice the turn set on the
+// bubble itself, such as "Streaming failed, retrying...", and a turn that ends
+// there would then show the thinking placeholder for good.
+export function pacerFramePaint(text, meta = {}, placeholder = '') {
+  const revealed = String(text ?? '');
+  if (revealed) return revealed;
+  return meta?.done ? null : placeholder;
+}
+
 export function createStreamPacer({
   onFrame = () => {},
   now = Date.now,

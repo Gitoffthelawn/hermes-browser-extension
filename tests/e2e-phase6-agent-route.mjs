@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -11,6 +11,7 @@ import {
   REAL_CAPABILITIES,
   ROOT,
   chromeExecutable,
+  ensureExtensionStartupPage,
   fetchJson,
   killChrome,
   unpackedExtensionId,
@@ -26,16 +27,14 @@ const AGENT_ROOT = process.env.HERMES_AGENT_PHASE6_PATH || 'D:/HermesCaches/herm
 const AGENT_DEPS = process.env.HERMES_AGENT_TEST_DEPS || 'D:/HermesCaches/hermes-agent-browser-pr-pytest311';
 const AGENT_PYTHON = process.env.HERMES_AGENT_PYTHON || 'C:/Users/Jaybo/.hermes/hermes-agent/venv/Scripts/python.exe';
 const ROUTED_TEXT = 'Phase Six Agent Route';
-
-function killProcessTree(child) {
-  if (!child?.pid) return;
-  try {
-    spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-  } catch { /* best effort */ }
-}
+// The advertised fill and select actions have no model tool in the pinned Agent
+// worktree yet, so the router journey cannot drive them.
+const NOT_YET_ROUTED = new Set(['browser_fill', 'browser_select']);
+// HERMES_AGENT_ROUTE_SUBSET=registered runs only the actions a stock upstream
+// Agent registers as model tools (navigate, snapshot, click, type, press,
+// scroll, back). The full journey needs the Phase 6 Agent integration worktree
+// that also registers hover, drag, scroll_to, screenshot and the tab tools.
+const REGISTERED_ONLY = process.env.HERMES_AGENT_ROUTE_SUBSET === 'registered';
 
 function waitForServer(child, diagnostics) {
   return new Promise((resolve, reject) => {
@@ -91,7 +90,7 @@ async function main() {
       ...process.env,
       PYTHONHOME: '',
       VIRTUAL_ENV: '',
-      PYTHONPATH: [AGENT_ROOT, AGENT_DEPS].join(';'),
+      PYTHONPATH: [AGENT_ROOT, AGENT_DEPS].filter(Boolean).join(path.delimiter),
       PYTHONUNBUFFERED: '1',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -133,6 +132,7 @@ async function main() {
     await waitFor(() => existsSync(activePort));
     const [portLine] = (await readFile(activePort, 'utf8')).trim().split('\n');
     const devtoolsBase = `http://127.0.0.1:${Number(portLine)}`;
+    await ensureExtensionStartupPage(devtoolsBase, extensionId);
     const version = await fetchJson(`${devtoolsBase}/json/version`);
     browser = new CdpClient(version.webSocketDebuggerUrl);
     await browser.connect();
@@ -260,11 +260,13 @@ async function main() {
     }) : null`));
     assert.deepEqual(mutation, { value: ROUTED_TEXT, result: `Applied: ${ROUTED_TEXT}` });
 
-    await dispatch('browser_hover', { ref: buttonRef.ref });
-    await dispatch('browser_scroll_to', { ref: buttonRef.ref });
-    const routedScreenshot = await dispatch('browser_screenshot', { ref: buttonRef.ref, zoom: 1.5 });
-    assert.match(routedScreenshot?.dataUrl || '', /^data:image\/png;base64,/);
-    await dispatchWithApproval('browser_drag', { ref: textboxRef.ref, to_ref: buttonRef.ref });
+    if (!REGISTERED_ONLY) {
+      await dispatch('browser_hover', { ref: buttonRef.ref });
+      await dispatch('browser_scroll_to', { ref: buttonRef.ref });
+      const routedScreenshot = await dispatch('browser_screenshot', { ref: buttonRef.ref, zoom: 1.5 });
+      assert.match(routedScreenshot?.dataUrl || '', /^data:image\/png;base64,/);
+      await dispatchWithApproval('browser_drag', { ref: textboxRef.ref, to_ref: buttonRef.ref });
+    }
     const buttonPoint = await controlled.evaluate(`(() => {
       const rect = document.querySelector('#apply').getBoundingClientRect();
       return { x: rect.left + (rect.width / 2), y: rect.top + (rect.height / 2) };
@@ -273,7 +275,8 @@ async function main() {
     await waitFor(() => controlled.evaluate(`phase6AgentRouteState.clicks === 2`));
 
     await dispatch('browser_press', { key: 'a', modifiers: ['shift'] });
-    await waitFor(() => controlled.evaluate(`phase6AgentRouteState.keys.includes('a')`));
+    // Shift+a types the shifted character, as a real keyboard does.
+    await waitFor(() => controlled.evaluate(`phase6AgentRouteState.keys.includes('A')`));
     const shot = await controlled.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
     await writeFile(SCREENSHOT, Buffer.from(shot.data, 'base64'));
 
@@ -286,53 +289,67 @@ async function main() {
     await dispatch('browser_back');
     await waitFor(() => controlled.evaluate(`location.href === ${JSON.stringify(fixtureUrl)}`));
 
-    const taskSetId = 'phase6-agent-route-tabs';
-    const createdA = await dispatch('browser_tab_create', {
-      url: `${fixtureUrl}?route=task-a`,
-      active: false,
-      task_set_id: taskSetId,
-    });
-    const createdB = await dispatch('browser_tab_create', {
-      url: `${fixtureUrl}?route=task-b`,
-      active: false,
-      task_set_id: taskSetId,
-    });
-    const createdTabA = Number(createdA?.tab?.id);
-    const createdTabB = Number(createdB?.tab?.id);
-    assert.ok(Number.isInteger(createdTabA) && createdTabA > 0, JSON.stringify(createdA));
-    assert.ok(Number.isInteger(createdTabB) && createdTabB > 0, JSON.stringify(createdB));
+    let createdTabA = null;
+    let createdTabB = null;
+    if (!REGISTERED_ONLY) {
+      const taskSetId = 'phase6-agent-route-tabs';
+      const createdA = await dispatch('browser_tab_create', {
+        url: `${fixtureUrl}?route=task-a`,
+        active: false,
+        task_set_id: taskSetId,
+      });
+      const createdB = await dispatch('browser_tab_create', {
+        url: `${fixtureUrl}?route=task-b`,
+        active: false,
+        task_set_id: taskSetId,
+      });
+      createdTabA = Number(createdA?.tab?.id);
+      createdTabB = Number(createdB?.tab?.id);
+      assert.ok(Number.isInteger(createdTabA) && createdTabA > 0, JSON.stringify(createdA));
+      assert.ok(Number.isInteger(createdTabB) && createdTabB > 0, JSON.stringify(createdB));
 
-    const tabsBefore = await dispatch('browser_tabs');
-    assert.deepEqual(
-      [tabId, createdTabA, createdTabB].every((id) => tabsBefore.tabs.some((tab) => Number(tab.id) === id)),
-      true,
-      JSON.stringify(tabsBefore),
-    );
-    await dispatch('browser_tab_activate', { tab_id: createdTabA });
-    await waitFor(() => extension.evaluate(`chrome.tabs.query({ active: true, currentWindow: true }).then((tabs) => Number(tabs?.[0]?.id) === ${createdTabA})`));
-    await dispatch('browser_tab_activate', { tab_id: tabId });
-    await waitFor(() => extension.evaluate(`chrome.tabs.query({ active: true, currentWindow: true }).then((tabs) => Number(tabs?.[0]?.id) === ${tabId})`));
+      const tabsBefore = await dispatch('browser_tabs');
+      assert.deepEqual(
+        [tabId, createdTabA, createdTabB].every((id) => tabsBefore.tabs.some((tab) => Number(tab.id) === id)),
+        true,
+        JSON.stringify(tabsBefore),
+      );
+      await dispatch('browser_tab_activate', { tab_id: createdTabA });
+      await waitFor(() => extension.evaluate(`chrome.tabs.query({ active: true, currentWindow: true }).then((tabs) => Number(tabs?.[0]?.id) === ${createdTabA})`));
+      await dispatch('browser_tab_activate', { tab_id: tabId });
+      await waitFor(() => extension.evaluate(`chrome.tabs.query({ active: true, currentWindow: true }).then((tabs) => Number(tabs?.[0]?.id) === ${tabId})`));
 
-    const grouped = await dispatch('browser_tab_group', { tab_ids: [createdTabA, createdTabB] });
-    assert.ok(Number.isInteger(Number(grouped?.groupId)) && Number(grouped.groupId) >= 0, JSON.stringify(grouped));
-    const ungrouped = await dispatch('browser_tab_ungroup', { tab_ids: [createdTabA, createdTabB] });
-    assert.equal(ungrouped?.status, 'tabs-ungrouped', JSON.stringify(ungrouped));
+      const grouped = await dispatch('browser_tab_group', { tab_ids: [createdTabA, createdTabB] });
+      assert.ok(Number.isInteger(Number(grouped?.groupId)) && Number(grouped.groupId) >= 0, JSON.stringify(grouped));
+      const ungrouped = await dispatch('browser_tab_ungroup', { tab_ids: [createdTabA, createdTabB] });
+      assert.equal(ungrouped?.status, 'tabs-ungrouped', JSON.stringify(ungrouped));
 
-    const closed = await dispatchWithApproval('browser_tab_close', { tab_id: createdTabA });
-    assert.equal(closed?.status, 'tab-closed', JSON.stringify(closed));
-    await waitFor(() => extension.evaluate(`chrome.tabs.get(${createdTabA}).then(() => false, () => true)`));
-    const tabsAfter = await dispatch('browser_tabs');
-    assert.equal(tabsAfter.tabs.some((tab) => Number(tab.id) === createdTabA), false, JSON.stringify(tabsAfter));
-    assert.equal(tabsAfter.tabs.some((tab) => Number(tab.id) === createdTabB), true, JSON.stringify(tabsAfter));
+      const closed = await dispatchWithApproval('browser_tab_close', { tab_id: createdTabA });
+      assert.equal(closed?.status, 'tab-closed', JSON.stringify(closed));
+      await waitFor(() => extension.evaluate(`chrome.tabs.get(${createdTabA}).then(() => false, () => true)`));
+      const tabsAfter = await dispatch('browser_tabs');
+      assert.equal(tabsAfter.tabs.some((tab) => Number(tab.id) === createdTabA), false, JSON.stringify(tabsAfter));
+      assert.equal(tabsAfter.tabs.some((tab) => Number(tab.id) === createdTabB), true, JSON.stringify(tabsAfter));
+
+    }
 
     const stateResponse = await fetch(`${baseUrl}/e2e/state`);
     const state = await stateResponse.json();
     assert.equal(state.fallback_count, 0);
-    assert.equal(state.dispatch_count, 21);
+    assert.equal(state.dispatch_count, REGISTERED_ONLY ? 8 : 21);
     assert.equal(typeof state.agent_runtime_dirty, 'boolean');
     if (state.agent_runtime_dirty) assert.match(state.agent_runtime_diff_sha256, /^[a-f0-9]{64}$/);
     else assert.equal(state.agent_runtime_diff_sha256, null);
-    assert.deepEqual(routed, [
+    assert.deepEqual(routed, REGISTERED_ONLY ? [
+      'browser_snapshot',
+      'browser_type',
+      'browser_click',
+      'browser_click',
+      'browser_press',
+      'browser_scroll',
+      'browser_navigate',
+      'browser_back',
+    ] : [
       'browser_snapshot',
       'browser_type',
       'browser_click',
@@ -355,10 +372,12 @@ async function main() {
       'browser_tab_close',
       'browser_tabs',
     ]);
-    assert.deepEqual(
-      [...new Set(routed)].sort(),
-      REAL_CAPABILITIES.filter((action) => action !== 'controller.noop').sort(),
-    );
+    if (!REGISTERED_ONLY) {
+      assert.deepEqual(
+        [...new Set(routed)].sort(),
+        REAL_CAPABILITIES.filter((action) => action !== 'controller.noop' && !NOT_YET_ROUTED.has(action)).sort(),
+      );
+    }
 
     const verdict = {
       passed: true,
@@ -375,7 +394,8 @@ async function main() {
       registryDispatchCount: state.dispatch_count,
       legacyFallbackCount: state.fallback_count,
       isolatedFallback: target.isolatedFallback,
-      tabOperations: {
+      subset: REGISTERED_ONLY ? 'registered-model-tools-only' : 'full',
+      tabOperations: REGISTERED_ONLY ? null : {
         created: [createdTabA, createdTabB],
         activated: [createdTabA, tabId],
         grouped: true,
@@ -388,13 +408,13 @@ async function main() {
     await writeFile(VERDICT, `${JSON.stringify(verdict, null, 2)}\n`, 'utf8');
     console.log(`Phase 6 real Agent registry CFT journey: PASS ${JSON.stringify(verdict)}`);
   } catch (error) {
-    throw new Error(`${error.message}; agentStderr=${diagnostics.stderr.slice(-2_000)}; chromeStderr=${chromeStderr.slice(-2_000)}`);
+    throw new Error(`${error.message}; agentStderr=${diagnostics.stderr.slice(-2_000)}; chromeStderr=${chromeStderr.slice(-2_000)}`, { cause: error });
   } finally {
     try { controlled?.close(); } catch { /* best effort */ }
     try { extension?.close(); } catch { /* best effort */ }
     try { browser?.close(); } catch { /* best effort */ }
     killChrome(chrome);
-    killProcessTree(server);
+    killChrome(server);
     await new Promise((resolve) => setTimeout(resolve, 300));
     await rm(PROFILE, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
   }

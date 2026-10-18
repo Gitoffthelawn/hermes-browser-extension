@@ -226,7 +226,7 @@ import { createThemeMarketplaceController } from './lib/theme-marketplace-contro
 import { createThemeMarketplaceTransport } from './lib/theme-marketplace-transport.mjs';
 import { buildAgentThemePrompt, extractAgentThemeDocument } from './lib/agent-theme-authoring.mjs';
 import { createImageViewerState, imageViewerReducer } from './lib/image-viewer.mjs';
-import { createStreamPacer } from './lib/stream-pacing.mjs';
+import { createStreamPacer, pacerFramePaint } from './lib/stream-pacing.mjs';
 import { contextTelemetryFromRuntime, formatTokenCount, mergeContextTelemetry } from './lib/session-context-telemetry.mjs';
 import { liveStateBadge, mergeLiveSignals } from './lib/session-live-state.mjs';
 import { friendlyModelName } from './lib/model-friendly-name.mjs';
@@ -18701,8 +18701,14 @@ function createStreamingMessageUpdater(node, record = {role:'assistant',content:
     activity = null;
     running = false;
     renderCalls();
-    if (frame) cancelAnimationFrame(frame);
-    frame = 0;
+    // A paint still waiting for its frame would be lost when the frame is
+    // cancelled, leaving the thinking indicator in place of the last text (for
+    // example the streaming-failed notice) once the turn has ended. Paint it now.
+    if (frame) {
+      cancelAnimationFrame(frame);
+      frame = 0;
+      if (pending) paintStream();
+    }
     setToolActivity(node, null);
   }
   return {
@@ -21965,7 +21971,8 @@ async function askHermes(userText, turnAttachments = [...attachments], turnOptio
     // the bubble never jumps to the full answer.
     streamPacer = createStreamPacer({
       onFrame: (text, meta) => {
-        streamView.updateText(text || (meta.done ? '' : THINKING_PLACEHOLDER));
+        const paint = pacerFramePaint(text, meta, THINKING_PLACEHOLDER);
+        if (paint !== null) streamView.updateText(paint);
         if (meta.done) resolvePacerDrain?.();
       },
       schedule: (cb) => requestAnimationFrame(cb),

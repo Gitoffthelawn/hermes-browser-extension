@@ -57,6 +57,7 @@
     "test:e2e:browser-control:reconnect": "npm run build && node tests/e2e-phase6-browser-control-reconnect.mjs",
     "test:e2e:browser-control:agent-route": "npm run build && node tests/e2e-phase6-agent-route.mjs",
     "test:e2e:browser-control:youtube": "npm run build && node tests/e2e-phase6-youtube-like.mjs",
+    "test:e2e:prompt-cards": "npm run build && node tests/e2e-agent-prompt-cards.mjs",
     "test:e2e:page-annotation": "npm run build:content-runtime && node tests/e2e-page-annotation.mjs"
   },
   "engines": {

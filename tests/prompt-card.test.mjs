@@ -22,6 +22,7 @@ function fixture() {
   // linkedom has no focus model: record focus() calls and expose activeElement.
   let active = null;
   const focused = [];
+  const hiddenAtFocus = [];
   let owner = Object.getPrototypeOf(document.createElement('button'));
   while (owner && !Object.hasOwn(owner, 'focus')) owner = Object.getPrototypeOf(owner);
   const originalFocus = owner?.focus;
@@ -29,6 +30,8 @@ function fixture() {
     owner.focus = function focus() {
       active = this;
       focused.push(this);
+      // A real browser ignores focus() on an element inside a hidden subtree.
+      hiddenAtFocus.push(Boolean(this.closest?.('[hidden]')));
     };
   }
   Object.defineProperty(document, 'activeElement', { configurable: true, get: () => active });
@@ -39,7 +42,7 @@ function fixture() {
     input.value = value;
     input.dispatchEvent(new document.defaultView.Event('input'));
   };
-  return { document, container, calls, card, show, type, controller, focused, restore, isActive: (node) => active === node };
+  return { document, container, calls, card, show, type, controller, focused, hiddenAtFocus, restore, isActive: (node) => active === node };
 }
 
 function approval(overrides = {}, entry = {}) {
@@ -85,6 +88,18 @@ test('Deny is the last button, is styled as the safe default, and takes focus', 
     assert.ok(f.isActive(deny), 'Deny holds focus, so a stray Enter or Space refuses');
     f.show([approval()], { now: NOW + 5000 });
     assert.equal(f.focused.length, 1, 'a countdown tick does not steal focus again');
+  } finally {
+    f.restore();
+  }
+});
+
+test('the card is showing when Deny takes focus, because a browser skips focus on a hidden element', () => {
+  const f = fixture();
+  try {
+    assert.equal(f.container.hidden, true);
+    f.show([approval()]);
+    assert.equal(f.focused.length, 1);
+    assert.deepEqual(f.hiddenAtFocus, [false], 'focus() ran while the card was still hidden');
   } finally {
     f.restore();
   }
