@@ -903,3 +903,98 @@ test('Phase 6 worker works without a debugger release hook', async () => {
   }, extensionSender());
   assert.equal(release.ok, true);
 });
+
+async function waitForTerminal(connection, commandId, attempts = 100) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const terminal = connection.sent.find((frame) => frame.method === 'browser.controller.result' && frame.params.command_id === commandId);
+    if (terminal) return terminal.params;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.fail(`No terminal frame for ${commandId}`);
+  return null;
+}
+
+// A worker wired to the real executor with an adapter whose first click
+// navigates the way Chrome does: tabs.onUpdated bumps the document generation
+// and the new document's content script announces another one.
+async function navigatingClickWorker({ announceDuring }) {
+  const storage = memoryStorage({ hermesBrowserSettings: settings() });
+  const transport = connector();
+  const clicks = [];
+  let workerRef = null;
+  let onDetailPage = false;
+  const announce = async () => {
+    await workerRef.handleTabUpdated(91, { status: 'loading' });
+    await workerRef.handleMessage({ type: CONTROLLER_WORKER_MESSAGES.documentReady }, extensionSender({ tabId: 91 }));
+  };
+  const adapter = {
+    contract: { enabled: true, actions: ['browser_click', 'browser_snapshot'] },
+    inspect: async () => ({ currentUrl: 'https://example.test/list', hasUnsavedContent: false }),
+    settle: async () => ({ navigated: clicks.length === 1, url: 'https://example.test/detail', title: 'Detail', timedOut: false }),
+    async execute(action, args, context) {
+      if (action === 'browser_snapshot') {
+        if (onDetailPage && announceDuring === 'snapshot' && clicks.length === 1) await announce();
+        return onDetailPage
+          ? { title: 'Detail', url: 'https://example.test/detail', text: 'Detail page body', nodes: [{ role: 'button', name: 'Add to cart', backendDOMNodeId: 501 }] }
+          : { title: 'List', url: 'https://example.test/list', text: 'List', nodes: [{ role: 'link', name: 'Open detail', backendDOMNodeId: 101 }] };
+      }
+      clicks.push({ ref: args.ref, backendDOMNodeId: context.target?.backendDOMNodeId });
+      if (clicks.length === 1) {
+        onDetailPage = true;
+        if (announceDuring === 'click') await announce();
+        else await workerRef.handleTabUpdated(91, { status: 'loading' });
+      }
+      return { status: 'clicked' };
+    },
+  };
+  const executor = createBrowserControlExecutor({
+    adapter,
+    approvals: createBrowserControlApprovalStore(),
+    refs: createBrowserControlRefStore(),
+  });
+  const worker = createControllerServiceWorker({
+    storageArea: storage.area,
+    connector: transport,
+    product: PRODUCT,
+    randomUUID: uuids(),
+    extensionOrigin: 'chrome-extension://fixture',
+    executeBrowserCommand: (frame, context) => executor.execute(frame, context),
+  });
+  workerRef = worker;
+  await worker.boot();
+  await ownedReady(worker, 91);
+  return { transport, clicks };
+}
+
+for (const announceDuring of ['click', 'snapshot']) {
+  test(`Phase 2 refs minted after a navigating click work for the next command (document ready during ${announceDuring})`, async () => {
+    const { transport, clicks } = await navigatingClickWorker({ announceDuring });
+    const connection = transport.connections[0];
+    // Broker-v1 style: no tab or generation, the worker binds the authoritative ones.
+    const send = (commandId, action, args) => connection.emit({
+      method: 'browser.controller.command',
+      params: { command_id: commandId, action, arguments: args },
+    });
+
+    await send('nav-snapshot', 'browser_snapshot', {});
+    const first = await waitForTerminal(connection, 'nav-snapshot');
+    assert.equal(first.ok, true);
+    assert.equal(first.result.refs[0].ref, '@e1');
+
+    await send('nav-click-1', 'browser_click', { ref: '@e1' });
+    const clicked = await waitForTerminal(connection, 'nav-click-1');
+    assert.equal(clicked.ok, true, JSON.stringify(clicked));
+    assert.equal(clicked.result.status, 'clicked');
+    assert.equal(clicked.result.navigated, true);
+    assert.equal(clicked.result.url, 'https://example.test/detail');
+    assert.deepEqual(clicked.result.snapshot.refs.map((item) => item.name), ['Add to cart']);
+    const nextRef = clicked.result.snapshot.refs[0].ref;
+
+    // The refs in that result must be valid for the very next command.
+    await send('nav-click-2', 'browser_click', { ref: nextRef });
+    const followUp = await waitForTerminal(connection, 'nav-click-2');
+    assert.equal(followUp.ok, true, JSON.stringify(followUp));
+    assert.equal(followUp.result.status, 'clicked');
+    assert.deepEqual(clicks.map((click) => click.backendDOMNodeId), [101, 501]);
+  });
+}

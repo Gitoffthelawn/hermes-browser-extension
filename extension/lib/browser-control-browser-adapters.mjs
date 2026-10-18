@@ -495,13 +495,15 @@ function pageProbe(mode, direction = '') {
   return { ok: false };
 }
 
-async function inspectPage(browserApi, scope, signal) {
+// `light` reads only the tab URL; the unsaved-content page script is skipped for
+// read-only actions that never leave the page.
+async function inspectPage(browserApi, scope, signal, { light = false } = {}) {
   assertNotAborted(signal);
   const tabId = tabIdFrom(scope);
   const tab = await browserApi.tabs.get(tabId);
   assertNotAborted(signal);
   const currentUrl = compact(tab?.url || tab?.pendingUrl);
-  if (isRestrictedUrl(currentUrl)) return { currentUrl, hasUnsavedContent: false };
+  if (light || isRestrictedUrl(currentUrl)) return { currentUrl, hasUnsavedContent: false };
   let hasUnsavedContent = false;
   if (browserApi.scripting?.executeScript) {
     try {
@@ -1219,7 +1221,7 @@ function createChromiumCdpAdapter({
 
   return {
     contract,
-    inspect: ({ tabId, frameId, signal } = {}) => inspectPage(browserApi, { tabId, frameId }, signal),
+    inspect: ({ tabId, frameId, signal, light } = {}) => inspectPage(browserApi, { tabId, frameId }, signal, { light: light === true }),
     async targetBounds({ scope = {}, signal, target = null } = {}) {
       const backendNodeId = Number(target?.backendDOMNodeId);
       if (!Number.isInteger(backendNodeId) || backendNodeId <= 0) return null;
@@ -1337,7 +1339,7 @@ function createFirefoxWebExtensionAdapter({ browserApi, now = Date.now, sleep = 
 
   return {
     contract,
-    inspect: ({ tabId, frameId, signal } = {}) => inspectPage(browserApi, { tabId, frameId }, signal),
+    inspect: ({ tabId, frameId, signal, light } = {}) => inspectPage(browserApi, { tabId, frameId }, signal, { light: light === true }),
     execute,
     settle,
     releaseTab: async () => false,

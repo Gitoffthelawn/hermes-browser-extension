@@ -9,6 +9,7 @@ import {
   base64ToBytes,
 } from './browser-control-artifacts.mjs';
 import { MAX_INLINE_SCREENSHOT_CHARS } from './screenshot-limits.mjs';
+import { renderControlSnapshot, SNAPSHOT_VIEW_BUDGETS } from './browser-control-snapshot-view.mjs';
 
 const MAX_RESULT_TEXT = 100_000;
 const MAX_CONSOLE_ENTRIES = 200;
@@ -26,6 +27,23 @@ const CDP_DENY_METHODS = new Set([
   'Runtime.evaluate',
   'Runtime.terminateExecution',
 ]);
+
+// Actions that change the page and therefore return fresh page state.
+const POST_ACTION_ACTIONS = new Set([
+  'browser_navigate', 'browser_back', 'browser_click', 'browser_type', 'browser_fill', 'browser_select',
+  'browser_press', 'browser_scroll', 'browser_scroll_to', 'browser_hover',
+]);
+// Probes that only need the tab URL, not the unsaved-content page script.
+const URL_ONLY_PROBE_ACTIONS = new Set(['browser_snapshot', 'browser_scroll', 'browser_screenshot', 'browser_back']);
+const APPROVALS_RECHECK_ACTIONS = new Set(['browser_click', 'browser_drag', 'browser_press', 'browser_type']);
+// The broker cancels a command at 30 s; the approval wait must end first.
+const APPROVAL_WAIT_CAP_MS = 28_000;
+const APPROVAL_TIMEOUT_MESSAGE = 'Waiting for your approval in the Hermes panel timed out.';
+const POST_ACTION_SETTLE_MS = 1_200;
+const POST_ACTION_MIN_BUDGET_MS = 250;
+const POST_ACTION_DEADLINE_MARGIN_MS = 400;
+const GENERATION_POLL_MS = 25;
+const GENERATION_MAX_POLLS = 20;
 
 // Adapter errors that carry a model-actionable code keep it; everything else
 // is reported as a generic command_error.
@@ -48,6 +66,16 @@ const APPROVAL_MESSAGES = Object.freeze({
   'dialog-consequence': 'Approve this page dialog?',
   'dialog-action': 'Handle this page dialog?',
 });
+
+const TIMED_OUT = Symbol('timed-out');
+
+function withTimeout(promise, ms) {
+  let timer = null;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(TIMED_OUT), Math.max(1, ms));
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 function compact(value, limit = 300) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, limit);
@@ -117,21 +145,56 @@ function frameMatchesScope(frame = {}, scope = {}) {
     && scope.leaseOwnerId === scope.controllerId;
 }
 
-function safeSnapshotResult(value = {}, refResult = {}) {
-  return {
-    title: compact(value.title, 500),
-    url: compact(value.url, 2_000),
-    text: String(value.text || '').slice(0, MAX_RESULT_TEXT),
-    refs: Array.isArray(refResult.refs)
-      ? refResult.refs.map(({ ref, role, name, sensitive = false, frameId = undefined }) => ({
-        ref,
-        role,
-        name,
-        ...(sensitive ? { sensitive: true } : {}),
-        ...(frameId ? { frameId } : {}),
-      }))
-      : [],
+function safeResultUrl(value = '') {
+  return safeNetworkUrl(value);
+}
+
+function safeResultTitle(value = '') {
+  return redactSensitiveText(compact(value, 500));
+}
+
+// Renders the page into the model-facing view. `refResult` is the output of
+// refs.replace for the same nodes, so every ref in the text is actionable.
+function safeSnapshotResult(value = {}, refResult = {}, { maxChars, fullText = false } = {}) {
+  const view = renderControlSnapshot({
+    text: value.text,
+    headings: value.headings,
+    refs: Array.isArray(refResult.refs) ? refResult.refs : [],
+    element_count: Array.isArray(value.nodes) ? value.nodes.length : 0,
     truncated: Boolean(value.truncated || refResult.truncated),
+  }, { maxChars, fullText });
+  return {
+    title: safeResultTitle(value.title),
+    url: safeResultUrl(value.url),
+    text: view.text,
+    refs: view.refs,
+    truncated: view.truncated,
+    element_count: view.element_count,
+  };
+}
+
+function safeScrollPosition(position = null) {
+  if (!position || typeof position !== 'object') return null;
+  const numbers = ['scrollX', 'scrollY', 'maxY'].map((key) => Number(position[key]));
+  if (!numbers.every(Number.isFinite)) return null;
+  return {
+    scrollX: numbers[0],
+    scrollY: numbers[1],
+    maxY: numbers[2],
+    atTop: position.atTop === true,
+    atBottom: position.atBottom === true,
+  };
+}
+
+function navigationResult(status, value) {
+  const url = safeResultUrl(value?.url);
+  const title = safeResultTitle(value?.title);
+  return {
+    status,
+    ...(url ? { url } : {}),
+    ...(title ? { title } : {}),
+    ...(typeof value?.navigated === 'boolean' ? { navigated: value.navigated } : {}),
+    ...(value?.timedOut === true ? { timedOut: true } : {}),
   };
 }
 
@@ -140,18 +203,18 @@ function sanitizedActionResult(action, value) {
   if (action === 'browser_fill') return { status: 'filled' };
   if (action === 'browser_select') return { status: 'selected' };
   if (action === 'browser_press') return { status: 'pressed' };
-  if (action === 'browser_click') return { status: 'clicked' };
+  if (action === 'browser_click') return { status: 'clicked', ...(value?.obscured === true ? { obscured: true } : {}) };
   if (action === 'browser_drag') return { status: 'dragged' };
   if (action === 'browser_hover') return { status: 'hovered' };
-  if (action === 'browser_scroll') return { status: 'scrolled' };
+  if (action === 'browser_scroll') {
+    const position = safeScrollPosition(value?.position);
+    return { status: 'scrolled', ...(position ? { position } : {}) };
+  }
   if (action === 'browser_scroll_to') return { status: 'scrolled-to-target' };
   if (action === 'browser_navigate') {
-    return {
-      status: 'navigated',
-      ...(compact(value?.url, 2_000) ? { url: compact(value.url, 2_000) } : {}),
-    };
+    return navigationResult(value?.status === 'already-open' ? 'already-open' : 'navigated', value);
   }
-  if (action === 'browser_back') return { status: 'navigated-back' };
+  if (action === 'browser_back') return navigationResult('navigated-back', value);
   if (action === 'browser_tab_activate') return { status: 'tab-activated' };
   if (action === 'browser_tab_close') return { status: 'tab-closed' };
   if (action === 'browser_tab_create') {
@@ -218,6 +281,7 @@ export function createBrowserControlExecutor({
   async function execute(frame = {}, context = {}) {
     const {
       scope: rawScope = {}, signal: callerSignal, leasedTabIds = [], ownedTabIds = [], currentWindowId = null,
+      currentDocumentGeneration = null,
     } = context;
     let scope = normalizedScope(rawScope);
     if (!frameMatchesScope(frame, scope)) return errorOutcome('scope_mismatch', 'The command no longer matches the owned tab document.');
@@ -276,10 +340,156 @@ export function createBrowserControlExecutor({
     };
     const callerAbort = () => abort('cancelled', 'The command was cancelled.');
     callerSignal?.addEventListener?.('abort', callerAbort, { once: true });
+    // A deadline that lands while the human is still deciding is an approval
+    // timeout, which the model should relay as such rather than as a failure.
     const timer = setTimeout(
-      () => abort('deadline_exceeded', 'The command exceeded its execution deadline.'),
+      () => (pendingApprovalId
+        ? abort('approval_timeout', APPROVAL_TIMEOUT_MESSAGE)
+        : abort('deadline_exceeded', 'The command exceeded its execution deadline.')),
       Math.max(1, deadlineAt - Number(now())),
     );
+    let approvalTimer = null;
+
+    // Page state after a mutating action. It never fails the action: whatever
+    // goes wrong is reported as snapshot_error next to the action's own status.
+    async function collectPostActionState({ action: performed, value: performedValue }) {
+      const canSettle = typeof adapter.settle === 'function';
+      const canSnapshot = adapter.contract.actions.includes('browser_snapshot');
+      if (!canSettle && !canSnapshot) return {};
+      const state = {};
+      const budgetMs = () => deadlineAt - Number(now()) - POST_ACTION_DEADLINE_MARGIN_MS;
+      if (budgetMs() < POST_ACTION_MIN_BUDGET_MS) {
+        return canSnapshot ? { snapshot_error: 'deadline_near' } : {};
+      }
+
+      let settled = null;
+      const alreadyOpen = performedValue?.status === 'already-open';
+      if (canSettle && !alreadyOpen) {
+        try {
+          settled = await adapter.settle({
+            scope,
+            signal: controller.signal,
+            mode: 'dom',
+            timeoutMs: Math.max(1, Math.min(POST_ACTION_SETTLE_MS, budgetMs())),
+          }) || null;
+        } catch {
+          settled = null;
+        }
+      }
+      if (controller.signal.aborted) return state;
+
+      const navigated = performedValue?.navigated === true || settled?.navigated === true;
+      let pageUrl = compact(settled?.url || performedValue?.url, 2_000);
+      let pageTitle = compact(settled?.title || performedValue?.title, 500);
+      if (canSettle || typeof performedValue?.navigated === 'boolean') state.navigated = navigated;
+      if (settled?.timedOut === true || performedValue?.timedOut === true) state.timedOut = true;
+      if (!canSnapshot) {
+        if (pageUrl) state.url = safeResultUrl(pageUrl);
+        if (pageTitle) state.title = safeResultTitle(pageTitle);
+        return state;
+      }
+
+      if (!pageUrl && typeof adapter.inspect === 'function') {
+        try {
+          pageUrl = compact((await adapter.inspect({
+            tabId: scope.tabId, frameId: scope.frameId, signal: controller.signal, light: true,
+          }))?.currentUrl, 2_000);
+        } catch {
+          pageUrl = '';
+        }
+      }
+      const allowLocalDocuments = Boolean(context?.allowLocalDocuments ?? context?.settings?.allowLocalDocuments);
+      if (!pageUrl) {
+        state.snapshot_error = 'page_unavailable';
+      } else if (classifyBrowserControlAction({
+        action: 'browser_snapshot', currentUrl: pageUrl, allowLocalDocuments,
+      }).risk === BROWSER_CONTROL_RISKS.BLOCKED) {
+        // Same gate as browser_snapshot: a restricted page is never read.
+        state.snapshot_error = 'restricted_page';
+        pageUrl = pageOrigin(pageUrl);
+        pageTitle = '';
+      }
+      if (pageUrl) state.url = safeResultUrl(pageUrl);
+      if (pageTitle) state.title = safeResultTitle(pageTitle);
+      if (state.snapshot_error) {
+        if (navigated) refs.invalidateTab(scope.tabId);
+        return state;
+      }
+
+      try {
+        if (navigated) refs.invalidateTab(scope.tabId);
+        const generation = await settledDocumentGeneration(navigated);
+        const snapshotScope = { ...scope, documentGeneration: generation };
+        const pending = adapter.execute('browser_snapshot', { full: false }, {
+          signal: controller.signal,
+          scope: snapshotScope,
+          target: null,
+          destination: null,
+          deadlineAt,
+          leasedTabIds: [...ownedTabs],
+          ownedTabIds: [...controllerOwnedTabs],
+          currentWindowId: Number(currentWindowId) || null,
+        });
+        pending.catch(() => {});
+        const raw = await withTimeout(pending, budgetMs());
+        if (controller.signal.aborted) return state;
+        if (raw === TIMED_OUT) {
+          state.snapshot_error = 'snapshot_timeout';
+          return state;
+        }
+        // The generation may have moved while the snapshot ran; refs must be
+        // minted under the one the next command will carry.
+        const mintGeneration = readDocumentGeneration(generation);
+        const minted = refs.replace({
+          ...scope,
+          documentGeneration: mintGeneration,
+          nodes: Array.isArray(raw?.nodes) ? raw.nodes : [],
+        });
+        if (!minted.ok) {
+          state.snapshot_error = 'ref_bind_failed';
+          return state;
+        }
+        const snapshot = safeSnapshotResult(raw, minted, { maxChars: SNAPSHOT_VIEW_BUDGETS.postAction });
+        state.snapshot = {
+          text: snapshot.text,
+          refs: snapshot.refs,
+          truncated: snapshot.truncated,
+          element_count: snapshot.element_count,
+        };
+      } catch (error) {
+        if (controller.signal.aborted) return state;
+        state.snapshot_error = ADAPTER_ERROR_CODES.has(error?.code) ? error.code : 'snapshot_failed';
+      }
+      return state;
+    }
+
+    function readDocumentGeneration(fallback) {
+      if (typeof currentDocumentGeneration !== 'function') return fallback;
+      try {
+        const value = Number(currentDocumentGeneration(scope.tabId, scope.frameId));
+        return Number.isInteger(value) && value >= 1 ? value : fallback;
+      } catch {
+        return fallback;
+      }
+    }
+
+    // The worker bumps the document generation from tabs.onUpdated and from the
+    // content script's document-ready message. After a navigation, wait for
+    // those to land and settle so refs are minted under the generation the
+    // next command will use. If it never moves, the current value stands.
+    async function settledDocumentGeneration(expectChange) {
+      const from = scope.documentGeneration;
+      if (typeof currentDocumentGeneration !== 'function') return from;
+      let current = readDocumentGeneration(from);
+      if (current === from && !expectChange) return current;
+      for (let poll = 0; poll < GENERATION_MAX_POLLS && !controller.signal.aborted; poll += 1) {
+        await new Promise((resolve) => { setTimeout(resolve, GENERATION_POLL_MS); });
+        const next = readDocumentGeneration(from);
+        if (next === current && current !== from) return current;
+        current = next;
+      }
+      return current;
+    }
 
     const operation = (async () => {
       let target = null;
@@ -307,13 +517,19 @@ export function createBrowserControlExecutor({
       }
 
       let pageState = {};
+      let waitedForApproval = false;
       if (typeof adapter.inspect === 'function' && [
         'browser_back', 'browser_click', 'browser_drag', 'browser_fill', 'browser_hover', 'browser_navigate', 'browser_press',
         'browser_screenshot', 'browser_scroll', 'browser_scroll_to', 'browser_select', 'browser_snapshot', 'browser_type',
         'browser_console', 'browser_network_requests', 'browser_response_body', 'browser_pdf', 'browser_upload',
         'browser_evaluate', 'browser_cdp', 'browser_dialog',
       ].includes(action)) {
-        pageState = await adapter.inspect({ tabId: scope.tabId, frameId: scope.frameId, signal: controller.signal }) || {};
+        pageState = await adapter.inspect({
+          tabId: scope.tabId,
+          frameId: scope.frameId,
+          signal: controller.signal,
+          ...(URL_ONLY_PROBE_ACTIONS.has(action) ? { light: true } : {}),
+        }) || {};
       }
       if (controller.signal.aborted) return errorOutcome(terminalCode || 'cancelled', terminalMessage || 'The command was cancelled.');
 
@@ -354,11 +570,18 @@ export function createBrowserControlExecutor({
         let consumed = approvals.consume(approval);
         if (!consumed.ok) {
           pendingApprovalId = approval.approvalId;
+          waitedForApproval = true;
+          approvalTimer = setTimeout(
+            () => abort('approval_timeout', APPROVAL_TIMEOUT_MESSAGE),
+            Math.max(1, Math.min(deadlineAt, startedAt + APPROVAL_WAIT_CAP_MS) - Number(now())),
+          );
           const requested = await approvals.request({
             ...approval,
             reason: approvalReason,
             ...(approvalDetail ? { detail: approvalDetail } : {}),
           });
+          clearTimeout(approvalTimer);
+          approvalTimer = null;
           if (!requested?.ok) {
             return errorOutcome(requested?.error || 'approval_cancelled', 'The approval request was cancelled.');
           }
@@ -372,9 +595,8 @@ export function createBrowserControlExecutor({
         if (!consumed.ok) return errorOutcome('approval_required', policy.reason || 'This action requires approval.');
       }
 
-      if (typeof adapter.inspect === 'function' && [
-        'browser_click', 'browser_drag', 'browser_press', 'browser_type',
-      ].includes(action)) {
+      // One probe per action; only a human approval wait leaves room for the page to change.
+      if (waitedForApproval && typeof adapter.inspect === 'function' && APPROVALS_RECHECK_ACTIONS.has(action)) {
         const current = await adapter.inspect({
           tabId: scope.tabId,
           frameId: scope.frameId,
@@ -528,9 +750,16 @@ export function createBrowserControlExecutor({
       }
 
       if (action === 'browser_snapshot') {
+        const full = args.full === true;
         const minted = refs.replace({ ...scope, nodes: Array.isArray(value?.nodes) ? value.nodes : [] });
         if (!minted.ok) return errorOutcome(minted.error, 'Could not bind snapshot refs.');
-        return { ok: true, result: safeSnapshotResult(value, minted) };
+        return {
+          ok: true,
+          result: safeSnapshotResult(value, minted, {
+            maxChars: full ? SNAPSHOT_VIEW_BUDGETS.full : SNAPSHOT_VIEW_BUDGETS.snapshot,
+            fullText: full,
+          }),
+        };
       }
       if (action === 'browser_screenshot') {
         const dataUrl = String(value?.dataUrl || '');
@@ -539,6 +768,10 @@ export function createBrowserControlExecutor({
         }
       }
       if (action === 'browser_navigate' || action === 'browser_back') refs.invalidateTab(scope.tabId);
+      if (POST_ACTION_ACTIONS.has(action)) {
+        const state = await collectPostActionState({ action, value });
+        return { ok: true, result: { ...sanitizedActionResult(action, value), ...state } };
+      }
       if (action === 'browser_tabs') {
         const filtered = { tabs: Array.isArray(value?.tabs) ? value.tabs.filter((tab) => ownedTabs.has(Number(tab?.id))) : [] };
         return { ok: true, result: sanitizedActionResult(action, filtered) };
@@ -556,6 +789,7 @@ export function createBrowserControlExecutor({
       return await Promise.race([operation, aborted]);
     } finally {
       clearTimeout(timer);
+      if (approvalTimer) clearTimeout(approvalTimer);
       if (pendingApprovalId) approvals.cancelRequest?.(pendingApprovalId);
       callerSignal?.removeEventListener?.('abort', callerAbort);
     }

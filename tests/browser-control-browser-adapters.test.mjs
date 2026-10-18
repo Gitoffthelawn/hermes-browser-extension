@@ -625,6 +625,18 @@ test('Phase 6 inspection does not inject a page probe into restricted surfaces',
   assert.equal(calls.some((call) => call[0] === 'executeScript'), false);
 });
 
+test('Phase 2 light inspection reads only the tab URL and skips the page probe', async () => {
+  const { createFirefoxWebExtensionAdapter } = await adaptersModule();
+  const { api, calls } = firefoxApis();
+  api.tabs.get = async () => ({ id: 7, url: 'https://example.test/list' });
+  const adapter = createFirefoxWebExtensionAdapter({ browserApi: api });
+  const light = await adapter.inspect({ tabId: 7, frameId: 0, signal: openSignal(), light: true });
+  assert.deepEqual(light, { currentUrl: 'https://example.test/list', hasUnsavedContent: false });
+  assert.equal(calls.some((call) => call[0] === 'executeScript'), false);
+  await adapter.inspect({ tabId: 7, frameId: 0, signal: openSignal() });
+  assert.equal(calls.some((call) => call[0] === 'executeScript'), true, 'the default probe still checks for unsaved content');
+});
+
 test('Firefox Phase 6 adapter runs only the truthful safe WebExtension subset', async () => {
   const { createFirefoxWebExtensionAdapter } = await adaptersModule();
   const { api, calls } = firefoxApis();

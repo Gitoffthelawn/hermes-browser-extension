@@ -325,6 +325,11 @@ export function createControllerServiceWorker({
         leasedTabIds: ownedLeases.map((ownedLease) => ownedLease.tabId),
         ownedTabIds: ownedLeases.map((ownedLease) => ownedLease.tabId),
         currentWindowId: lease.windowId,
+        // The executor mints post-action refs under the generation the next
+        // command will carry, which a navigation advances while it runs.
+        currentDocumentGeneration: (hookTabId, hookFrameId = 0) => Number(
+          documentGenerations[frameKey(Number(hookTabId), Math.max(0, Number(hookFrameId) || 0))] || 0,
+        ),
         scope: {
           controllerId,
           leaseOwnerId: lease.ownerId,

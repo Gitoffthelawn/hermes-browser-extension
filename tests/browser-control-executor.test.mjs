@@ -49,6 +49,15 @@ function fullAdapter(execute) {
   };
 }
 
+// Mutating actions now read the page afterwards; tests that count side effects
+// only want the action itself, so the follow-up snapshot gets an empty page.
+function sideEffectAdapter(effect, nodes = []) {
+  return fullAdapter(async (action, ...rest) => {
+    if (action === 'browser_snapshot') return { title: 'After', url: 'https://example.test/start', text: '', nodes };
+    return effect(action, ...rest);
+  });
+}
+
 test('Phase 6 rejects expired, unsupported, and mismatched-scope commands before adapter side effects', async () => {
   const { createBrowserControlExecutor } = await executorModule();
   let calls = 0;
@@ -89,7 +98,9 @@ test('Phase 6 snapshots mint scoped refs and return useful content without raw b
   const result = await executor.execute(frame('browser_snapshot'), { scope });
   assert.equal(result.ok, true);
   assert.deepEqual(result.result.refs.map((item) => item.ref), ['@e1', '@e2']);
-  assert.equal(result.result.text, 'Public page summary');
+  assert.equal(result.result.text, '[@e1] button "Search"\n[@e2] textbox "Sensitive field"\n\nPublic page summary');
+  assert.equal(result.result.element_count, 2);
+  assert.equal(result.result.truncated, false);
   assert.equal(result.result.refs[1].name, 'Sensitive field');
   assert.doesNotMatch(JSON.stringify(result), /backendDOMNodeId|\b44\b|\b45\b/);
   assert.equal(refs.resolve({ ...scope, ref: '@e1' }).target.backendDOMNodeId, 44);
@@ -108,7 +119,10 @@ test('Phase 6 blocks sensitive typing and requires one exact approval before con
   });
   let calls = 0;
   const executor = createBrowserControlExecutor({
-    adapter: fullAdapter(async () => { calls += 1; return { completed: true }; }),
+    adapter: sideEffectAdapter(async () => { calls += 1; return { completed: true }; }, [
+      { role: 'textbox', name: 'Password', inputType: 'password', backendDOMNodeId: 45 },
+      { role: 'button', name: 'Send message', backendDOMNodeId: 46 },
+    ]),
     approvals,
     refs,
     now: () => 5_000,
@@ -177,7 +191,7 @@ test('Phase 6 revalidates the page origin immediately before an approved mutatio
   refs.replace({ ...scope, nodes: [{ role: 'button', name: 'Send message', backendDOMNodeId: 46 }] });
   let inspections = 0;
   let sideEffects = 0;
-  const adapter = fullAdapter(async () => { sideEffects += 1; return { status: 'clicked' }; });
+  const adapter = sideEffectAdapter(async () => { sideEffects += 1; return { status: 'clicked' }; });
   adapter.inspect = async () => ({
     currentUrl: inspections++ === 0
       ? 'https://example.test/editor'
@@ -199,9 +213,9 @@ test('Phase 8 approved local documents pass origin revalidation on the same file
   const { createBrowserControlExecutor } = await executorModule();
   const approvals = createBrowserControlApprovalStore();
   const refs = createBrowserControlRefStore();
-  refs.replace({ ...scope, nodes: [{ role: 'button', name: 'Enlarge image', backendDOMNodeId: 46 }] });
+  refs.replace({ ...scope, nodes: [{ role: 'button', name: 'Send deck', backendDOMNodeId: 46 }] });
   let sideEffects = 0;
-  const adapter = fullAdapter(async () => { sideEffects += 1; return { status: 'clicked' }; });
+  const adapter = sideEffectAdapter(async () => { sideEffects += 1; return { status: 'clicked' }; });
   adapter.inspect = async () => ({
     currentUrl: 'file:///D:/Hermes/bangkok-hermes-events-deck.html',
     hasUnsavedContent: false,
@@ -221,10 +235,12 @@ test('Phase 8 navigating to a different local file still trips domain_changed', 
   const { createBrowserControlExecutor } = await executorModule();
   const approvals = createBrowserControlApprovalStore();
   const refs = createBrowserControlRefStore();
-  refs.replace({ ...scope, nodes: [{ role: 'button', name: 'Enlarge image', backendDOMNodeId: 46 }] });
+  // The origin is only re-checked after a human approval wait, so the click
+  // must be one that needs approval.
+  refs.replace({ ...scope, nodes: [{ role: 'button', name: 'Send deck', backendDOMNodeId: 46 }] });
   let sideEffects = 0;
   let inspections = 0;
-  const adapter = fullAdapter(async () => { sideEffects += 1; return { status: 'clicked' }; });
+  const adapter = sideEffectAdapter(async () => { sideEffects += 1; return { status: 'clicked' }; });
   adapter.inspect = async () => ({
     currentUrl: inspections++ === 0
       ? 'file:///D:/Hermes/bangkok-hermes-events-deck.html'
