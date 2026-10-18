@@ -165,6 +165,7 @@ export default Object.freeze({
   "update.no_local_checkout": "此機器上沒有倉庫的本機簽出?",
   "wake.turn_on": "Turn on wake word",
   "browser_control.approve_once": "核准一次",
+  "browser_control.attach_not_ready": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
   "browser_control.authorize": "授權控制",
   "browser_control.control_ready": "控制已就緒",
   "browser_control.detach": "分離",

@@ -165,6 +165,7 @@ export default Object.freeze({
   "update.no_local_checkout": "Tidak ada checkout lokal repositori di mesin ini?",
   "wake.turn_on": "Turn on wake word",
   "browser_control.approve_once": "Setujui sekali",
+  "browser_control.attach_not_ready": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
   "browser_control.authorize": "Izinkan kontrol",
   "browser_control.control_ready": "Kontrol siap",
   "browser_control.detach": "Lepaskan",

@@ -144,6 +144,7 @@ export default Object.freeze({
   "bot_mode.group_title_required": "Give this group chat a name.",
   "profile.refresh_title": "Refresh profiles",
   "browser_control.approve_once": "Approve once",
+  "browser_control.attach_not_ready": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
   "browser_control.authorize": "Authorize control",
   "browser_control.control_ready": "Control ready",
   "browser_control.detach": "Detach",

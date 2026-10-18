@@ -2328,11 +2328,11 @@ function browserControlMessage(type, payload = {}) {
 
 const CONTROL_TARGET_READY_RETRY = Object.freeze({ attempts: 6, delayMs: 100 });
 
-async function resolveBrowserControlCandidate(candidate) {
+async function resolveBrowserControlCandidate(candidate, messageType = 'HERMES_CONTROLLER_TARGET_RESOLVE') {
   let resolved = null;
   for (let attempt = 0; attempt < CONTROL_TARGET_READY_RETRY.attempts; attempt += 1) {
     try {
-      resolved = await browserControlMessage('HERMES_CONTROLLER_TARGET_RESOLVE', candidate);
+      resolved = await browserControlMessage(messageType, candidate);
     } catch {
       return null;
     }
@@ -2356,6 +2356,26 @@ function browserControlCandidate({ context = {}, scope = {} } = {}) {
 }
 
 async function resolveBrowserControlForTurn({ context = {}, scope = {} } = {}) {
+  // Chat-only and control-off turns never asked for browser control, so they
+  // are "not requested" rather than a missing tab.
+  if (scope?.mode === CONTEXT_SCOPE_MODES.CHAT_ONLY) {
+    return {
+      route: 'extension-controller',
+      availability: 'not_requested',
+      isolatedFallback: 'forbidden',
+      reason: 'chat_only',
+      message: 'This is a chat-only turn; browser control was not requested.',
+    };
+  }
+  if (settings.browserControlEnabled !== true) {
+    return {
+      route: 'extension-controller',
+      availability: 'not_requested',
+      isolatedFallback: 'forbidden',
+      reason: 'control_off',
+      message: 'Hermes Control is off for this turn.',
+    };
+  }
   const candidate = browserControlCandidate({ context, scope });
   if (!candidate) {
     return {
@@ -2367,7 +2387,9 @@ async function resolveBrowserControlForTurn({ context = {}, scope = {} } = {}) {
     };
   }
   try {
-    const resolved = await resolveBrowserControlCandidate(candidate);
+    // PREPARE_TURN resolves the same exact target and, when control is ready,
+    // also returns the page view (with refs minted) for this turn.
+    const resolved = await resolveBrowserControlCandidate(candidate, 'HERMES_CONTROLLER_PREPARE_TURN');
     if (resolved?.route === 'extension-controller' && resolved?.isolatedFallback === 'forbidden') return resolved;
   } catch {
     // Fall through to a fail-closed unavailable target.
@@ -2377,7 +2399,7 @@ async function resolveBrowserControlForTurn({ context = {}, scope = {} } = {}) {
     availability: 'unavailable',
     isolatedFallback: 'forbidden',
     reason: 'controller_unavailable',
-    message: 'Tab not found in your browser.',
+    message: 'Hermes Control could not be reached for this tab. Ask the user to check Hermes Control in the Hermes panel.',
   };
 }
 
@@ -2544,14 +2566,25 @@ async function attachBrowserControlToCurrentTab() {
   }
   const acquired = await browserControlMessage('HERMES_CONTROLLER_LEASE_ACQUIRE', resolvedReplacement.acquire);
   if (!acquired?.ok) throw new Error(acquired?.error || 'Could not lease this tab.');
-  const candidate = browserControlCandidate({
-    context: { activeTab: tab },
-    scope: { mode: CONTEXT_SCOPE_MODES.ACTIVE_TAB },
-  });
-  const resolved = candidate ? await resolveBrowserControlCandidate(candidate) : null;
-  if (resolved?.availability !== 'available' || resolved?.leaseOwned !== true) {
-    await refreshBrowserControlStatus({ follow: false });
-    throw new Error('This tab is leased but its page is not ready yet. Wait for the page to finish loading, then attach it again.');
+  // Attach is a transaction: a lease that never became ready is given back, so
+  // the tab is not left half-attached.
+  let resolved = null;
+  try {
+    const candidate = browserControlCandidate({
+      context: { activeTab: tab },
+      scope: { mode: CONTEXT_SCOPE_MODES.ACTIVE_TAB },
+    });
+    resolved = candidate ? await resolveBrowserControlCandidate(candidate) : null;
+    if (resolved?.availability !== 'available' || resolved?.leaseOwned !== true) {
+      throw new Error(t('browser_control.attach_not_ready'));
+    }
+  } catch (error) {
+    await browserControlMessage('HERMES_CONTROLLER_LEASE_RELEASE', {
+      ownerId: resolvedReplacement.ownerId,
+      tabIds: resolvedReplacement.acquire.tabIds,
+    }).catch(() => null);
+    await refreshBrowserControlStatus({ follow: false }).catch(() => null);
+    throw error;
   }
   await persistBrowserControlPreferences({
     browserControlScope: 'this-tab',

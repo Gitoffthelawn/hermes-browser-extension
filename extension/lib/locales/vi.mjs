@@ -165,6 +165,7 @@ export default Object.freeze({
   "update.no_local_checkout": "Không có bản sao cục bộ của kho trên máy này?",
   "wake.turn_on": "Turn on wake word",
   "browser_control.approve_once": "Cho phép một lần",
+  "browser_control.attach_not_ready": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
   "browser_control.authorize": "Cho phép điều khiển",
   "browser_control.control_ready": "Điều khiển đã sẵn sàng",
   "browser_control.detach": "Tách rời",

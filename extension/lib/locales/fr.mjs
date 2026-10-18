@@ -165,6 +165,7 @@ export default Object.freeze({
   "update.no_local_checkout": "Pas de copie locale du dépôt sur cette machine ?",
   "wake.turn_on": "Turn on wake word",
   "browser_control.approve_once": "Approuver une fois",
+  "browser_control.attach_not_ready": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
   "browser_control.authorize": "Autoriser le contrôle",
   "browser_control.control_ready": "Contrôle prêt",
   "browser_control.detach": "Détacher",

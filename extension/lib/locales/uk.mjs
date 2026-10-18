@@ -165,6 +165,7 @@ export default Object.freeze({
   "update.no_local_checkout": "Немає локальної копії репозиторію на цій машині?",
   "wake.turn_on": "Turn on wake word",
   "browser_control.approve_once": "Дозволити один раз",
+  "browser_control.attach_not_ready": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
   "browser_control.authorize": "Дозволити керування",
   "browser_control.control_ready": "Керування готове",
   "browser_control.detach": "Від’єднати",

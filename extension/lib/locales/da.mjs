@@ -165,6 +165,7 @@ export default Object.freeze({
   "update.no_local_checkout": "Ingen lokal klon af repositoryet på denne maskine?",
   "wake.turn_on": "Turn on wake word",
   "browser_control.approve_once": "Godkend én gang",
+  "browser_control.attach_not_ready": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
   "browser_control.authorize": "Tillad kontrol",
   "browser_control.control_ready": "Styring klar",
   "browser_control.detach": "Frakobl",

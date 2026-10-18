@@ -165,6 +165,7 @@ export default Object.freeze({
   "update.no_local_checkout": "ไม่มีสำเนาในเครื่องของที่เก็บโค้ดบนเครื่องนี้?",
   "wake.turn_on": "Turn on wake word",
   "browser_control.approve_once": "อนุมัติครั้งเดียว",
+  "browser_control.attach_not_ready": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
   "browser_control.authorize": "อนุญาตการควบคุม",
   "browser_control.control_ready": "พร้อมควบคุม",
   "browser_control.detach": "แยกออก",

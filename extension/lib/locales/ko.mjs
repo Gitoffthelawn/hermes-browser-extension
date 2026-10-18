@@ -165,6 +165,7 @@ export default Object.freeze({
   "update.no_local_checkout": "이 컴퓨터에 저장소의 로컬 체크아웃이 없나요?",
   "wake.turn_on": "Turn on wake word",
   "browser_control.approve_once": "한 번만 승인",
+  "browser_control.attach_not_ready": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
   "browser_control.authorize": "제어 승인",
   "browser_control.control_ready": "제어 준비 완료",
   "browser_control.detach": "분리",

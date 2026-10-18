@@ -143,6 +143,7 @@ export default Object.freeze({
   "bot_mode.group_members_required": "请为这个群聊命名。",
   "bot_mode.group_title_required": "刷新配置",
   "browser_control.approve_once": "批准一次",
+  "browser_control.attach_not_ready": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
   "browser_control.authorize": "授权控制",
   "browser_control.control_ready": "控制已就绪",
   "browser_control.detach": "分离",

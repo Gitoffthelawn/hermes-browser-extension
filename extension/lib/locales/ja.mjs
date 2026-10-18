@@ -165,6 +165,7 @@ export default Object.freeze({
   "update.no_local_checkout": "このマシンにリポジトリのローカルチェックアウトがありませんか?",
   "wake.turn_on": "Turn on wake word",
   "browser_control.approve_once": "1回だけ許可",
+  "browser_control.attach_not_ready": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
   "browser_control.authorize": "操作を許可",
   "browser_control.control_ready": "操作の準備完了",
   "browser_control.detach": "切り離す",

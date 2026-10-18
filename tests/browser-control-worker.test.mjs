@@ -307,7 +307,7 @@ test('successful exact-target commands renew the owned lease idle TTL and persis
   assert.deepEqual(worker.status().leasedTabIds, [76]);
 });
 
-test('Phase 6 worker keeps real actions disabled without explicit user control setting', async () => {
+test('Phase 6 worker never registers while control is off and connects the moment it is turned on', async () => {
   const storage = memoryStorage({ hermesBrowserSettings: settings({ browserControlEnabled: false }) });
   const transport = connector();
   let calls = 0;
@@ -317,17 +317,38 @@ test('Phase 6 worker keeps real actions disabled without explicit user control s
     product: PRODUCT,
     randomUUID: uuids(),
     extensionOrigin: 'chrome-extension://fixture',
-    executeBrowserCommand: async () => { calls += 1; return { ok: true }; },
+    executeBrowserCommand: async () => { calls += 1; return { ok: true, result: { status: 'scrolled' } }; },
   });
-  await worker.boot();
+  const booted = await worker.boot();
+  // No registration at the gateway while control is off: it would bind a noop lane.
+  assert.equal(transport.connections.length, 0);
+  assert.equal(booted.connected, false);
+  assert.equal(booted.dormant, true);
+  assert.equal(worker.status().controlEnabled, false);
+  assert.equal((await worker.reconcile({ reason: 'alarm' })).connected, false);
+  assert.equal(transport.connections.length, 0);
+
+  // Turning control on (settings refresh) connects immediately.
+  storage.state.hermesBrowserSettings = settings({ browserControlEnabled: true });
+  const refreshed = await worker.handleMessage({ type: CONTROLLER_WORKER_MESSAGES.settingsRefresh }, extensionSender());
+  assert.equal(refreshed.connected, true);
+  assert.equal(transport.connections.length, 1);
   const ready = await ownedReady(worker, 78);
   await transport.connections[0].emit({
     method: 'browser.controller.command',
-    params: { command_id: 'disabled-real', action: 'browser_scroll', arguments: { direction: 'down' }, tab_id: 78, document_generation: ready.documentGeneration },
+    params: { command_id: 'enabled-real', action: 'browser_scroll', arguments: { direction: 'down' }, tab_id: 78, document_generation: ready.documentGeneration },
   });
   await settle();
-  assert.equal(calls, 0);
-  assert.equal(transport.connections[0].sent.at(-1).params.error.code, 'action_disabled');
+  assert.equal(calls, 1);
+  assert.equal(transport.connections[0].sent.at(-1).params.ok, true);
+
+  // Turning it off again closes the socket and does not re-register a noop lane.
+  const detached = await worker.handleMessage({ type: CONTROLLER_WORKER_MESSAGES.detach }, extensionSender());
+  assert.equal(detached.ok, true);
+  assert.equal(worker.status().connected, false);
+  assert.equal(transport.connections.length, 1);
+  assert.equal((await worker.reconcile({ reason: 'alarm' })).connected, false);
+  assert.equal(transport.connections.length, 1);
 });
 
 test('Phase 6 worker revalidates lease and document immediately before queued side effects', async () => {

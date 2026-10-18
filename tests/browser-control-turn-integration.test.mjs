@@ -36,8 +36,39 @@ test('right-click background turn resolves target before final consent refresh a
 test('Browser-origin live-tab turns explicitly forbid isolated automation substitution', () => {
   assert.match(common, /browser_control\.isolated_fallback = forbidden/);
   assert.match(common, /Never substitute Chrome DevTools, Browser Use, Playwright, computer use, an isolated QA browser, or another browser profile/);
-  assert.match(common, /Tab not found in your browser/);
+  // Control-off and chat-only turns must not be told to answer "Tab not found".
+  assert.doesNotMatch(common, /Tab not found in your browser/);
   assert.match(sidepanel, /isolatedFallback: 'forbidden'/);
+});
+
+test('system prompt gives state-aware guidance for ready, not_requested and unavailable control', () => {
+  assert.match(common, /browser_control\.state = "ready"/);
+  assert.match(common, /do not call browser_navigate for it/);
+  assert.match(common, /refs in browser_control\.control_snapshot/);
+  assert.match(common, /do not need browser_snapshot after an action/);
+  assert.match(common, /browser_control\.availability = "not_requested"/);
+  assert.match(common, /press Attach in Hermes Control/);
+  assert.match(common, /browser_control\.availability = "unavailable"/);
+});
+
+test('turn preparation asks the worker for the control snapshot and marks control-off turns not requested', () => {
+  const resolve = sidepanel.match(/async function resolveBrowserControlForTurn\([\s\S]*?\n\}/)?.[0] || '';
+  assert.match(resolve, /HERMES_CONTROLLER_PREPARE_TURN/);
+  assert.match(resolve, /availability: 'not_requested'/);
+  assert.match(resolve, /reason: 'chat_only'/);
+  assert.match(resolve, /reason: 'control_off'/);
+  assert.ok(resolve.indexOf("reason: 'control_off'") < resolve.indexOf('browserControlCandidate({ context, scope })'));
+});
+
+test('a failed attach gives the just-acquired lease back', () => {
+  const attach = sidepanel.match(/async function attachBrowserControlToCurrentTab\([\s\S]*?\n\}/)?.[0] || '';
+  const acquireIndex = attach.indexOf('HERMES_CONTROLLER_LEASE_ACQUIRE');
+  const catchIndex = attach.indexOf('} catch (error) {', acquireIndex);
+  assert.ok(catchIndex > acquireIndex);
+  const rollback = attach.slice(catchIndex, attach.indexOf('throw error;', catchIndex));
+  assert.match(rollback, /HERMES_CONTROLLER_LEASE_RELEASE/);
+  assert.match(rollback, /resolvedReplacement\.acquire\.tabIds/);
+  assert.match(attach, /t\('browser_control\.attach_not_ready'\)/);
 });
 
 test('service worker rechecks the candidate tab through the live browser API', () => {

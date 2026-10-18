@@ -165,6 +165,7 @@ export default Object.freeze({
   "update.no_local_checkout": "لا يوجد نسخ محلي للمستودع على هذا الجهاز؟",
   "wake.turn_on": "Turn on wake word",
   "browser_control.approve_once": "الموافقة مرة واحدة",
+  "browser_control.attach_not_ready": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
   "browser_control.authorize": "تفويض التحكم",
   "browser_control.control_ready": "التحكم جاهز",
   "browser_control.detach": "فصل",

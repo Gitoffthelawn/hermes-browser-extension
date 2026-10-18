@@ -165,6 +165,7 @@ export default Object.freeze({
   "update.no_local_checkout": "इस मशीन पर रिपॉज़िटरी का स्थानीय चेकआउट नहीं है?",
   "wake.turn_on": "Turn on wake word",
   "browser_control.approve_once": "एक बार स्वीकृत करें",
+  "browser_control.attach_not_ready": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
   "browser_control.authorize": "नियंत्रण अधिकृत करें",
   "browser_control.control_ready": "नियंत्रण तैयार",
   "browser_control.detach": "अलग करें",

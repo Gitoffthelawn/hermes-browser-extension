@@ -174,7 +174,9 @@ test('BCP v2 carries authoritative control target outside page context for full 
     document_generation: 3,
     url: target.url,
     lease_owned: true,
+    state: 'ready',
   });
+  assert.equal(full.browser_control.control_snapshot, undefined);
 
   const reference = buildBrowserTurnEnvelope({
     humanInput: 'continue',

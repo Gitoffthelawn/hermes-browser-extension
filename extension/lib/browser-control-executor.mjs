@@ -281,7 +281,7 @@ export function createBrowserControlExecutor({
   async function execute(frame = {}, context = {}) {
     const {
       scope: rawScope = {}, signal: callerSignal, leasedTabIds = [], ownedTabIds = [], currentWindowId = null,
-      currentDocumentGeneration = null,
+      currentDocumentGeneration = null, snapshotBudget = '',
     } = context;
     let scope = normalizedScope(rawScope);
     if (!frameMatchesScope(frame, scope)) return errorOutcome('scope_mismatch', 'The command no longer matches the owned tab document.');
@@ -753,10 +753,15 @@ export function createBrowserControlExecutor({
         const full = args.full === true;
         const minted = refs.replace({ ...scope, nodes: Array.isArray(value?.nodes) ? value.nodes : [] });
         if (!minted.ok) return errorOutcome(minted.error, 'Could not bind snapshot refs.');
+        // The worker's turn-context snapshot is the only caller that sets
+        // snapshotBudget (never a model argument); it asks for the small view.
+        const turnView = snapshotBudget === 'turn' && !full;
         return {
           ok: true,
           result: safeSnapshotResult(value, minted, {
-            maxChars: full ? SNAPSHOT_VIEW_BUDGETS.full : SNAPSHOT_VIEW_BUDGETS.snapshot,
+            maxChars: turnView
+              ? SNAPSHOT_VIEW_BUDGETS.turn
+              : (full ? SNAPSHOT_VIEW_BUDGETS.full : SNAPSHOT_VIEW_BUDGETS.snapshot),
             fullText: full,
           }),
         };
