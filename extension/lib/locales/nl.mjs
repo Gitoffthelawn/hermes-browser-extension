@@ -444,6 +444,8 @@ export default Object.freeze({
   "session.copy_id_for": "Sessie-ID kopiëren voor {title}",
   "session.new_extension_session": "＋ Nieuwe Hermes Browser Extension-sessie",
   "session.opening": "{title} openen",
+  "session.origin_refused_title": "Hermes refused this browser origin",
+  "session.origin_refused": "Hermes refused this browser origin, {origin}, on a session request and returned no error body. Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
   "session.rail_save_failed": "Opslaan van sessierail mislukt: {error}",
   "session.rename_named": "Sessie {title} hernoemen",
   "settings.language.description": "Kies de interfacetaal.",

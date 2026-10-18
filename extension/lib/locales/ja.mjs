@@ -444,6 +444,8 @@ export default Object.freeze({
   "session.copy_id_for": "{title} のセッション ID をコピー",
   "session.new_extension_session": "＋ 新しい Hermes Browser Extension セッション",
   "session.opening": "{title} を開いています",
+  "session.origin_refused_title": "Hermes refused this browser origin",
+  "session.origin_refused": "Hermes refused this browser origin, {origin}, on a session request and returned no error body. Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
   "session.rail_save_failed": "セッションレールの保存に失敗しました: {error}",
   "session.rename_named": "セッション {title} の名前を変更",
   "settings.language.description": "インターフェースの言語を選択します。",

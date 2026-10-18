@@ -444,6 +444,8 @@ export default Object.freeze({
   "session.copy_id_for": "Copia ID sessione per {title}",
   "session.new_extension_session": "＋ Nuova sessione Hermes Browser Extension",
   "session.opening": "Apertura di {title}",
+  "session.origin_refused_title": "Hermes refused this browser origin",
+  "session.origin_refused": "Hermes refused this browser origin, {origin}, on a session request and returned no error body. Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
   "session.rail_save_failed": "Salvataggio del binario delle sessioni non riuscito: {error}",
   "session.rename_named": "Rinomina la sessione {title}",
   "settings.language.description": "Scegli la lingua dell'interfaccia.",

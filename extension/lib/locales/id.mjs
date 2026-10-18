@@ -444,6 +444,8 @@ export default Object.freeze({
   "session.copy_id_for": "Salin ID sesi untuk {title}",
   "session.new_extension_session": "＋ Sesi Hermes Browser Extension baru",
   "session.opening": "Membuka {title}",
+  "session.origin_refused_title": "Hermes refused this browser origin",
+  "session.origin_refused": "Hermes refused this browser origin, {origin}, on a session request and returned no error body. Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
   "session.rail_save_failed": "Gagal menyimpan rel sesi: {error}",
   "session.rename_named": "Ganti nama sesi {title}",
   "settings.language.description": "Pilih bahasa antarmuka.",

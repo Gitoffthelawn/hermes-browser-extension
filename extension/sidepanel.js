@@ -234,6 +234,7 @@ import { sessionIsLiveFromStatus, shouldAttachLiveSession, sessionToolDisplayMes
 import { appendUserImageAttachments, extractHistoryMediaAttachments, normalizeUserImageAttachments, preserveUserImageAttachments, rawGeneratedImageCandidatesFromResult, resolveImageSource, resolvedGeneratedImageSources, resolvedGeneratedImageSourcesFromMessages } from './lib/image-render.mjs';
 import { createRestFollowState, messageCountFromSessionPayload, restFollowDue, restFollowStep } from './lib/session-follow.mjs';
 import { collectSessionPages, DASHBOARD_SESSION_MAX_PAGES, DASHBOARD_SESSION_PAGE_LIMIT } from './lib/session-paging.mjs';
+import { materializeSessionRoute, sessionRouteError } from './lib/session-materialization.mjs';
 import { createUserFileAttachment, createPageContextAttachment, appendUserFileAttachments, stageUserFiles, attachmentFileContext, attachmentSourceKey, rememberUserFileAttachments, restoreUserFileAttachments, openUserFileAttachment, downloadUserFileAttachment } from './lib/user-file-attachments.mjs';
 import { mediaDisplayName, mediaSourcePlan, probeArtifactFileSource, resolveArtifactDownloadSource, resolveArtifactFileSource } from './lib/media-source.mjs';
 import { classifyMediaKind, resolveMediaFetchPlan } from './lib/media-persistence.mjs';
@@ -20285,9 +20286,20 @@ function safeHttpBodySnippet(text = '', limit = 500) {
     .trim();
 }
 
-function createSessionRouteError({ action, response, body = '' } = {}) {
+function createSessionRouteError({ action, response, body = '', originRefusal = null } = {}) {
   const status = response?.status || 0;
   const actionText = action || 'Hermes session request';
+  if (originRefusal) {
+    // The API server refused this extension origin before any chat request was
+    // sent. Name the origin and the exact .env line; never reclassify it as a
+    // remote setup or authorization problem.
+    return sessionRouteError({
+      action: actionText,
+      status,
+      message: t('session.origin_refused', { origin: originRefusal.origin, envLine: originRefusal.envLine }),
+      originRefusal,
+    });
+  }
   const diagnostic = isRemoteMode()
     ? classifyRemoteGatewaySetup({
         url: settings.gatewayUrl,
@@ -20301,16 +20313,21 @@ function createSessionRouteError({ action, response, body = '' } = {}) {
   const message = knownRemoteDiagnostic
     ? `${knownRemoteDiagnostic.title}: ${knownRemoteDiagnostic.detail}`
     : `${actionText} failed (${status}): ${fallbackDetail}`;
-  const error = new Error(message);
-  error.name = 'HermesSessionRouteError';
-  error.httpStatus = status;
-  error.sessionRouteAction = actionText;
-  error.remoteDiagnostic = knownRemoteDiagnostic;
-  error.hermesSetupFailure = Boolean(knownRemoteDiagnostic)
-    || status === 401
-    || status === 403
-    || status === 0;
-  return error;
+  return sessionRouteError({
+    action: actionText,
+    status,
+    message,
+    remoteDiagnostic: knownRemoteDiagnostic,
+  });
+}
+
+// A session route refused by the API server's CORS gate (issue #89). This is a
+// setup note for this session only: it does not touch the connection state or
+// the composer draft, and it is not stored in the transcript.
+function reportSessionOriginRefusal(error) {
+  const detail = String(error?.message || '');
+  setStatus('warn', t('session.origin_refused_title'), detail, { translateTitle: false, translateDetail: false });
+  addMessage('system', detail, { persist: false });
 }
 
 async function ensureHermesSession() {
@@ -20326,42 +20343,22 @@ async function ensureHermesSession() {
     await browserApi.storage.local.set({ hermesBrowserSettings: settings });
   }
   const sessionPath = `/api/sessions/${encodeSessionId(settings.sessionId)}`;
-  const getResponse = await apiFetch(sessionPath, { method: 'GET' });
-  if (getResponse.ok) {
-    sessionRoutesAvailable = true;
-    // Newer gateways refuse a REST turn on a session stored under any source
-    // other than api_server/bot_room ("permission denied"). Re-label it once
-    // before sending; the Browser still recognises its sessions by id prefix.
-    const repair = restTurnSourceRepair(await readJsonResponse(getResponse).catch(() => ({})));
-    if (repair) {
-      try {
-        await apiFetch(sessionPath, { method: 'PATCH', body: JSON.stringify(repair) });
-      } catch {
-        // Best effort: the send below still reports the gateway's own answer.
+  const route = await materializeSessionRoute({
+    apiFetch,
+    sessionPath,
+    extensionOrigin: currentExtensionOrigin(),
+    failure: createSessionRouteError,
+    // Session titles are unique on the gateway, and the bare default title is
+    // already owned by this extension's long-lived session: creating a new session
+    // with it is refused (invalid_title) and the chat never starts. Mint a unique
+    // title first — auto-naming still treats the stamped title as a default.
+    beforeCreate: async () => {
+      if (!String(settings.sessionTitle || '').trim() || isDefaultBrowserSessionTitle(settings.sessionTitle)) {
+        settings = { ...settings, sessionTitle: makeBrowserSessionTitle() };
+        await browserApi.storage.local.set({ hermesBrowserSettings: settings });
       }
-    }
-    return true;
-  }
-  if (getResponse.status !== 404) {
-    const text = await getResponse.text();
-    throw createSessionRouteError({
-      action: 'Inspect Hermes Browser Extension session',
-      response: getResponse,
-      body: text,
-    });
-  }
-
-  // Session titles are unique on the gateway, and the bare default title is
-  // already owned by this extension's long-lived session: creating a new session
-  // with it is refused (invalid_title) and the chat never starts. Mint a unique
-  // title first — auto-naming still treats the stamped title as a default.
-  if (!String(settings.sessionTitle || '').trim() || isDefaultBrowserSessionTitle(settings.sessionTitle)) {
-    settings = { ...settings, sessionTitle: makeBrowserSessionTitle() };
-    await browserApi.storage.local.set({ hermesBrowserSettings: settings });
-  }
-  const createResponse = await apiFetch('/api/sessions', {
-    method: 'POST',
-    body: JSON.stringify({
+    },
+    createBody: () => ({
       id: settings.sessionId,
       title: settings.sessionTitle,
       source: settings.sessionSource || DEFAULT_SETTINGS.sessionSource,
@@ -20370,19 +20367,24 @@ async function ensureHermesSession() {
       system_prompt: currentHermesBrowserSystemPrompt(),
     }),
   });
-  if (createResponse.status === 404 || createResponse.status === 405) {
+  if (route.outcome === 'unavailable') {
     sessionRoutesAvailable = false;
     return false;
   }
-  if (!createResponse.ok && createResponse.status !== 409) {
-    const text = await createResponse.text();
-    throw createSessionRouteError({
-      action: 'Create Hermes Browser Extension session',
-      response: createResponse,
-      body: text,
-    });
-  }
   sessionRoutesAvailable = true;
+  if (route.outcome === 'present') {
+    // Newer gateways refuse a REST turn on a session stored under any source
+    // other than api_server/bot_room ("permission denied"). Re-label it once
+    // before sending; the Browser still recognises its sessions by id prefix.
+    const repair = restTurnSourceRepair(await readJsonResponse(route.response).catch(() => ({})));
+    if (repair) {
+      try {
+        await apiFetch(sessionPath, { method: 'PATCH', body: JSON.stringify(repair) });
+      } catch {
+        // Best effort: the send below still reports the gateway's own answer.
+      }
+    }
+  }
   return true;
 }
 
@@ -21711,6 +21713,12 @@ async function askHermes(userText, turnAttachments = [...attachments], turnOptio
     activeRunControl = markRunTerminal(activeRunControl, 'failed');
     sending = false;
     updateComposerBusyState();
+    if (error?.originRefused) {
+      // Refused before the turn was sent: the composer still holds the draft
+      // (it is cleared only after this step) and the connection stays as it was.
+      reportSessionOriginRefusal(error);
+      return false;
+    }
     setStatus('error', 'Could not start Hermes session', error?.message || String(error), { translateDetail: false });
     return false;
   }
@@ -22232,6 +22240,22 @@ ${streamError.message}`);
           ? 'Hermes compacted the session and Browser adopted the acknowledged successor when provided.'
           : 'This runtime could not recover the session automatically. Start a new session, then resend the preserved draft.';
         addMessage('system', `Session context reached its compression ceiling. ${recoveryDetail} ${replayDetail}`);
+        return didSend;
+      }
+      if (error?.originRefused) {
+        // The session route was refused before the chat request, so the turn
+        // was not delivered: restore the draft and leave the connection alone.
+        if (!turnOptions.preserveComposer && !els.input.value.trim() && !attachments.length) {
+          els.input.value = commentPack.consumed ? (commentPack.displayUserText || '') : userText;
+          attachments = commentPack.consumed
+            ? [...turnAttachments].filter((item) => item?.source !== 'page-annotations')
+            : [...turnAttachments];
+          renderAttachments();
+          renderSkillSuggestions();
+          renderContextWindow('');
+          persistCurrentComposerDraft({ immediate: true });
+        }
+        reportSessionOriginRefusal(error);
         return didSend;
       }
       if (error?.remoteDiagnostic && applyRemoteDiagnostic(error.remoteDiagnostic, { statusKind: 'error' })) {

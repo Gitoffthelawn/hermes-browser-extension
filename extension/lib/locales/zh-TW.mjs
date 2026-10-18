@@ -444,6 +444,8 @@ export default Object.freeze({
   "session.copy_id_for": "複製 {title} 的工作階段 ID",
   "session.new_extension_session": "＋ 新增 Hermes Browser 擴充功能工作階段",
   "session.opening": "正在開啟 {title}",
+  "session.origin_refused_title": "Hermes refused this browser origin",
+  "session.origin_refused": "Hermes refused this browser origin, {origin}, on a session request and returned no error body. Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
   "session.rail_save_failed": "工作階段欄儲存失敗：{error}",
   "session.rename_named": "重新命名工作階段 {title}",
   "settings.language.description": "選擇介面語言。",

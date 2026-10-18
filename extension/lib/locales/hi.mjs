@@ -444,6 +444,8 @@ export default Object.freeze({
   "session.copy_id_for": "{title} के लिए सत्र आईडी कॉपी करें",
   "session.new_extension_session": "＋ नया Hermes Browser Extension सत्र",
   "session.opening": "{title} खोला जा रहा है",
+  "session.origin_refused_title": "Hermes refused this browser origin",
+  "session.origin_refused": "Hermes refused this browser origin, {origin}, on a session request and returned no error body. Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
   "session.rail_save_failed": "सत्र रेल सहेजना विफल: {error}",
   "session.rename_named": "सत्र {title} का नाम बदलें",
   "settings.language.description": "इंटरफ़ेस भाषा चुनें.",

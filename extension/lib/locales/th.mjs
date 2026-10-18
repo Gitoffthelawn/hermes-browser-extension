@@ -444,6 +444,8 @@ export default Object.freeze({
   "session.copy_id_for": "คัดลอก ID เซสชันสำหรับ {title}",
   "session.new_extension_session": "＋ เซสชัน Hermes Browser Extension ใหม่",
   "session.opening": "กำลังเปิด {title}",
+  "session.origin_refused_title": "Hermes refused this browser origin",
+  "session.origin_refused": "Hermes refused this browser origin, {origin}, on a session request and returned no error body. Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
   "session.rail_save_failed": "การบันทึกรางเซสชันล้มเหลว: {error}",
   "session.rename_named": "เปลี่ยนชื่อเซสชัน {title}",
   "settings.language.description": "เลือกภาษาอินเทอร์เฟซ",

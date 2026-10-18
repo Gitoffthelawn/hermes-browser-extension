@@ -421,6 +421,8 @@ export default Object.freeze({
   "session.copy_id_for": "复制会话 {title} 的 ID",
   "session.new_extension_session": "＋ 新建 Hermes 浏览器扩展会话",
   "session.opening": "正在打开 {title}",
+  "session.origin_refused_title": "Hermes refused this browser origin",
+  "session.origin_refused": "Hermes refused this browser origin, {origin}, on a session request and returned no error body. Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
   "session.rail_save_failed": "会话栏保存失败：{error}",
   "session.rename_named": "重命名会话 {title}",
   "settings.language.description": "选择界面语言。",
