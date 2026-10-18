@@ -33,6 +33,7 @@ export const WS_METHODS = Object.freeze({
   profilesSetAsset: 'profiles.set_asset',
   promptSubmit: 'prompt.submit',
   sessionInterrupt: 'session.interrupt',
+  sessionCompress: 'session.compress',
   sessionSteer: 'session.steer',
   promptBtw: 'prompt.btw',
   contextBreakdown: 'session.context_breakdown',
@@ -267,6 +268,133 @@ export function runtimeModelFromSessionStatus(output = '') {
     model: model === '(unknown)' ? '' : model,
     provider: provider === 'unknown' || provider === '(unknown)' ? '' : provider,
   };
+}
+
+// Stop fencing. Authority-attached gateways require `execution_generation` on
+// session.interrupt and answer `stale_generation` when it no longer matches.
+// session.resume is the canonical read of the current generation (it returns
+// the live snapshot); `omit_messages` keeps that read cheap. Gateways without a
+// session authority ignore the fence, so nothing is read from them.
+function integerGeneration(value) {
+  return Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+export function executionGenerationFrom(payload = null) {
+  if (!payload || typeof payload !== 'object') return null;
+  for (const candidate of [
+    payload.execution_generation,
+    payload.handle?.execution_generation,
+    payload.session?.execution_generation,
+    payload.data?.execution_generation,
+  ]) {
+    const generation = integerGeneration(candidate);
+    if (generation !== null) return generation;
+  }
+  return null;
+}
+
+function gatewayErrorReason(error) {
+  return String(error?.data?.reason || error?.message || '').trim().toLowerCase();
+}
+
+export function isStaleGenerationError(error) {
+  return gatewayErrorReason(error) === 'stale_generation';
+}
+
+export function isInvalidParamsError(error) {
+  const reason = gatewayErrorReason(error);
+  if (reason === 'invalid_params' || reason === 'invalid params') return true;
+  return [4000, -32602].includes(Number(error?.rpcCode ?? error?.code))
+    && /invalid[ _-]?param/i.test(String(error?.message || ''));
+}
+
+export async function readSessionExecutionGeneration(client, sessionId, { storedSessionId = '' } = {}) {
+  const target = String(sessionId || '').trim();
+  if (!client?.request || !target) return null;
+  try {
+    const status = await client.request(WS_METHODS.sessionStatus, { session_id: target });
+    const generation = executionGenerationFrom(status);
+    if (generation !== null) return generation;
+  } catch {
+    // Fall through to the authority snapshot.
+  }
+  if (client.readyPayload?.session_authority !== true) return null;
+  try {
+    const snapshot = await client.request(WS_METHODS.sessionResume, {
+      session_id: String(storedSessionId || target).trim(),
+      omit_messages: true,
+    });
+    return executionGenerationFrom(snapshot);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Interrupt a gateway session with its execution generation. A stale
+ * generation is re-read and retried once; a gateway that rejects the params
+ * falls back to `restFallback` (REST stop by run id) when one is supplied.
+ * Anything else throws so the caller keeps the run in its unconfirmed state.
+ */
+export async function interruptGatewaySession({
+  client,
+  sessionId,
+  storedSessionId = '',
+  withTimeout = (operation) => operation(),
+  restFallback = null,
+} = {}) {
+  const target = String(sessionId || '').trim();
+  if (!client?.request || !target) throw new Error('A live Hermes session is required to interrupt it.');
+  const read = () => readSessionExecutionGeneration(client, target, { storedSessionId });
+  const send = (generation) => withTimeout(() => client.request(WS_METHODS.sessionInterrupt, {
+    session_id: target,
+    ...(generation === null ? {} : { execution_generation: generation }),
+  }));
+  const fallBack = async (error) => {
+    if (typeof restFallback !== 'function') throw error;
+    return { via: 'rest', generation: null, retried: false, result: await restFallback() };
+  };
+  let generation = await read();
+  try {
+    return { via: 'ws', generation, retried: false, result: await send(generation) };
+  } catch (error) {
+    if (isInvalidParamsError(error)) return fallBack(error);
+    if (!isStaleGenerationError(error)) throw error;
+    const fresh = (await read()) ?? integerGeneration(error?.data?.execution_generation);
+    if (fresh === null) throw error;
+    generation = fresh;
+    try {
+      return { via: 'ws', generation, retried: true, result: await send(generation) };
+    } catch (retryError) {
+      if (isInvalidParamsError(retryError)) return fallBack(retryError);
+      throw retryError;
+    }
+  }
+}
+
+export function buildSessionCompressParams({ sessionId = '', focusTopic = '' } = {}) {
+  const normalizedSessionId = String(sessionId || '').trim();
+  if (!normalizedSessionId) throw new Error('A live Hermes session is required to compact context.');
+  const focus = String(focusTopic || '').trim();
+  return { session_id: normalizedSessionId, ...(focus ? { focus_topic: focus } : {}) };
+}
+
+// session.compress answers `compressed: false` when another compressor holds
+// the lock, `aborted` when the summary failed, and `pending` when a compute
+// host will finish later. Only a real compaction counts as done.
+export function normalizeSessionCompressResult(result = null) {
+  const payload = result && typeof result === 'object' ? result : {};
+  const status = String(payload.status || '').trim().toLowerCase();
+  const detail = String(payload.summary?.headline || payload.message || '').trim();
+  if (payload.compressed === false || payload.lock_held === true) return { ok: false, reason: 'busy', detail, payload };
+  if (status === 'pending') return { ok: false, reason: 'pending', detail, payload };
+  if (status === 'aborted' || payload.summary?.aborted === true) return { ok: false, reason: 'aborted', detail, payload };
+  return { ok: true, noop: payload.summary?.noop === true, detail, payload };
+}
+
+export function isUnknownMethodError(error) {
+  return Number(error?.rpcCode ?? error?.code) === -32601
+    || String(error?.data?.reason || '').toLowerCase() === 'unknown_method';
 }
 
 // Classify an inbound frame so callers don't reimplement the JSON-RPC shape.

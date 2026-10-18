@@ -61,7 +61,15 @@ export const DEFAULT_GATEWAY_CAPABILITIES = Object.freeze({
   warnings: Object.freeze([]),
 });
 
-export function dashboardWsGatewayCapabilities({ health = false, source = 'dashboard-ws' } = {}) {
+// The dashboard WebSocket serves `session.compress` from its legacy session
+// handlers. An authority-attached gateway (gateway.ready carries
+// `session_authority`) does not route that verb and answers -32601, so it is
+// only advertised when the connection proves it is not authority-attached.
+export function dashboardWsSupportsCompress(readyPayload = null) {
+  return Boolean(readyPayload && typeof readyPayload === 'object' && readyPayload.session_authority !== true);
+}
+
+export function dashboardWsGatewayCapabilities({ health = false, source = 'dashboard-ws', readyPayload = null } = {}) {
   return {
     ...DEFAULT_GATEWAY_CAPABILITIES,
     source,
@@ -74,6 +82,7 @@ export function dashboardWsGatewayCapabilities({ health = false, source = 'dashb
     skills: true,
     profiles: true,
     runSteer: true,
+    sessionCompress: dashboardWsSupportsCompress(readyPayload),
     dashboardWs: true,
     warnings: Object.freeze([
       'Dashboard WebSocket transport is active; REST-only API routes are not required.',
