@@ -402,7 +402,16 @@ export async function interruptGatewaySession({
 } = {}) {
   const target = String(sessionId || '').trim();
   if (!client?.request || !target) throw new Error('A live Hermes session is required to interrupt it.');
-  const read = () => readSessionExecutionGeneration(client, target, { storedSessionId });
+  // The reads that come before Stop is sent are bounded like Stop itself: a
+  // gateway that does not answer them must not delay the interrupt by the
+  // client's whole request timeout. An unreadable generation is sent as unknown.
+  const read = async () => {
+    try {
+      return await withTimeout(() => readSessionExecutionGeneration(client, target, { storedSessionId }));
+    } catch {
+      return null;
+    }
+  };
   const send = (generation) => withTimeout(() => client.request(WS_METHODS.sessionInterrupt, {
     session_id: target,
     ...(generation === null ? {} : { execution_generation: generation }),

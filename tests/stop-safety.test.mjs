@@ -203,11 +203,11 @@ test('other interrupt failures never trigger the REST fallback', async () => {
   assert.equal(restCalls, 0);
 });
 
-test('the interrupt request goes through the supplied timeout wrapper', async () => {
+test('the generation read and the interrupt request both go through the supplied timeout wrapper', async () => {
   const client = fakeClient({ [WS_METHODS.sessionStatus]: { output: 'x' }, [WS_METHODS.sessionInterrupt]: { status: 'interrupted' } });
   let wrapped = 0;
   await interruptGatewaySession({ client, sessionId: 'live-1', withTimeout: (operation) => { wrapped += 1; return operation(); } });
-  assert.equal(wrapped, 1);
+  assert.equal(wrapped, 2);
 });
 
 test('compaction params and results follow the session.compress contract', () => {

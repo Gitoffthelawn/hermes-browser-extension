@@ -16,7 +16,7 @@ import {
   waitForTerminalStatus,
   withRunControlId,
 } from '../extension/lib/run-control-lifecycle.mjs';
-import { WS_METHODS, readGatewaySessionStatus } from '../extension/lib/gateway-ws.mjs';
+import { WS_METHODS, interruptGatewaySession, readGatewaySessionStatus } from '../extension/lib/gateway-ws.mjs';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const sidepanel = read('extension/sidepanel.js');
@@ -174,4 +174,39 @@ test('Release exists on both surfaces, runs only from its button, and is declare
     assert.match(strings, /"run\.release": "[^"]+",/, locale);
     assert.match(strings, /"run\.release_detail": "[^"]+",/, locale);
   }
+});
+
+// ---- Stop is not held up by the reads that precede it ----------------------------------------------
+
+test('a gateway that never answers the generation read does not hold up the interrupt', async () => {
+  for (const readyPayload of [{ heartbeat: true }, { session_authority: true }]) {
+    const never = () => new Promise(() => {});
+    const client = scriptedClient({
+      [WS_METHODS.sessionStatus]: never,
+      [WS_METHODS.sessionResume]: never,
+      [WS_METHODS.sessionInterrupt]: { status: 'interrupted' },
+    }, readyPayload);
+    let timedOut = 0;
+    const withTimeout = (operation) => Promise.race([
+      operation(),
+      new Promise((_, reject) => setTimeout(() => { timedOut += 1; reject(new Error('Runtime control request timed out')); }, 15)),
+    ]);
+    const outcome = await interruptGatewaySession({ client, sessionId: 'live-1', storedSessionId: 'sess-1', withTimeout });
+    assert.equal(outcome.via, 'ws');
+    assert.equal(outcome.generation, null, 'an unreadable generation is sent as unknown');
+    assert.deepEqual(client.calls.find((call) => call.method === WS_METHODS.sessionInterrupt).params, { session_id: 'live-1' });
+    assert.ok(timedOut >= 1, 'the read was cut short by the wrapper, not waited out');
+  }
+});
+
+test('a generation read that fails outright is also sent as unknown, and a slow interrupt still fails Stop', async () => {
+  const client = scriptedClient({
+    [WS_METHODS.sessionStatus]: Object.assign(new Error('boom'), { rpcCode: 5000 }),
+    [WS_METHODS.sessionInterrupt]: () => new Promise(() => {}),
+  });
+  const withTimeout = (operation) => Promise.race([
+    operation(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Runtime control request timed out')), 15)),
+  ]);
+  await assert.rejects(interruptGatewaySession({ client, sessionId: 'live-1', withTimeout }), /timed out/);
 });
