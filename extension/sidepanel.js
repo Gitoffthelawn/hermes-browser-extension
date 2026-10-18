@@ -76,7 +76,6 @@ import {
   sanitizeGatewayDiagnosticText,
   shouldRequireModelLock,
   shouldReuseImageGenerationActivity,
-  shouldStopSessionPaging,
   shouldFallbackToWebSpeechForTranscription,
   shouldOpenVoiceDictationPageForSpeechError,
   shouldUseLocalDashboardAudioTranscription,
@@ -234,6 +233,7 @@ import { classicThinkingFace, createToolCallGroup, updateToolCallGroup, groupToo
 import { sessionIsLiveFromStatus, shouldAttachLiveSession, sessionToolDisplayMessages, sessionLiveRoster } from './lib/live-session-attach.mjs';
 import { appendUserImageAttachments, extractHistoryMediaAttachments, normalizeUserImageAttachments, preserveUserImageAttachments, rawGeneratedImageCandidatesFromResult, resolveImageSource, resolvedGeneratedImageSources, resolvedGeneratedImageSourcesFromMessages } from './lib/image-render.mjs';
 import { createRestFollowState, messageCountFromSessionPayload, restFollowDue, restFollowStep } from './lib/session-follow.mjs';
+import { collectSessionPages, DASHBOARD_SESSION_MAX_PAGES, DASHBOARD_SESSION_PAGE_LIMIT } from './lib/session-paging.mjs';
 import { createUserFileAttachment, createPageContextAttachment, appendUserFileAttachments, stageUserFiles, attachmentFileContext, attachmentSourceKey, rememberUserFileAttachments, restoreUserFileAttachments, openUserFileAttachment, downloadUserFileAttachment } from './lib/user-file-attachments.mjs';
 import { mediaDisplayName, mediaSourcePlan, probeArtifactFileSource, resolveArtifactDownloadSource, resolveArtifactFileSource } from './lib/media-source.mjs';
 import { classifyMediaKind, resolveMediaFetchPlan } from './lib/media-persistence.mjs';
@@ -15913,38 +15913,41 @@ async function loadDashboardSessionsForProfile(profile = '') {
   });
   const token = extractDashboardSessionToken(await rootResponse.text());
   if (!token) throw Object.assign(new Error('no-dashboard-session-token'), { status: rootResponse.status || 0 });
-  const limit = 100;
-  let offset = 0;
-  const merged = [];
-  for (let page = 0; page < 5; page += 1) {
-    const url = `${base}/api/sessions?limit=${limit}&offset=${offset}&order=recent${profile ? `&profile=${encodeURIComponent(profile)}` : ''}`;
-    const response = await fetch(url, {
-      headers: { Accept: 'application/json', 'X-Hermes-Session-Token': token },
-      credentials: 'include',
-      cache: 'no-store',
-      signal: typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(3_000) : undefined,
-    });
-    if (!response.ok) {
-      if (page === 0) throw Object.assign(new Error(`dashboard-sessions-${response.status}`), { status: response.status });
-      break;
-    }
-    const payload = await response.json().catch(() => null);
-    const rows = Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload?.sessions)
-        ? payload.sessions
-        : Array.isArray(payload?.data)
-          ? payload.data
-          : Array.isArray(payload?.results)
-            ? payload.results
-            : [];
-    merged.push(...rows);
-    const hasMore = Boolean(payload?.has_more ?? payload?.hasMore ?? payload?.pagination?.hasMore);
-    const total = Number(payload?.total || payload?.pagination?.total || 0);
-    offset += rows.length;
-    if (shouldStopSessionPaging({ rowCount: rows.length, offset, total, hasMore }) || rows.length < limit) break;
-  }
-  return merged;
+  // Paging follows the server's has_more/total answer. A short page is not the
+  // end of the list; collectSessionPages stops at the page cap or on a page that
+  // adds nothing new.
+  return collectSessionPages({
+    limit: DASHBOARD_SESSION_PAGE_LIMIT,
+    maxPages: DASHBOARD_SESSION_MAX_PAGES,
+    fetchPage: async ({ offset, limit, page }) => {
+      const url = `${base}/api/sessions?limit=${limit}&offset=${offset}&order=recent${profile ? `&profile=${encodeURIComponent(profile)}` : ''}`;
+      const response = await fetch(url, {
+        headers: { Accept: 'application/json', 'X-Hermes-Session-Token': token },
+        credentials: 'include',
+        cache: 'no-store',
+        signal: typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(3_000) : undefined,
+      });
+      if (!response.ok) {
+        if (page === 0) throw Object.assign(new Error(`dashboard-sessions-${response.status}`), { status: response.status });
+        return null;
+      }
+      const payload = await response.json().catch(() => null);
+      const rows = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.sessions)
+          ? payload.sessions
+          : Array.isArray(payload?.data)
+            ? payload.data
+            : Array.isArray(payload?.results)
+              ? payload.results
+              : [];
+      return {
+        rows,
+        hasMore: Boolean(payload?.has_more ?? payload?.hasMore ?? payload?.pagination?.hasMore),
+        total: Number(payload?.total || payload?.pagination?.total || 0),
+      };
+    },
+  });
 }
 
 async function loadSessions({ quiet = false } = {}) {
