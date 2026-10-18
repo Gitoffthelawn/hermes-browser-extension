@@ -111,6 +111,12 @@ const SENSITIVE_ASSIGNMENT_KEY_SUFFIXES = [
 // key, optional closing quote of a JSON-style key, separator, then either a
 // fully quoted value (spaces allowed) or a bare token.
 const POTENTIAL_ASSIGNMENT_RE = /\b([A-Za-z][A-Za-z0-9_%+.-]{1,79})(["'`]?)(\s*)([:=])(\s*)(?:(["'`])((?:(?!\6)[^\r\n]){1,500})\6|(["'`]?)([^\s'"`;&,]+))/gi;
+// The same shape inside a JSON string that was itself stored as a string
+// (`{\"password\":\"hunter2\"}`), which is how JSON turns up in logs and API
+// consoles. The value runs to the next escaped quote.
+const ESCAPED_JSON_ASSIGNMENT_RE = /\b([A-Za-z][A-Za-z0-9_%+.-]{1,79})(\\+["'])(\s*:\s*)(\\+["'])((?:(?!\\+["'])[^\r\n]){1,500})(\\+["'])/gi;
+// Closing brackets after a bare value belong to the surrounding JSON or code.
+const BARE_VALUE_TRAILING_BRACKETS_RE = /[}\]]+$/;
 
 const SECRET_PATTERNS = [
   { pattern: /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/g, replacement: '[REDACTED_PRIVATE_KEY]' },
@@ -197,7 +203,12 @@ export function isSensitiveAssignmentKey(value = '') {
 
 function redactSensitiveAssignments(value = '') {
   let count = 0;
-  const text = String(value || '').replace(POTENTIAL_ASSIGNMENT_RE, (match, key, keyQuote, beforeSeparator, separator, afterSeparator, quote) => {
+  const escaped = String(value || '').replace(ESCAPED_JSON_ASSIGNMENT_RE, (match, key, keyQuote, separator, openQuote, _secret, closeQuote) => {
+    if (!isSensitiveAssignmentKey(key)) return match;
+    count += 1;
+    return `${key}${keyQuote}${separator}${openQuote}[REDACTED_SECRET]${closeQuote}`;
+  });
+  const text = escaped.replace(POTENTIAL_ASSIGNMENT_RE, (match, key, keyQuote, beforeSeparator, separator, afterSeparator, quote, _quoted, _bareQuote, bare) => {
     if (!isSensitiveAssignmentKey(key)) return match;
     count += 1;
     if (quote) {
@@ -205,12 +216,14 @@ function redactSensitiveAssignments(value = '') {
       // config-file shapes survive, and drop only the value itself.
       return `${key}${keyQuote}${beforeSeparator}${separator}${afterSeparator}${quote}[REDACTED_SECRET]${quote}`;
     }
+    // A bare value must not swallow the `}` or `]` that closes its object.
+    const closers = BARE_VALUE_TRAILING_BRACKETS_RE.exec(bare || '')?.[0] || '';
     if (keyQuote) {
       // JSON-style key followed by an unquoted value (number, boolean, bare word).
-      return `${key}${keyQuote}${separator} [REDACTED_SECRET]`;
+      return `${key}${keyQuote}${separator} [REDACTED_SECRET]${closers}`;
     }
     const delimiter = separator === ':' ? ': ' : '=';
-    return `${key}${delimiter}[REDACTED_SECRET]`;
+    return `${key}${delimiter}[REDACTED_SECRET]${closers}`;
   });
   return { text, count };
 }
