@@ -434,7 +434,7 @@ test('legacy local bootstrap connects without requiring an unrelated signed-in t
     dashboardFetch: async () => ({ ok: true, text: async () => 'legacy bootstrap' }),
     extractDashboardSessionToken: () => 'fixture-bootstrap',
     requestDashboardOriginTrust: async () => { throw new Error('no-dashboard-tab'); },
-    settings: {}, createGatewayClient: () => client, WebSocket: {},
+    settings: {}, createChatGatewayClient: () => client, WebSocket: {},
     buildDashboardWsUrlWithCredential: () => 'ws://localhost/fixture',
     buildDashboardWsUrl: () => 'ws://localhost/fixture',
   };

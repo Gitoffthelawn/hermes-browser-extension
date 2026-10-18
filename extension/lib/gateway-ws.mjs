@@ -51,6 +51,10 @@ export const WS_METHODS = Object.freeze({
   voiceRecord: 'voice.record',
   voiceTts: 'voice.tts',
   configSet: 'config.set',
+  // Says once per connection that this client answers server-to-client requests
+  // (approval, clarify). Until it is sent the gateway fails those requests fast
+  // for this connection instead of waiting for an answer that cannot come.
+  clientCapabilities: 'client.capabilities',
 });
 
 // Streamed assistant-turn events we care about. Everything else (tool.*,
@@ -63,8 +67,17 @@ export const WS_EVENTS = Object.freeze({
   wakeDetected: 'wake.detected',
   voiceTranscript: 'voice.transcript',
   voiceStatus: 'voice.status',
+  // The gateway withdrew a server request: it timed out, was answered from
+  // another surface, or the turn was interrupted.
+  requestCancel: 'request.cancel',
   error: 'error',
 });
+
+// Server-to-client requests that belong to a desktop window (preview, terminal,
+// tour). A client with no such window declines them with this code so the agent
+// is told at once instead of waiting out the deadline.
+export const NOT_SHOWN_CODE = 4404;
+const WINDOW_OWNED_REQUESTS = new Set(['terminal.read', 'preview.read', 'window.read', 'preview.act', 'tour']);
 
 // Gateway sessions have two identities. `session_id` addresses the live
 // runtime on the current WebSocket; the stored id survives disconnects and is
@@ -157,6 +170,9 @@ export async function establishGatewaySession({ client, storedSessionId = '', cr
         ...(requestedProfile ? { profile: requestedProfile } : {}),
       });
   const { liveId, storedId, profile: acknowledgedProfile } = remoteSessionIdentity(result, requestedId);
+  // Requests still waiting on this session when it was resumed (the frame went
+  // to a connection that was gone) are handed over as if they had just arrived.
+  if (requestedId && Array.isArray(result?.open_requests)) client.deliverOpenRequests?.(result.open_requests);
   if (!liveId || !storedId) {
     throw new Error(`Dashboard did not return complete ${action === 'resumed' ? 'resume' : 'session'} identity.`);
   }
@@ -402,6 +418,8 @@ export function isUnknownMethodError(error) {
 //   { kind: 'response', id, result }        — RPC reply (success)
 //   { kind: 'error', id, error }            — RPC reply (failure)
 //   { kind: 'event', type, sessionId, payload } — server push (method === 'event')
+//   { kind: 'server-request', id, method, sessionId, params }
+//                                           — the gateway asks the client a question
 //   { kind: 'ignore' }                      — unparseable / unrecognized
 export function classifyGatewayFrame(raw) {
   let frame;
@@ -427,13 +445,34 @@ export function classifyGatewayFrame(raw) {
     };
   }
 
+  if (frame.id !== undefined && frame.id !== null && typeof frame.method === 'string' && frame.method !== 'event') {
+    const params = frame.params && typeof frame.params === 'object' && !Array.isArray(frame.params) ? frame.params : {};
+    return {
+      kind: 'server-request',
+      id: frame.id,
+      method: frame.method,
+      sessionId: String(params.session_id || ''),
+      params,
+    };
+  }
+
   return { kind: 'ignore' };
 }
 
 // Minimal JSON-RPC client over a WebSocket. WebSocketImpl is injectable so the
 // client can be unit-tested with a fake socket.
-export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, readyTimeoutMs = 15_000 } = {}) {
+//
+// serverRequests opts a connection into answering the gateway's questions:
+//   { handle(request, controls) => boolean, cancel(payload) }
+// handle receives {id, method, params} and controls {reply, replyError, client}
+// and returns true when it owns the request (it answers later through
+// controls). Anything it does not own is declined here. The connection says
+// client.capabilities {server_requests: true} only when a handler is given, so
+// a client with no card to show never receives a question it cannot answer.
+export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, readyTimeoutMs = 15_000, serverRequests = null } = {}) {
   const SocketCtor = WebSocketImpl || (typeof WebSocket !== 'undefined' ? WebSocket : null);
+  const serverRequestHandler = typeof serverRequests?.handle === 'function' ? serverRequests : null;
+  let declinesNotShown = false;
   let socket = null;
   let connectAttempt = null;
   let readyPayload = null;
@@ -462,8 +501,61 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
     }
   }
 
+  function sendFrame(frame) {
+    if (!socket || socket.readyState !== 1) throw new Error('WebSocket is not open');
+    socket.send(JSON.stringify({ jsonrpc: '2.0', ...frame }));
+  }
+
+  function advertiseServerRequests() {
+    request(WS_METHODS.clientCapabilities, { server_requests: true })
+      .then((result) => { declinesNotShown = result?.declines_not_shown === true; })
+      .catch(() => {
+        // A gateway that predates the call never sends server requests either.
+      });
+  }
+
+  function declineServerRequest(frame, controls) {
+    try {
+      if (WINDOW_OWNED_REQUESTS.has(frame.method) && declinesNotShown) {
+        controls.replyError(NOT_SHOWN_CODE, 'No window here shows this session');
+      } else {
+        controls.replyError(-32601, `Method not found: ${frame.method}`);
+      }
+    } catch {
+      // The socket closed first; the gateway withdraws the request itself.
+    }
+  }
+
+  function dispatchServerRequest(frame) {
+    const controls = {
+      reply: (result) => sendFrame({ id: frame.id, result: result ?? {} }),
+      replyError: (code, message) => sendFrame({ id: frame.id, error: { code, message } }),
+      client: api,
+    };
+    if (!serverRequestHandler) {
+      declineServerRequest(frame, controls);
+      return;
+    }
+    let owned = false;
+    try {
+      owned = serverRequestHandler.handle({ id: frame.id, method: frame.method, params: frame.params }, controls) === true;
+    } catch {
+      try {
+        controls.replyError(-32603, 'Internal error');
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    if (!owned) declineServerRequest(frame, controls);
+  }
+
   function handleFrame(raw) {
     const frame = classifyGatewayFrame(raw);
+    if (frame.kind === 'server-request') {
+      dispatchServerRequest(frame);
+      return;
+    }
     if (frame.kind === 'response' || frame.kind === 'error') {
       const call = pending.get(frame.id);
       if (!call) return;
@@ -488,6 +580,9 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
         clearTimeout(attempt.timer);
         readyPayload = frame.payload;
         adoptReplayEpoch(String(frame.payload?.replay_epoch || ''));
+        // Sent before the connect promise settles, so it precedes every request
+        // the caller makes next on this socket.
+        if (serverRequestHandler) advertiseServerRequests();
         attempt.resolve(frame.payload);
         queueMicrotask(() => { void fetchReplay(); });
       }
@@ -540,6 +635,7 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
           adoptReplayEpoch(epoch);
           continue;
         }
+        if (Array.isArray(result?.open_requests)) deliverOpenRequests(result.open_requests);
         for (const event of Array.isArray(result?.events) ? result.events : []) {
           if (!event?.type) continue;
           dispatchIfNewer({
@@ -667,6 +763,22 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
     return () => listeners.get(type)?.delete(handler);
   }
 
+  // Requests the gateway still has open for a resumed session. They are handed
+  // to the handler exactly like a live frame; it keys them by id, so a request
+  // seen twice is one request.
+  function deliverOpenRequests(requests) {
+    if (!serverRequestHandler) return;
+    for (const item of Array.isArray(requests) ? requests : []) {
+      if (!item || typeof item.method !== 'string' || item.id === undefined || item.id === null) continue;
+      dispatchServerRequest({
+        id: item.id,
+        method: item.method,
+        sessionId: String(item.params?.session_id || ''),
+        params: item.params && typeof item.params === 'object' ? item.params : {},
+      });
+    }
+  }
+
   function close() {
     if (connectAttempt) {
       const attempt = connectAttempt;
@@ -684,11 +796,12 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
     readyPayload = null;
   }
 
-  return {
+  const api = {
     connect,
     request,
     on,
     close,
+    deliverOpenRequests,
     getSeqWatermarks() {
       return Object.fromEntries(lastSeenSeq);
     },
@@ -699,4 +812,8 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
       return readyPayload;
     },
   };
+  if (typeof serverRequestHandler?.cancel === 'function') {
+    on(WS_EVENTS.requestCancel, (event) => serverRequestHandler.cancel(event.payload || {}));
+  }
+  return api;
 }
