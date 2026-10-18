@@ -356,5 +356,9 @@ test('display_text rejection from a strict-contract core is recognised and retri
   assert.equal(turnRecovery.isDisplayTextRejection(new Error('invalid params for prompt.submit: truncate_before_row_id: Extra inputs')), false);
   assert.equal(turnRecovery.isDisplayTextRejection(new Error('Dashboard connection closed mid-turn.')), false);
   const source = readFileSync(new URL('../extension/sidepanel.js', import.meta.url), 'utf8');
-  assert.match(source, /isDisplayTextRejection\(error\)[\s\S]{0,200}displayTextUnsupported = true/);
+  // The refusal is remembered per gateway (not as a page-wide flag), and only a
+  // submit that carried display_text is retried without it.
+  assert.match(source, /Object\.hasOwn\(firstSubmit, 'display_text'\)[\s\S]{0,120}isDisplayTextRejection\(error\)/);
+  assert.match(source, /isDisplayTextRejection\(error\)[\s\S]{0,200}markUnsupported\(quirkGatewayUrl, GATEWAY_QUIRK\.PROMPT_DISPLAY_TEXT\)/);
+  assert.doesNotMatch(source, /displayTextUnsupported/);
 });

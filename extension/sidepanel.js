@@ -68,6 +68,7 @@ import {
   normalizeToolActivity,
   normalizeReasoningEffort,
   pairingFailureMessage,
+  pairingStartCanContinue,
   prepareOnDeviceSpeechRecognition,
   queuedMessageControlState,
   reasoningEffortShortLabel,
@@ -390,10 +391,12 @@ import {
   transcribeAudioViaDashboard,
   resolveDashboardTranscriptionBaseUrl,
   fetchVoiceLiveStatus,
-  dashboardFileStreamUrl,
+  attachDashboardStreamBlob,
   dashboardModelDiscoveryBaseUrl,
+  fetchDashboardFileStreamObjectUrl,
   fetchDashboardMediaDataUrl,
   fetchDashboardSessionToken,
+  releaseDashboardStreamBlob,
   discoverCanonicalProviderCatalog,
   discoverGatewayVirtualModels,
   discoverModelsFromDashboard,
@@ -588,6 +591,7 @@ import {
   createConnectionController,
 } from './lib/connection-controller.mjs';
 import { createHermesClient } from './lib/hermes-client.mjs';
+import { createGatewayQuirkStore, GATEWAY_QUIRK, isSessionPatchRejection } from './lib/gateway-quirks.mjs';
 import { openHermesFullView } from './lib/fulltab-opener.mjs';
 import { buildCleanClipboardPayload, writeAssistantClipboardEvent } from './lib/assistant-clipboard.mjs';
 import { normalizeMessageTimestamp } from './lib/message-meta.mjs';
@@ -1128,6 +1132,7 @@ let wakeTurnProcessingId = '';
 const hermesClient = createHermesClient({
   getConnection: () => settings,
 });
+const gatewayQuirks = createGatewayQuirkStore({ storageArea: browserApi?.storage?.local });
 let startupReadiness = initialStartupReadiness(settings);
 let contextScope = normalizeContextScope(DEFAULT_CONTEXT_SCOPE);
 let previousConversationScope = normalizeContextScope(DEFAULT_CONTEXT_SCOPE);
@@ -1918,8 +1923,15 @@ function isRemoteWsMode() {
   return normalizeGatewayMode(settings.gatewayMode) === 'remote-dashboard';
 }
 
+// Loopback and localhost dashboard discovery (the Desktop dashboard ports, open
+// 127.0.0.1 tabs, the dashboard-candidates request) belongs to the local
+// gateway only. Any remote mode must never reach for the user's own machine.
+function isLocalApiMode() {
+  return normalizeGatewayMode(settings.gatewayMode) === 'local-api';
+}
+
 function isRemoteMode() {
-  return normalizeGatewayMode(settings.gatewayMode) !== 'local-api';
+  return !isLocalApiMode();
 }
 
 function currentConnectionState() {
@@ -10185,6 +10197,12 @@ function isNamedHermesProfile(profileName = safeActiveProfile()) {
   return Boolean(normalized && normalized !== 'default');
 }
 
+function dashboardCompanionNotConfiguredError() {
+  const error = new Error('dashboard-companion-not-configured');
+  error.code = 'dashboard-companion-not-configured';
+  return error;
+}
+
 function profileConnectionKey(baseUrl = desktopDashboardUrl || settings.gatewayUrl) {
   return botModeRouteKey({
     connectionId: normalizeGatewayUrl(baseUrl),
@@ -10200,6 +10218,7 @@ function dashboardTicketOriginMatches(baseUrl = '') {
 }
 
 async function localhostDashboardCandidateUrls() {
+  if (!isLocalApiMode()) return [];
   try {
     const tabs = await browserApi.tabs.query({ url: ['http://127.0.0.1/*', 'http://localhost/*'] });
     return [...new Set((Array.isArray(tabs) ? tabs : []).map((tab) => {
@@ -10215,6 +10234,10 @@ async function localhostDashboardCandidateUrls() {
 }
 
 async function ensureDesktopDashboardUrl({ timeoutMs = 8_000 } = {}) {
+  if (!isLocalApiMode()) {
+    desktopDashboardUrl = '';
+    return '';
+  }
   if (desktopDashboardUrl) {
     const alive = await dashboardFetch(desktopDashboardUrl, {
       method: 'GET',
@@ -10229,6 +10252,7 @@ async function ensureDesktopDashboardUrl({ timeoutMs = 8_000 } = {}) {
       const cached = await readCachedRosterUrl();
       const candidateUrls = await localhostDashboardCandidateUrls();
       const discovered = await discoverLocalDashboardBaseUrl({
+        gatewayMode: normalizeGatewayMode(settings.gatewayMode),
         cachedUrl: cached.url,
         cachedAt: cached.cachedAt,
         candidateUrls,
@@ -10237,11 +10261,12 @@ async function ensureDesktopDashboardUrl({ timeoutMs = 8_000 } = {}) {
         fetchFn: dashboardFetch,
         timeoutMs: Math.max(8_000, Number(timeoutMs) || 8_000),
       });
-      if (discovered) {
+      if (discovered && isLocalApiMode()) {
         desktopDashboardUrl = discovered;
         await writeCachedRosterUrl(discovered);
+        return discovered;
       }
-      return discovered;
+      return '';
     })().catch(() => '').finally(() => {
       desktopDashboardDiscoveryPromise = null;
     });
@@ -10251,7 +10276,7 @@ async function ensureDesktopDashboardUrl({ timeoutMs = 8_000 } = {}) {
   const raced = await Promise.race([discovery, timer]);
   if (raced) return raced;
   void discovery.then((url) => {
-    if (!url || desktopDashboardUrl === url) return;
+    if (!url || desktopDashboardUrl === url || !isLocalApiMode()) return;
     desktopDashboardUrl = url;
     void writeCachedRosterUrl(url);
     void loadProfiles({ quiet: true, allowDashboardTrust: true });
@@ -10262,6 +10287,9 @@ async function ensureDesktopDashboardUrl({ timeoutMs = 8_000 } = {}) {
 
 async function ensureProfileWsConnection({ readyTimeoutMs = 8_000, allowDashboardTrust = false } = {}) {
   if (isRemoteWsMode()) return ensureRemoteWsClient();
+  // Remote API mode has no dashboard companion yet. Do not go looking for a
+  // dashboard on this machine; report the missing companion instead.
+  if (!isLocalApiMode()) throw dashboardCompanionNotConfiguredError();
   // The dashboard WS (/api/ws) lives on the DESKTOP dashboard's random port —
   // the 8642 sidecar has no such route and a connect attempt there hangs
   // waiting gateway.ready. When no dashboard URL is known yet, discover it
@@ -10399,7 +10427,7 @@ async function ensureActiveDashboardWsConnection() {
 }
 
 async function activateLocalDashboardTransport({ timeoutMs = 5_000 } = {}) {
-  if (isRemoteWsMode()) return null;
+  if (!isLocalApiMode()) return null;
   if (!desktopDashboardUrl) {
     desktopDashboardUrl = await ensureDesktopDashboardUrl({ timeoutMs });
   }
@@ -12673,7 +12701,7 @@ async function loadProfiles({ quiet = false, allowDashboardTrust = !quiet } = {}
   if (isRemoteMode() && !isRemoteWsMode()) {
     availableProfiles = [];
     botModeRoster = [];
-    botModeRosterNote = 'Profile roster unavailable in Remote API mode. Connect a Hermes Dashboard to use profile switching.';
+    botModeRosterNote = t('profile.companion_not_configured');
     rosterRetryCount = 0;
     activeConversationTransport = 'rest';
     activeDashboardWsConnection = null;
@@ -17049,12 +17077,25 @@ async function hydrateSessionMediaInElement(element) {
       return;
     }
     if (kind === 'video' && plan.transport === 'dashboard-stream') {
+      // A <video> cannot send the session header, so the file is read with it
+      // and played from a blob URL that never carries the token.
+      const streamUrl = await fetchDashboardFileStreamObjectUrl({ baseUrl, filePath, token });
+      if (!streamUrl) {
+        node.classList.add('unavailable');
+        return;
+      }
+      if (!node.isConnected) {
+        releaseDashboardStreamBlob(streamUrl);
+        return;
+      }
       const video = doc.createElement('video');
       video.className = 'session-media-player';
       video.controls = true;
       video.preload = 'metadata';
-      video.src = dashboardFileStreamUrl(baseUrl, filePath, token);
+      video.src = streamUrl;
+      attachDashboardStreamBlob(streamUrl, video);
       video.addEventListener('error', () => {
+        releaseDashboardStreamBlob(streamUrl);
         node.classList.add('unavailable');
         if (video.isConnected) video.replaceWith(node);
       }, { once: true });
@@ -17547,7 +17588,12 @@ async function ensureDefaultBrowserSession({ focus = false, scopeRevisionId = sc
   if ((!settings.apiKey && !usesDashboardWsChatTransport()) || settings.sessionId !== DEFAULT_SETTINGS.sessionId) return false;
   const current = availableSessions.find((session) => session.id === settings.sessionId);
   if (isHermesBrowserSession(current)) return true;
-  if (current) {
+  // Current Hermes refuses a session PATCH that carries `source`. One request
+  // per gateway may find that out; after a refusal the session is simply left
+  // as is and the draft/open path below takes over without a warning.
+  await gatewayQuirks.load();
+  const patchGatewayUrl = settings.gatewayUrl;
+  if (current && gatewayQuirks.beginProbe(patchGatewayUrl, GATEWAY_QUIRK.SESSION_SOURCE_PATCH)) {
     try {
       const response = await apiFetch(`/api/sessions/${encodeSessionId(current.id)}`, {
         method: 'PATCH',
@@ -17555,17 +17601,26 @@ async function ensureDefaultBrowserSession({ focus = false, scopeRevisionId = sc
       });
       const payload = await readJsonResponse(response);
       if (!scopeRevision.isCurrent(scopeRevisionId)) return false;
-      if (!response.ok) throw new Error(payload?.error?.message || payload?.error || `Session migration failed (${response.status})`);
-      const migrated = normalizeHermesSessions({ data: [payload.session || payload] })[0];
-      if (migrated) {
-        availableSessions = normalizeHermesSessions({ data: [migrated, ...availableSessions.filter((item) => item.id !== migrated.id)] });
-        updateSessionLabel();
-        renderSessionMenu();
-        return true;
+      if (!response.ok) {
+        if (isSessionPatchRejection(response, payload)) {
+          await gatewayQuirks.markUnsupported(patchGatewayUrl, GATEWAY_QUIRK.SESSION_SOURCE_PATCH);
+        } else {
+          throw new Error(payload?.error?.message || payload?.error || `Session migration failed (${response.status})`);
+        }
+      } else {
+        const migrated = normalizeHermesSessions({ data: [payload.session || payload] })[0];
+        if (migrated) {
+          availableSessions = normalizeHermesSessions({ data: [migrated, ...availableSessions.filter((item) => item.id !== migrated.id)] });
+          updateSessionLabel();
+          renderSessionMenu();
+          return true;
+        }
       }
     } catch (error) {
       if (!scopeRevision.isCurrent(scopeRevisionId)) return false;
       setStatus('warn', 'Could not migrate Browser session', error?.message || String(error), { translateDetail: false });
+    } finally {
+      gatewayQuirks.endProbe(patchGatewayUrl, GATEWAY_QUIRK.SESSION_SOURCE_PATCH);
     }
   }
   if (!scopeRevision.isCurrent(scopeRevisionId)) return false;
@@ -19184,6 +19239,7 @@ async function saveSettingsFromForm() {
     remoteWsConnection = null;
     profileWsConnection?.client?.close?.();
     profileWsConnection = null;
+    if (!isLocalApiMode()) desktopDashboardUrl = '';
   }
   if (previousSettings.botModeEnabled === true && settings.botModeEnabled !== true) {
     botModeRosterGeneration += 1;
@@ -20368,11 +20424,21 @@ async function ensureHermesSession() {
     // other than api_server/bot_room ("permission denied"). Re-label it once
     // before sending; the Browser still recognises its sessions by id prefix.
     const repair = restTurnSourceRepair(await readJsonResponse(getResponse).catch(() => ({})));
-    if (repair) {
+    await gatewayQuirks.load();
+    const repairGatewayUrl = settings.gatewayUrl;
+    if (repair && gatewayQuirks.beginProbe(repairGatewayUrl, GATEWAY_QUIRK.SESSION_SOURCE_PATCH)) {
       try {
-        await apiFetch(sessionPath, { method: 'PATCH', body: JSON.stringify(repair) });
+        const repairResponse = await apiFetch(sessionPath, { method: 'PATCH', body: JSON.stringify(repair) });
+        if (!repairResponse.ok) {
+          const repairPayload = await readJsonResponse(repairResponse).catch(() => null);
+          if (isSessionPatchRejection(repairResponse, repairPayload)) {
+            await gatewayQuirks.markUnsupported(repairGatewayUrl, GATEWAY_QUIRK.SESSION_SOURCE_PATCH);
+          }
+        }
       } catch {
         // Best effort: the send below still reports the gateway's own answer.
+      } finally {
+        gatewayQuirks.endProbe(repairGatewayUrl, GATEWAY_QUIRK.SESSION_SOURCE_PATCH);
       }
     }
     return true;
@@ -20916,10 +20982,9 @@ async function ensureRemoteWsSession(connection) {
 }
 
 // A browser turn stores the typed words; the model still gets the envelope. Cores with strict
-// params contracts reject the field, so it stays off once one has refused it.
-let displayTextUnsupported = false;
-function browserTurnDisplayParam(text) {
-  if (displayTextUnsupported) return {};
+// params contracts reject the field, so it stays off for that gateway once one has refused it.
+function browserTurnDisplayParam(text, gatewayUrl = settings.gatewayUrl) {
+  if (gatewayQuirks.isUnsupported(gatewayUrl, GATEWAY_QUIRK.PROMPT_DISPLAY_TEXT)) return {};
   const shown = messageDisplayText('user', text);
   return shown && shown !== text ? { display_text: shown } : {};
 }
@@ -21103,17 +21168,23 @@ async function streamDashboardWsChatAttempt(connection, sessionId, prompt, onDel
         } catch (error) {
           console.warn('[Hermes Browser] Dashboard image attach failed:', error);
         }
+        const quirkGatewayUrl = connection.baseUrl || settings.gatewayUrl;
+        await gatewayQuirks.load();
         if (settled) return;
         const submitParams = () => ({
           session_id: sessionId,
           text: prompt,
-          ...browserTurnDisplayParam(prompt),
+          ...browserTurnDisplayParam(prompt, quirkGatewayUrl),
           ...truncateSubmitParams({ rowId: truncate?.rowId }),
           ...voiceParams,
         });
-        client.request(WS_METHODS.promptSubmit, submitParams()).catch((error) => {
-          if (!isDisplayTextRejection(error) || displayTextUnsupported) throw error;
-          displayTextUnsupported = true;
+        const firstSubmit = submitParams();
+        client.request(WS_METHODS.promptSubmit, firstSubmit).catch(async (error) => {
+          // Only a submit that carried display_text can be refused for it. When
+          // a concurrent turn already recorded the refusal, this turn still
+          // retries, and the retry leaves the field out.
+          if (!Object.hasOwn(firstSubmit, 'display_text') || !isDisplayTextRejection(error)) throw error;
+          await gatewayQuirks.markUnsupported(quirkGatewayUrl, GATEWAY_QUIRK.PROMPT_DISPLAY_TEXT);
           return client.request(WS_METHODS.promptSubmit, submitParams());
         }).then((response) => {
           onSubmitResponse?.(response);
@@ -21518,11 +21589,16 @@ async function connectApiWithPairing() {
     }
     healthProbeAnswered = true;
 
-    const capabilities = await loadGatewayCapabilities({ quiet: true, publicOnly: true, healthOk: true });
+    await loadGatewayCapabilities({ quiet: true, publicOnly: true, healthOk: true });
     if (!connectionController.isCurrent(generation)) return;
+    // The pairing bootstrap is attempted whether or not /v1/capabilities
+    // advertises it: some gateways keep the advertisement behind the API key
+    // while the bootstrap route is open (Firefox/401 hardening). A refusal, an
+    // unreadable answer or a network failure here means manual setup, never a
+    // connection error.
     let pairingStart = null;
     let pairingPayload = null;
-    if (capabilities.browserPairing) {
+    try {
       pairingStart = await publicApiFetch('/api/browser-extension/pair/start', {
         method: 'POST',
         body: JSON.stringify({
@@ -21530,33 +21606,21 @@ async function connectApiWithPairing() {
           extensionId: browserApi.runtime?.id || '',
         }),
       });
-      pairingPayload = await readJsonResponse(pairingStart);
-      if (!connectionController.isCurrent(generation)) return;
-      if (!pairingStart.ok) throw new Error(pairingFailureMessage(pairingStart.status, pairingPayload));
-    } else {
-      // Bootstrap pairing recovery (Firefox/401 hardening): some gateways keep
-      // /v1/capabilities behind the API key, so the unauthenticated probe 401s
-      // and the advertisement is unreadable even though the pairing bootstrap
-      // route is open. Give loopback local gateways one optimistic pair/start
-      // attempt before falling back to manual setup; a genuine miss lands in
-      // that same manual-setup path below.
-      pairingStart = await publicApiFetch('/api/browser-extension/pair/start', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: 'Hermes Browser Extension',
-          extensionId: browserApi.runtime?.id || '',
-        }),
-      });
-      try { pairingPayload = await readJsonResponse(pairingStart); } catch { pairingPayload = null; }
-      if (!connectionController.isCurrent(generation)) return;
-      if (!pairingStart.ok || !pairingPayload || (!pairingPayload.token && !pairingPayload.approval_url)) {
-        connectionController.transition(generation, CONNECTION_STATES.DEGRADED, { reason: 'manual-setup-required' });
-        markConnectionProbe('unconfigured', 'Manual setup required; automatic browser pairing is not advertised by this Hermes runtime.');
-        els.connectStatus.textContent = translateUiText('Automatic pairing is not available on this Hermes runtime. Open Settings and use Manual setup with your Gateway URL and API token.');
-        setStatus('warn', 'Manual setup required', 'This Hermes runtime does not advertise browser pairing yet.');
-        openSettingsDialog({ pane: 'connections' });
-        return;
-      }
+      pairingPayload = await readJsonResponse(pairingStart).catch(() => null);
+    } catch {
+      pairingStart = null;
+    }
+    if (!connectionController.isCurrent(generation)) return;
+    if (!pairingStartCanContinue({ ok: pairingStart?.ok === true, payload: pairingPayload })) {
+      const detail = pairingStart && pairingStart.ok === false
+        ? pairingFailureMessage(pairingStart.status, pairingPayload)
+        : 'This Hermes runtime does not advertise browser pairing yet.';
+      connectionController.transition(generation, CONNECTION_STATES.DEGRADED, { reason: 'manual-setup-required' });
+      markConnectionProbe('unconfigured', 'Manual setup required; automatic browser pairing is not advertised by this Hermes runtime.');
+      els.connectStatus.textContent = translateUiText('Automatic pairing is not available on this Hermes runtime. Open Settings and use Manual setup with your Gateway URL and API token.');
+      setStatus('warn', 'Manual setup required', detail);
+      openSettingsDialog({ pane: 'connections' });
+      return;
     }
 
     let pairedToken = pairingPayload.token || '';

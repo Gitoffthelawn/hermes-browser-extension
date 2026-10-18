@@ -39,6 +39,7 @@ test('dynamic dashboard discovery uses the sidecar candidate route before scanni
   };
 
   const discovered = await discoverLocalDashboardBaseUrl({
+    gatewayMode: 'local-api',
     gatewayUrl: 'http://127.0.0.1:8642',
     fetchFn,
     timeoutMs: 2_000,
@@ -62,6 +63,7 @@ test('desktop discovery accepts an existing loopback tab candidate without probi
   };
 
   const discovered = await discoverLocalDashboardBaseUrl({
+    gatewayMode: 'local-api',
     candidateUrls: ['http://127.0.0.1:43211/dashboard'],
     gatewayUrl: '',
     fetchFn,
@@ -87,6 +89,7 @@ test('desktop discovery sends the gateway key only to the exact sidecar candidat
   };
 
   const discovered = await discoverLocalDashboardBaseUrl({
+    gatewayMode: 'local-api',
     gatewayUrl: 'http://127.0.0.1:8642',
     apiKey: 'gateway-key-fixture',
     fetchFn,
@@ -118,6 +121,7 @@ test('live sidecar dashboard port wins over a stale cached URL after Hermes rest
   };
 
   const discovered = await discoverLocalDashboardBaseUrl({
+    gatewayMode: 'local-api',
     gatewayUrl: 'http://127.0.0.1:8642',
     cachedUrl: 'http://127.0.0.1:9119',
     fetchFn,
@@ -141,6 +145,7 @@ test('dynamic dashboard discovery recognizes an authenticated dashboard through 
   };
 
   const discovered = await discoverLocalDashboardBaseUrl({
+    gatewayMode: 'local-api',
     gatewayUrl: 'http://127.0.0.1:8642',
     fetchFn,
     timeoutMs: 2_000,
@@ -162,6 +167,7 @@ test('dynamic dashboard discovery rejects generic profile-shaped status payloads
   };
 
   const discovered = await discoverLocalDashboardBaseUrl({
+    gatewayMode: 'local-api',
     explicitUrl: 'http://127.0.0.1:43210',
     fetchFn,
     timeoutMs: 500,
@@ -240,6 +246,7 @@ test('loopback dashboard status with auth_required false still identifies Hermes
   };
 
   const discovered = await discoverLocalDashboardBaseUrl({
+    gatewayMode: 'local-api',
     gatewayUrl: 'http://127.0.0.1:8642',
     candidateUrls: ['http://127.0.0.1:17445'],
     fetchFn,

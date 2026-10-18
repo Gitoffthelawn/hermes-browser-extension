@@ -42,6 +42,7 @@ import {
   normalizeGatewayCapabilities,
 } from './lib/capabilities.mjs';
 import { createHermesClient } from './lib/hermes-client.mjs';
+import { createGatewayQuirkStore, GATEWAY_QUIRK, isSessionPatchRejection } from './lib/gateway-quirks.mjs';
 import { migrateConnectionSettings, normalizeConnectionMode } from './lib/connection-modes.mjs';
 import { SURFACE_KINDS, fullTabEntryPathForPage, parseFullTabHandoff } from './lib/surface-protocol.mjs';
 import { WAKE_MESSAGES, WAKE_STORAGE_KEYS, normalizeWakeWordSettings, wakeTurnIsFresh } from './lib/wake-word.mjs';
@@ -88,14 +89,16 @@ import { getLocale, initI18n, populateLanguageSelect, setLocale, subscribeLocale
 import { mountContextMenuEditor } from './lib/context-menu-editor-client.mjs';
 import {
   MODEL_CATALOG_CACHE_STORAGE_KEY,
-  dashboardFileStreamUrl,
+  attachDashboardStreamBlob,
   dashboardModelDiscoveryBaseUrl,
   discoverCanonicalProviderCatalog,
   discoverGatewayVirtualModels,
   discoverModelsFromDashboard,
   discoverModelsFromRegistry,
   discoverModelsFromSessions,
+  fetchDashboardFileStreamObjectUrl,
   fetchDashboardMediaDataUrl,
+  releaseDashboardStreamBlob,
   fetchDashboardSessionToken,
   mergeModelsWithRegistry,
   mergeVirtualModelRows,
@@ -519,6 +522,7 @@ const TASK_STACKS_STORAGE_KEY = 'hermesBrowserTaskStacks';
 const client = createHermesClient({
   getConnection: () => settings,
 });
+const gatewayQuirks = createGatewayQuirkStore({ storageArea: browserApi?.storage?.local });
 
 // ---- Approval and clarify prompts ------------------------------------------
 // Hermes pauses a turn until the user answers. REST turns learn of the prompt
@@ -1896,19 +1900,41 @@ function isOwnedHermesWebSession(session = {}) {
 async function migrateOwnedHermesWebSessionSources(rows = []) {
   const migrations = rows.filter(isOwnedHermesWebSession);
   if (!migrations.length) return rows;
-  const migrated = await Promise.all(migrations.map(async (session) => {
+  // Current Hermes refuses a session PATCH that carries `source`. One request
+  // per gateway may find that out; after a refusal it is remembered and the
+  // rows stay as listed. Lists that load while that request is in flight wait
+  // for the next load instead of sending the field again.
+  await gatewayQuirks.load();
+  const gatewayUrl = settings.gatewayUrl;
+  if (!gatewayQuirks.beginProbe(gatewayUrl, GATEWAY_QUIRK.SESSION_SOURCE_PATCH)) return rows;
+  const migrateOne = async (session) => {
     try {
       const response = await client.fetch(`/api/sessions/${encodeURIComponent(session.id)}`, {
         method: 'PATCH',
         body: JSON.stringify({ source: HERMES_WEB_SESSION_SOURCE }),
       });
       const payload = await client.readJson(response);
-      if (!response.ok) return session;
+      if (!response.ok) {
+        if (isSessionPatchRejection(response, payload)) {
+          await gatewayQuirks.markUnsupported(gatewayUrl, GATEWAY_QUIRK.SESSION_SOURCE_PATCH);
+        }
+        return session;
+      }
       return normalizeHermesSessions({ data: [payload.session || payload] })[0] || session;
     } catch {
       return session;
     }
-  }));
+  };
+  let migrated = [];
+  try {
+    const [probe, ...rest] = migrations;
+    migrated = [await migrateOne(probe)];
+    if (!gatewayQuirks.isUnsupported(gatewayUrl, GATEWAY_QUIRK.SESSION_SOURCE_PATCH)) {
+      migrated.push(...await Promise.all(rest.map(migrateOne)));
+    }
+  } finally {
+    gatewayQuirks.endProbe(gatewayUrl, GATEWAY_QUIRK.SESSION_SOURCE_PATCH);
+  }
   const byId = new Map(migrated.map((session) => [session.id, session]));
   return rows.map((session) => byId.get(session.id) || session);
 }
@@ -2575,12 +2601,25 @@ async function hydrateSessionMediaInElement(element) {
       return;
     }
     if (kind === 'video' && plan.transport === 'dashboard-stream') {
+      // A <video> cannot send the session header, so the file is read with it
+      // and played from a blob URL that never carries the token.
+      const streamUrl = await fetchDashboardFileStreamObjectUrl({ baseUrl, filePath, token });
+      if (!streamUrl) {
+        node.classList.add('unavailable');
+        return;
+      }
+      if (!node.isConnected) {
+        releaseDashboardStreamBlob(streamUrl);
+        return;
+      }
       const video = doc.createElement('video');
       video.className = 'session-media-player';
       video.controls = true;
       video.preload = 'metadata';
-      video.src = dashboardFileStreamUrl(baseUrl, filePath, token);
+      video.src = streamUrl;
+      attachDashboardStreamBlob(streamUrl, video);
       video.addEventListener('error', () => {
+        releaseDashboardStreamBlob(streamUrl);
         node.classList.add('unavailable');
         if (video.isConnected) video.replaceWith(node);
       }, { once: true });

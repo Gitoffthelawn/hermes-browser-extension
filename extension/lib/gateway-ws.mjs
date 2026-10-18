@@ -54,6 +54,9 @@ export const WS_METHODS = Object.freeze({
   voiceRecord: 'voice.record',
   voiceTts: 'voice.tts',
   configSet: 'config.set',
+  // Liveness probe. The gateway answers it on its read loop, and only when its
+  // gateway.ready advertised heartbeat: true.
+  gatewayPing: 'gateway.ping',
   // Says once per connection that this client answers server-to-client requests
   // (approval, clarify). Until it is sent the gateway fails those requests fast
   // for this connection instead of waiting for an answer that cannot come.
@@ -539,6 +542,13 @@ export function classifyGatewayFrame(raw) {
   return { kind: 'ignore' };
 }
 
+// A socket with no close event (a half-open link, a sleeping laptop) is only
+// noticed by asking. Once the gateway advertises heartbeat, the client pings
+// every interval and drops a socket that stays silent past the deadline, so the
+// caller's close handling takes over instead of waiting on a dead connection.
+export const GATEWAY_HEARTBEAT_INTERVAL_MS = 30_000;
+export const GATEWAY_HEARTBEAT_DEADLINE_MS = 45_000;
+
 // Minimal JSON-RPC client over a WebSocket. WebSocketImpl is injectable so the
 // client can be unit-tested with a fake socket.
 //
@@ -556,13 +566,22 @@ export function classifyGatewayFrame(raw) {
 //   event(type, event, client)           each prompt event, and the end of a turn
 //   prompts(list, {sessionId, client})   the snapshot's open prompts
 //   closed(client)                       this connection is gone, however it ended
-export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, readyTimeoutMs = 15_000, serverRequests = null } = {}) {
+export function createGatewayClient({
+  WebSocketImpl,
+  requestTimeoutMs = 30_000,
+  readyTimeoutMs = 15_000,
+  serverRequests = null,
+  heartbeatIntervalMs = GATEWAY_HEARTBEAT_INTERVAL_MS,
+  heartbeatDeadlineMs = GATEWAY_HEARTBEAT_DEADLINE_MS,
+} = {}) {
   const SocketCtor = WebSocketImpl || (typeof WebSocket !== 'undefined' ? WebSocket : null);
   const serverRequestHandler = typeof serverRequests?.handle === 'function' ? serverRequests : null;
   let declinesNotShown = false;
   let socket = null;
   let connectAttempt = null;
   let readyPayload = null;
+  let heartbeatTimer = null;
+  let heartbeatInFlight = false;
   let nextId = 1;
   const pending = new Map();
   const listeners = new Map();
@@ -599,6 +618,44 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
       .catch(() => {
         // A gateway that predates the call never sends server requests either.
       });
+  }
+
+  function stopHeartbeat() {
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+
+  async function heartbeatOnce() {
+    if (heartbeatInFlight) return;
+    if (!socket || socket.readyState !== 1 || !readyPayload) {
+      stopHeartbeat();
+      return;
+    }
+    heartbeatInFlight = true;
+    const probed = socket;
+    try {
+      await request(WS_METHODS.gatewayPing, {}, { timeoutMs: heartbeatDeadlineMs });
+    } catch {
+      // No answer inside the deadline: this link is no longer carrying traffic.
+      // Close it so the caller's close handling reconnects or reports it.
+      stopHeartbeat();
+      if (socket === probed) {
+        try {
+          probed.close();
+        } catch {
+          /* already closing */
+        }
+      }
+    } finally {
+      heartbeatInFlight = false;
+    }
+  }
+
+  function startHeartbeat() {
+    stopHeartbeat();
+    if (!(heartbeatIntervalMs > 0)) return;
+    heartbeatTimer = setInterval(() => { void heartbeatOnce(); }, heartbeatIntervalMs);
+    heartbeatTimer?.unref?.();
   }
 
   function declineServerRequest(frame, controls) {
@@ -670,6 +727,10 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
         // Sent before the connect promise settles, so it precedes every request
         // the caller makes next on this socket.
         if (serverRequestHandler) advertiseServerRequests();
+        // Older gateways do not answer gateway.ping, so only a gateway that
+        // advertises heartbeat is probed.
+        if (frame.payload?.heartbeat === true) startHeartbeat();
+        else stopHeartbeat();
         attempt.resolve(frame.payload);
         queueMicrotask(() => { void fetchReplay(); });
       }
@@ -767,6 +828,7 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
       let connectionSocket = null;
       let attempt = null;
       readyPayload = null;
+      stopHeartbeat();
       const timer = setTimeout(() => {
         if (connectAttempt !== attempt) return;
         connectAttempt = null;
@@ -806,6 +868,7 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
         if (socket !== connectionSocket) return;
         socket = null;
         readyPayload = null;
+        stopHeartbeat();
         if (connectAttempt) {
           const attempt = connectAttempt;
           connectAttempt = null;
@@ -822,7 +885,7 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
     });
   }
 
-  function request(method, params = {}) {
+  function request(method, params = {}, { timeoutMs = requestTimeoutMs } = {}) {
     return new Promise((resolve, reject) => {
       if (!socket || socket.readyState !== 1) {
         reject(new Error('WebSocket is not open'));
@@ -833,7 +896,7 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
       const timer = setTimeout(() => {
         pending.delete(id);
         reject(new Error(`Gateway RPC ${method} timed out`));
-      }, requestTimeoutMs);
+      }, timeoutMs);
       pending.set(id, { resolve, reject, timer });
       try {
         socket.send(JSON.stringify({ jsonrpc: '2.0', id, method, params }));
@@ -892,6 +955,7 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
 
   function close() {
     const hadSocket = Boolean(socket);
+    stopHeartbeat();
     if (connectAttempt) {
       const attempt = connectAttempt;
       connectAttempt = null;

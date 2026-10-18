@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
+import english from '../extension/lib/locales/en.mjs';
 import { installGroupLifecycleHarness } from './helpers/group-lifecycle-harness.mjs';
 
 const source = await readFile(new URL('../extension/sidepanel.js', import.meta.url), 'utf8');
@@ -74,6 +75,8 @@ function harness({ fail = false, profiles = [{ name: 'default' }], previous = []
     resetActiveGroupTypingIndicator() { context.activeGroupTypingMembers.clear(); },
     loadSessions: async () => {}, setStatus: (...args) => statuses.push(args),
     scheduleRosterRetry() {}, isRemoteMode: () => currentGatewayMode !== 'local-api', isRemoteWsMode: () => currentGatewayMode === 'remote-dashboard',
+    isLocalApiMode: () => currentGatewayMode === 'local-api',
+    t: (key) => english[key] || key,
     activeRunControl: null, sending: false, BOT_HISTORY_PAGE_SIZE: 40,
     markRunTerminal: (control) => control,
     releaseBackgroundLocalRun: () => false, localTurnBlocksNavigation: () => false,
@@ -149,6 +152,7 @@ test('Remote API-only mode clears stale Dashboard roster state while preserving 
 
   assert.equal(result.status, 'degraded');
   assert.match(result.detail, /Remote API mode/);
+  assert.equal(result.detail, english['profile.companion_not_configured'], 'the roster names the missing companion');
   assert.equal(connectionRequests.length, 0);
   assert.equal(writes.length, 0);
   assert.equal(context.botModeRoster.length, 0);
@@ -427,7 +431,7 @@ test('legacy local bootstrap connects without requiring an unrelated signed-in t
   const wsSource = source.slice(source.indexOf('async function ensureProfileWsConnection('), source.indexOf('\nfunction usesDashboardWsChatTransport('));
   const client = { readyState: 1, on() {}, connect: async () => {}, close() {} };
   const context = {
-    isRemoteWsMode: () => false, desktopDashboardUrl: 'http://127.0.0.1:43210',
+    isRemoteWsMode: () => false, isLocalApiMode: () => true, desktopDashboardUrl: 'http://127.0.0.1:43210',
     normalizeGatewayUrl: (url) => url, profileConnectionKey: () => 'profile-route',
     profileWsConnection: null, trustedDashboardTabId: null,
     dashboardTicketOriginMatches: () => false,
@@ -442,6 +446,28 @@ test('legacy local bootstrap connects without requiring an unrelated signed-in t
   vm.runInContext(`${wsSource}\nthis.run = ensureProfileWsConnection;`, context);
   const connection = await context.run({ allowDashboardTrust: true });
   assert.equal(connection.client, client);
+});
+
+test('remote API mode reports the missing companion and never looks for a dashboard here', async () => {
+  const errorSource = source.slice(source.indexOf('function dashboardCompanionNotConfiguredError('), source.indexOf('\nfunction profileConnectionKey('));
+  const wsSource = source.slice(source.indexOf('async function ensureProfileWsConnection('), source.indexOf('\nfunction usesDashboardWsChatTransport('));
+  const probes = [];
+  const context = {
+    isRemoteWsMode: () => false, isLocalApiMode: () => false, desktopDashboardUrl: '',
+    normalizeGatewayUrl: (url) => url, profileConnectionKey: () => 'profile-route',
+    profileWsConnection: null, trustedDashboardTabId: null,
+    dashboardTicketOriginMatches: () => false,
+    ensureDesktopDashboardUrl: async () => { probes.push('discover'); return 'http://127.0.0.1:9119'; },
+    dashboardFetch: async (url) => { probes.push(String(url)); return { ok: true, text: async () => '' }; },
+    requestDashboardOriginTrust: async () => { probes.push('trust'); },
+    settings: {}, createChatGatewayClient: () => ({}), WebSocket: {},
+    buildDashboardWsUrlWithCredential: () => 'ws://localhost/fixture',
+    buildDashboardWsUrl: () => 'ws://localhost/fixture',
+  };
+  vm.createContext(context);
+  vm.runInContext(`${errorSource}\n${wsSource}\nthis.run = ensureProfileWsConnection;`, context);
+  await assert.rejects(context.run({ allowDashboardTrust: true }), { code: 'dashboard-companion-not-configured' });
+  assert.deepEqual(probes, [], 'no discovery, trust prompt, or loopback request');
 });
 
 test('dashboard WebSocket bootstrap uses the same worker transport as discovery', () => {

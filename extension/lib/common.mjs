@@ -3292,6 +3292,14 @@ export function pairingFailureMessage(status, payload) {
   return payload?.error?.message || payload?.error || `Pairing failed (${status})`;
 }
 
+// A refused, unreadable or incomplete pairing start is not a connection error.
+// Only an OK answer that carries a token or an approval link lets automatic
+// pairing continue; every other answer means manual setup.
+export function pairingStartCanContinue({ ok = false, payload = null } = {}) {
+  if (ok !== true || !payload || typeof payload !== 'object') return false;
+  return Boolean(payload.token || payload.approval_url);
+}
+
 export function shouldStopSessionPaging({ rowCount = 0, offset = 0, total = 0, hasMore = false } = {}) {
   if (!rowCount) return true;
   if (hasMore) return false;
