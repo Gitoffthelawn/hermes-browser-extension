@@ -139,7 +139,7 @@ import {
   subagentsFromListResult,
 } from './lib/subagent-stack.mjs';
 import { modelLockRequestOutcome, readHermesSse, runSteerFailureState } from './lib/fulltab-runtime.mjs';
-import { isClarifyToolEvent } from './lib/gateway-prompts.mjs';
+import { isClarifyToolEvent, isRunStatusTerminal } from './lib/gateway-prompts.mjs';
 import { createPromptCard } from './lib/prompt-card.mjs';
 import { createPendingControlsPoller, createPromptController } from './lib/prompt-controller.mjs';
 import { parseBrowserCommand, resolveCommandPrompt } from './lib/commands.mjs';
@@ -578,12 +578,19 @@ function createRestPromptPoller({ getRunId, sessionId, isCurrent }) {
     onStatus: (payload) => {
       if (isCurrent()) promptController.ingestRunStatus(getRunId(), payload, { sessionId });
     },
+    isTerminal: isRunStatusTerminal,
   });
 }
 
 const gatewayServerRequests = {
   handle: (request, controls) => promptController.ingestServerRequest(request, controls),
   cancel: (payload) => promptController.cancelServerRequest(payload?.id, { reason: payload?.reason }),
+  // A session-authority gateway raises prompts as events and lists the open ones
+  // in the resume snapshot; closed() also covers a connection this view closes
+  // itself, which raises no socket-close event.
+  event: (type, event, client) => promptController.ingestAuthorityEvent(type, event, { client }),
+  prompts: (prompts, context) => promptController.ingestAuthorityPrompts(prompts, context),
+  closed: (client) => promptController.dropClient(client),
 };
 
 function currentDelegationScopeKey() {
@@ -4896,6 +4903,11 @@ async function refreshWebActiveSessionHistoryQuietly(expectedGeneration = runCon
 async function settleWebRunTerminal() {
   if (activeRunControl?.phase !== RUN_CONTROL_PHASES.TERMINAL || activeRunControl.writerLease !== 'released') return false;
   const settledRunControl = activeRunControl;
+  // A turn that is over is not waiting on anyone. A session authority does not
+  // always announce that to the prompts the turn left open (Stop is the common
+  // way a turn ends mid-question), so this view withdraws them itself.
+  const endedLiveSessionId = String(dashboardLiveSessionId || '').trim();
+  if (endedLiveSessionId) promptController.settleScope('ws-authority', endedLiveSessionId);
   activeAbortController?.abort();
   activeAbortController = null;
   activeRunId = '';

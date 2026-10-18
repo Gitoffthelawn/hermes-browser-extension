@@ -150,7 +150,7 @@ import { blobatar as blobatarSvg } from './lib/vendor/blobatar-2.0.0.js';
 import { renderMarkdownSafe, sanitizeHtml } from './lib/sanitizer.mjs';
 import { highlightCodeBlocks } from './lib/code-highlighting.mjs';
 import { enhanceMarkdownCodeBlocks } from './lib/markdown-code-copy.mjs';
-import { isClarifyToolEvent, isPromptEventName, isPromptRequestEvent } from './lib/gateway-prompts.mjs';
+import { isClarifyToolEvent, isPromptEventName, isPromptRequestEvent, isRunStatusTerminal } from './lib/gateway-prompts.mjs';
 import { createPromptCard } from './lib/prompt-card.mjs';
 import { createPendingControlsPoller, createPromptController } from './lib/prompt-controller.mjs';
 import {
@@ -5377,6 +5377,11 @@ async function flushQueuedTurnForSession(sessionId, scopeRevisionId) {
 async function settleActiveRunTerminal() {
   if (activeRunControl?.phase !== RUN_CONTROL_PHASES.TERMINAL || activeRunControl.writerLease !== 'released') return false;
   const settledRunControl = activeRunControl;
+  // A turn that is over is not waiting on anyone. A session authority does not
+  // always announce that to the prompts the turn left open (Stop is the common
+  // way a turn ends mid-question), so this view withdraws them itself.
+  const endedLiveSessionId = String(activeDashboardWsConnection?.wsSessionId || '').trim();
+  if (endedLiveSessionId) promptController.settleScope('ws-authority', endedLiveSessionId);
   activeAbortController?.abort();
   activeAbortController = null;
   activeRunId = '';
@@ -20495,6 +20500,12 @@ const promptController = createPromptController({
 const gatewayServerRequests = {
   handle: (request, controls) => promptController.ingestServerRequest(request, controls),
   cancel: (payload) => promptController.cancelServerRequest(payload?.id, { reason: payload?.reason }),
+  // A session-authority gateway raises prompts as events and lists the open ones
+  // in the resume snapshot; closed() also covers a connection this panel closes
+  // itself, which raises no socket-close event.
+  event: (type, event, client) => promptController.ingestAuthorityEvent(type, event, { client }),
+  prompts: (prompts, context) => promptController.ingestAuthorityPrompts(prompts, context),
+  closed: (client) => promptController.dropClient(client),
 };
 
 // Only chat connections answer server requests: they are the ones that can
@@ -20519,6 +20530,7 @@ function createRestPromptPoller({ getRunId, sessionId, isCurrent }) {
     onStatus: (payload) => {
       if (isCurrent()) promptController.ingestRunStatus(getRunId(), payload, { sessionId });
     },
+    isTerminal: isRunStatusTerminal,
   });
 }
 

@@ -58,6 +58,10 @@ export const WS_METHODS = Object.freeze({
   // (approval, clarify). Until it is sent the gateway fails those requests fast
   // for this connection instead of waiting for an answer that cannot come.
   clientCapabilities: 'client.capabilities',
+  // Authority gateways take the answer to a pending prompt as a generation-fenced
+  // method call, not as the reply to a server request.
+  approvalRespond: 'approval.respond',
+  clarifyRespond: 'clarify.respond',
 });
 
 // Streamed assistant-turn events we care about. Everything else (tool.*,
@@ -75,6 +79,17 @@ export const WS_EVENTS = Object.freeze({
   requestCancel: 'request.cancel',
   error: 'error',
 });
+
+// Events a session-authority gateway raises for a prompt, plus the two that end
+// a turn (and with it every prompt the turn was waiting on).
+const PROMPT_EVENT_TYPES = Object.freeze([
+  'approval.request',
+  'approval.settled',
+  'clarify.request',
+  'clarify.settled',
+  WS_EVENTS.messageComplete,
+  WS_EVENTS.error,
+]);
 
 // Server-to-client requests that belong to a desktop window (preview, terminal,
 // tour). A client with no such window declines them with this code so the agent
@@ -182,6 +197,9 @@ export async function establishGatewaySession({ client, storedSessionId = '', cr
   if (requestedProfile && acknowledgedProfile !== requestedProfile) {
     throw new Error(`Hermes profile acknowledgement mismatch: requested ${requestedProfile}, received ${acknowledgedProfile || 'none'}.`);
   }
+  // A session authority lists the approvals and questions still waiting on the
+  // session in its snapshot; they are the same prompts its events announce.
+  if (Array.isArray(result?.prompts) && result.prompts.length) client.deliverPrompts?.(result.prompts, liveId);
   return { action, liveId, storedId, profile: acknowledgedProfile };
 }
 
@@ -522,6 +540,13 @@ export function classifyGatewayFrame(raw) {
 // controls). Anything it does not own is declined here. The connection says
 // client.capabilities {server_requests: true} only when a handler is given, so
 // a client with no card to show never receives a question it cannot answer.
+//
+// A session-authority gateway announces the same prompts as events
+// (approval.request, clarify.request and their .settled partners) and lists the
+// open ones in the resume snapshot, so the handler may also carry
+//   event(type, event, client)           each prompt event, and the end of a turn
+//   prompts(list, {sessionId, client})   the snapshot's open prompts
+//   closed(client)                       this connection is gone, however it ended
 export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, readyTimeoutMs = 15_000, serverRequests = null } = {}) {
   const SocketCtor = WebSocketImpl || (typeof WebSocket !== 'undefined' ? WebSocket : null);
   const serverRequestHandler = typeof serverRequests?.handle === 'function' ? serverRequests : null;
@@ -783,6 +808,7 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
         }
         rejectAllPending(new Error('WebSocket closed'));
         emit('close', { type: 'close', payload: { code: event?.code, reason: event?.reason } });
+        notifyClosed();
       });
     });
   }
@@ -832,7 +858,31 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
     }
   }
 
+  // The prompts a session authority lists as open for a session (its resume
+  // snapshot), handed over like the events that announced them.
+  function deliverPrompts(prompts, sessionId = '') {
+    if (typeof serverRequests?.prompts !== 'function') return;
+    try {
+      serverRequests.prompts(Array.isArray(prompts) ? prompts : [], { sessionId: String(sessionId || ''), client: api });
+    } catch {
+      // A card that cannot be built must not break the session resume.
+    }
+  }
+
+  // Whatever this connection carried is withdrawn when it ends, whether the
+  // socket dropped or the owner closed it: the browser's own close() raises no
+  // socket-close event, and a card left behind could never be answered.
+  function notifyClosed() {
+    if (typeof serverRequests?.closed !== 'function') return;
+    try {
+      serverRequests.closed(api);
+    } catch {
+      /* ignore */
+    }
+  }
+
   function close() {
+    const hadSocket = Boolean(socket);
     if (connectAttempt) {
       const attempt = connectAttempt;
       connectAttempt = null;
@@ -847,6 +897,8 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
     }
     socket = null;
     readyPayload = null;
+    // A socket that already dropped told the owner when it did.
+    if (hadSocket) notifyClosed();
   }
 
   const api = {
@@ -855,6 +907,7 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
     on,
     close,
     deliverOpenRequests,
+    deliverPrompts,
     getSeqWatermarks() {
       return Object.fromEntries(lastSeenSeq);
     },
@@ -867,6 +920,11 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
   };
   if (typeof serverRequestHandler?.cancel === 'function') {
     on(WS_EVENTS.requestCancel, (event) => serverRequestHandler.cancel(event.payload || {}));
+  }
+  if (typeof serverRequests?.event === 'function') {
+    for (const type of PROMPT_EVENT_TYPES) {
+      on(type, (event) => serverRequests.event(type, event, api));
+    }
   }
   return api;
 }

@@ -76,7 +76,7 @@ export function createPromptCard({ container, t, controller, now = () => Date.no
     }
     if (!diff.rows.length) pre.append(el('span', 'agent-prompt-diff-row is-gap', edit.path || ''));
     details.append(summary, pre);
-    if (diff.truncated) details.append(el('small', 'agent-prompt-note', t('exec_approval.edit_truncated')));
+    if (diff.truncated || edit.truncated) details.append(el('small', 'agent-prompt-note', t('exec_approval.edit_truncated')));
     return details;
   }
 
@@ -85,6 +85,7 @@ export function createPromptCard({ container, t, controller, now = () => Date.no
     frag.append(header('exec_approval.kicker', 'exec_approval.title'));
     if (entry.edit) frag.append(diffBlock(entry.edit));
     else frag.append(el('code', 'agent-prompt-command', entry.command));
+    if (entry.commandTruncated && !entry.edit) frag.append(el('span', 'agent-prompt-note', t('exec_approval.command_truncated')));
     if (entry.description) frag.append(el('span', 'agent-prompt-reason', entry.description));
     frag.append(el('span', 'agent-prompt-hint', t('exec_approval.hint')));
     return frag;

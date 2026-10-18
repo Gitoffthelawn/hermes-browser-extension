@@ -208,6 +208,7 @@ export default Object.freeze({
   "exec_approval.other_session": "A request in another session is waiting for your answer. Switch to that session to respond.",
   "exec_approval.edit_title": "Proposed file change",
   "exec_approval.edit_truncated": "Showing the first part of the change.",
+  "exec_approval.command_truncated": "Only the first part of this command is shown. Deny it unless you trust the rest.",
   "exec_approval.countdown": "{time} left to answer",
   "exec_approval.queue_more": "{count} more waiting",
   "exec_approval.choice_help": "Approve once runs this command a single time. Session allows matching commands until this session ends. Always saves a permanent rule for matching commands.",
