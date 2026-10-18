@@ -284,6 +284,9 @@ export function createPromptCard({ container, t, controller, now = () => Date.no
       container.hidden = true;
       return;
     }
+    // Show the card before building it: a browser will not move focus into an
+    // element that is still hidden, so Deny would never take the default focus.
+    container.hidden = false;
     const signature = buildSignature(entry, snapshot);
     if (signature !== renderedSignature) {
       rebuild(entry, snapshot, entry.key !== renderedKey);
@@ -291,7 +294,6 @@ export function createPromptCard({ container, t, controller, now = () => Date.no
       renderedSignature = signature;
     }
     updateCountdown(entry, snapshot.now ?? now());
-    container.hidden = false;
   }
 
   const unsubscribe = controller.subscribe(render);
