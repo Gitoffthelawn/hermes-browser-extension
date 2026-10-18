@@ -139,7 +139,7 @@ import {
   subagentsFromListResult,
 } from './lib/subagent-stack.mjs';
 import { modelLockRequestOutcome, readHermesSse, runSteerFailureState } from './lib/fulltab-runtime.mjs';
-import { isClarifyToolEvent } from './lib/gateway-prompts.mjs';
+import { isClarifyToolEvent, isRunStatusTerminal } from './lib/gateway-prompts.mjs';
 import { createPromptCard } from './lib/prompt-card.mjs';
 import { createPendingControlsPoller, createPromptController } from './lib/prompt-controller.mjs';
 import { parseBrowserCommand, resolveCommandPrompt } from './lib/commands.mjs';
@@ -198,7 +198,7 @@ import {
   sessionContextFailureRecovery,
   turnRequestFailureState,
 } from './lib/turn-recovery.mjs';
-import { buildDashboardWsUrlWithCredential, buildSessionCompressParams, buildSessionListParams, buildSessionModelSwitchRequest, connectGatewayWithTicket, createGatewayClient, establishGatewaySession, interruptGatewaySession, isUnknownMethodError, normalizeGatewayHistoryMessages, normalizeSessionCompressResult, runtimeModelFromSessionStatus, WS_EVENTS, WS_METHODS } from './lib/gateway-ws.mjs';
+import { buildDashboardWsUrlWithCredential, buildSessionCompressParams, buildSessionListParams, buildSessionModelSwitchRequest, connectGatewayWithTicket, createGatewayClient, establishGatewaySession, interruptGatewaySession, isUnknownMethodError, normalizeGatewayHistoryMessages, normalizeSessionCompressResult, readGatewaySessionStatus, runtimeModelFromSessionStatus, WS_EVENTS, WS_METHODS } from './lib/gateway-ws.mjs';
 import { createDashboardStreamWatchdog, dashboardWatchdogTimeoutAction, matchesDashboardSessionEvent, shouldReattachDashboardStream } from './lib/dashboard-stream-watchdog.mjs';
 import { isTrustedDashboardOrigin, mintWsTicket, originOf, ticketFailureHelp } from './lib/dashboard-bridge.mjs';
 import {
@@ -226,6 +226,7 @@ import {
   acknowledgeStopRequest,
   activeRunIdFromSessionPayload,
   beginRunControl,
+  canReleaseUnconfirmedRun,
   canSwitchActiveSession,
   dashboardTerminalStatus,
   markRunStreamClosed,
@@ -417,6 +418,7 @@ const els = {
   webRunControlRecovery: $('#webRunControlRecovery'),
   webRunControlRecoveryDetail: $('#webRunControlRecoveryDetail'),
   webRetryRunStatusButton: $('#webRetryRunStatusButton'),
+  webReleaseRunButton: $('#webReleaseRunButton'),
   webDiscardHeldQueueButton: $('#webDiscardHeldQueueButton'),
   steerDraft: $('#steerDraft'),
 };
@@ -573,15 +575,22 @@ function createRestPromptPoller({ getRunId, sessionId, isCurrent }) {
       const statusResponse = await client.fetch(`/v1/runs/${encodeURIComponent(runId)}`, { method: 'GET' });
       return statusResponse.ok ? client.readJson(statusResponse) : null;
     },
-    onStatus: (payload) => {
-      if (isCurrent()) promptController.ingestRunStatus(getRunId(), payload, { sessionId });
+    onStatus: (payload, { requestedAt } = {}) => {
+      if (isCurrent()) promptController.ingestRunStatus(getRunId(), payload, { sessionId, requestedAt });
     },
+    isTerminal: isRunStatusTerminal,
   });
 }
 
 const gatewayServerRequests = {
   handle: (request, controls) => promptController.ingestServerRequest(request, controls),
   cancel: (payload) => promptController.cancelServerRequest(payload?.id, { reason: payload?.reason }),
+  // A session-authority gateway raises prompts as events and lists the open ones
+  // in the resume snapshot; closed() also covers a connection this view closes
+  // itself, which raises no socket-close event.
+  event: (type, event, client) => promptController.ingestAuthorityEvent(type, event, { client }),
+  prompts: (prompts, context) => promptController.ingestAuthorityPrompts(prompts, context),
+  closed: (client) => promptController.dropClient(client),
 };
 
 function currentDelegationScopeKey() {
@@ -804,7 +813,17 @@ async function ensureDashboardConnection() {
     if (dashboardConnection?.client === gatewayClient) dashboardConnection = null;
     dashboardLiveSessionId = '';
   });
-  await connectGatewayWithTicket(gatewayClient, settings.gatewayUrl, ticket.ticket);
+  await connectGatewayWithTicket(gatewayClient, settings.gatewayUrl, ticket.ticket, {
+    refreshTicket: async () => {
+      const fresh = await mintWsTicket({
+        tabsApi: browserApi.tabs,
+        scriptingApi: browserApi.scripting,
+        baseUrl: settings.gatewayUrl,
+        tabId,
+      });
+      return fresh?.ok ? fresh.ticket : '';
+    },
+  });
   dashboardConnection = { client: gatewayClient, origin: desiredOrigin, tabId };
   bindSubagentClient(gatewayClient);
   return dashboardConnection;
@@ -4749,7 +4768,7 @@ async function reconcileWebRunTerminal({ stopRequested = false, dashboardSession
         dashboardStatusSessionId = identity.liveId;
       }
       return runControlRequestWithTimeout(
-        () => connection.client.request(WS_METHODS.sessionStatus, { session_id: dashboardStatusSessionId }),
+        () => readGatewaySessionStatus(connection.client, dashboardStatusSessionId, { storedSessionId: activeSessionId }),
         { timeoutMs: RUN_CONTROL_REQUEST_TIMEOUT_MS },
       );
     }
@@ -4791,6 +4810,20 @@ function renderWebRunControlRecovery() {
     : 'Hermes has not confirmed a terminal run state. Retry status before starting another turn.';
   els.webRetryRunStatusButton.disabled = false;
   els.webDiscardHeldQueueButton.disabled = !queuedTurn;
+  // Without a run id there is nothing for Retry to ask about, so the person
+  // may release the hold themselves once they have looked at Hermes.
+  if (els.webReleaseRunButton) els.webReleaseRunButton.hidden = !canReleaseUnconfirmedRun(activeRunControl);
+}
+
+// The hold has no other way out when Stop never learned a run id. Never taken on
+// the person's behalf: it runs only from the Release button.
+async function releaseUnconfirmedWebRun() {
+  if (!canReleaseUnconfirmedRun(activeRunControl)) return false;
+  activeRunControl = markRunTerminal(activeRunControl, 'cancelled');
+  els.composerStatus.textContent = `${t('run.stop_unconfirmed_title')}: ${t('run.release_detail')}`;
+  renderWebRunControlRecovery();
+  await settleWebRunTerminal();
+  return true;
 }
 
 async function retryWebRunTerminalStatus() {
@@ -4870,6 +4903,11 @@ async function refreshWebActiveSessionHistoryQuietly(expectedGeneration = runCon
 async function settleWebRunTerminal() {
   if (activeRunControl?.phase !== RUN_CONTROL_PHASES.TERMINAL || activeRunControl.writerLease !== 'released') return false;
   const settledRunControl = activeRunControl;
+  // A turn that is over is not waiting on anyone. A session authority does not
+  // always announce that to the prompts the turn left open (Stop is the common
+  // way a turn ends mid-question), so this view withdraws them itself.
+  const endedLiveSessionId = String(dashboardLiveSessionId || '').trim();
+  if (endedLiveSessionId) promptController.settleScope('ws-authority', endedLiveSessionId);
   activeAbortController?.abort();
   activeAbortController = null;
   activeRunId = '';
@@ -6194,6 +6232,7 @@ els.stopRun.addEventListener('click', () => {
   stopActiveRun().catch((error) => { els.composerStatus.textContent = error?.message || String(error); });
 });
 els.webRetryRunStatusButton?.addEventListener('click', () => { void retryWebRunTerminalStatus(); });
+els.webReleaseRunButton?.addEventListener('click', () => { void releaseUnconfirmedWebRun(); });
 els.webDiscardHeldQueueButton?.addEventListener('click', discardWebHeldQueuedTurn);
 els.attachButton.addEventListener('click', () => toggleAttachMenu());
 els.quickAttach.addEventListener('click', () => toggleAttachMenu(true));

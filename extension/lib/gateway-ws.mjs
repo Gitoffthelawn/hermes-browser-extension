@@ -34,6 +34,9 @@ export const WS_METHODS = Object.freeze({
   promptSubmit: 'prompt.submit',
   sessionInterrupt: 'session.interrupt',
   sessionCompress: 'session.compress',
+  // Live sessions in this process with their run state; the one session read a
+  // session-authority gateway still serves (it answers -32601 to session.status).
+  sessionActiveList: 'session.active_list',
   sessionSteer: 'session.steer',
   promptBtw: 'prompt.btw',
   contextBreakdown: 'session.context_breakdown',
@@ -55,6 +58,10 @@ export const WS_METHODS = Object.freeze({
   // (approval, clarify). Until it is sent the gateway fails those requests fast
   // for this connection instead of waiting for an answer that cannot come.
   clientCapabilities: 'client.capabilities',
+  // Authority gateways take the answer to a pending prompt as a generation-fenced
+  // method call, not as the reply to a server request.
+  approvalRespond: 'approval.respond',
+  clarifyRespond: 'clarify.respond',
 });
 
 // Streamed assistant-turn events we care about. Everything else (tool.*,
@@ -72,6 +79,17 @@ export const WS_EVENTS = Object.freeze({
   requestCancel: 'request.cancel',
   error: 'error',
 });
+
+// Events a session-authority gateway raises for a prompt, plus the two that end
+// a turn (and with it every prompt the turn was waiting on).
+const PROMPT_EVENT_TYPES = Object.freeze([
+  'approval.request',
+  'approval.settled',
+  'clarify.request',
+  'clarify.settled',
+  WS_EVENTS.messageComplete,
+  WS_EVENTS.error,
+]);
 
 // Server-to-client requests that belong to a desktop window (preview, terminal,
 // tour). A client with no such window declines them with this code so the agent
@@ -179,6 +197,9 @@ export async function establishGatewaySession({ client, storedSessionId = '', cr
   if (requestedProfile && acknowledgedProfile !== requestedProfile) {
     throw new Error(`Hermes profile acknowledgement mismatch: requested ${requestedProfile}, received ${acknowledgedProfile || 'none'}.`);
   }
+  // A session authority lists the approvals and questions still waiting on the
+  // session in its snapshot; they are the same prompts its events announce.
+  if (Array.isArray(result?.prompts) && result.prompts.length) client.deliverPrompts?.(result.prompts, liveId);
   return { action, liveId, storedId, profile: acknowledgedProfile };
 }
 
@@ -213,15 +234,35 @@ export function gatewayWebSocketProtocols(ticket) {
  * Connect with a one-shot dashboard ticket. The ticket goes in
  * Sec-WebSocket-Protocol so it never lands in a URL (proxy and access logs
  * record request targets). A dashboard that predates ticket subprotocol
- * admission refuses the handshake before it opens; only then is the same,
- * still-unspent ticket retried in the query string the older dashboards read.
+ * admission refuses the handshake before it opens, and the query-string
+ * ticket the older dashboards read is tried instead.
+ *
+ * A current dashboard spends the ticket before it checks the request's host and
+ * origin, so a handshake refused after that point leaves the first ticket used
+ * up and looks, from here, exactly like the old dashboard's refusal. Pass
+ * `refreshTicket` (an async function returning a fresh ticket, or '') so the
+ * retry never offers a ticket that may already be spent. Without it the same
+ * ticket is retried, as before.
  */
-export async function connectGatewayWithTicket(client, baseUrl, ticket) {
+export async function connectGatewayWithTicket(client, baseUrl, ticket, { refreshTicket = null } = {}) {
   try {
     return await client.connect(buildDashboardWsEndpoint(baseUrl), gatewayWebSocketProtocols(ticket));
   } catch (error) {
     if (!/WebSocket closed before gateway\.ready and open\b/.test(String(error?.message || ''))) throw error;
-    return client.connect(buildDashboardWsUrl(baseUrl, ticket));
+    let fallbackTicket = ticket;
+    if (typeof refreshTicket === 'function') {
+      let fresh = '';
+      try {
+        fresh = String((await refreshTicket()) || '').trim();
+      } catch {
+        fresh = '';
+      }
+      // No fresh ticket: report the handshake failure itself rather than
+      // presenting a ticket the dashboard has probably consumed.
+      if (!fresh) throw error;
+      fallbackTicket = fresh;
+    }
+    return client.connect(buildDashboardWsUrl(baseUrl, fallbackTicket));
   }
 }
 
@@ -361,7 +402,16 @@ export async function interruptGatewaySession({
 } = {}) {
   const target = String(sessionId || '').trim();
   if (!client?.request || !target) throw new Error('A live Hermes session is required to interrupt it.');
-  const read = () => readSessionExecutionGeneration(client, target, { storedSessionId });
+  // The reads that come before Stop is sent are bounded like Stop itself: a
+  // gateway that does not answer them must not delay the interrupt by the
+  // client's whole request timeout. An unreadable generation is sent as unknown.
+  const read = async () => {
+    try {
+      return await withTimeout(() => readSessionExecutionGeneration(client, target, { storedSessionId }));
+    } catch {
+      return null;
+    }
+  };
   const send = (generation) => withTimeout(() => client.request(WS_METHODS.sessionInterrupt, {
     session_id: target,
     ...(generation === null ? {} : { execution_generation: generation }),
@@ -411,6 +461,36 @@ export function normalizeSessionCompressResult(result = null) {
 export function isUnknownMethodError(error) {
   return Number(error?.rpcCode ?? error?.code) === -32601
     || String(error?.data?.reason || '').toLowerCase() === 'unknown_method';
+}
+
+/**
+ * Read whether a live session is still running. `session.status` answers with
+ * rendered text ("Agent Running: Yes"); a session authority does not serve it at
+ * all (-32601), so there its `session.active_list` row carries the run state
+ * (idle | starting | working | waiting), and a session that list leaves out is
+ * read from the resume snapshot. Anything unreadable throws, so a caller waiting
+ * for Stop to land keeps the run held instead of assuming it ended.
+ */
+export async function readGatewaySessionStatus(client, sessionId, { storedSessionId = '' } = {}) {
+  const target = String(sessionId || '').trim();
+  if (!client?.request || !target) throw new Error('A live Hermes session is required to read its status.');
+  try {
+    return await client.request(WS_METHODS.sessionStatus, { session_id: target });
+  } catch (error) {
+    if (client.readyPayload?.session_authority !== true || !isUnknownMethodError(error)) throw error;
+  }
+  const stored = String(storedSessionId || target).trim();
+  const listed = await client.request(WS_METHODS.sessionActiveList, { current_session_id: stored });
+  const row = (Array.isArray(listed?.sessions) ? listed.sessions : [])
+    .find((item) => item && [item.id, item.session_key].some((id) => id === target || id === stored));
+  if (row) {
+    const state = String(row.status || '').trim().toLowerCase();
+    return { status: state === 'idle' ? 'idle' : 'running', source: WS_METHODS.sessionActiveList };
+  }
+  const snapshot = await client.request(WS_METHODS.sessionResume, { session_id: stored, omit_messages: true });
+  const state = String(snapshot?.execution_state || '').trim().toLowerCase();
+  const idle = snapshot?.running === false && (!state || state === 'idle' || state === 'terminal');
+  return { status: idle ? 'idle' : 'running', source: WS_METHODS.sessionResume };
 }
 
 // Classify an inbound frame so callers don't reimplement the JSON-RPC shape.
@@ -469,6 +549,13 @@ export function classifyGatewayFrame(raw) {
 // controls). Anything it does not own is declined here. The connection says
 // client.capabilities {server_requests: true} only when a handler is given, so
 // a client with no card to show never receives a question it cannot answer.
+//
+// A session-authority gateway announces the same prompts as events
+// (approval.request, clarify.request and their .settled partners) and lists the
+// open ones in the resume snapshot, so the handler may also carry
+//   event(type, event, client)           each prompt event, and the end of a turn
+//   prompts(list, {sessionId, client})   the snapshot's open prompts
+//   closed(client)                       this connection is gone, however it ended
 export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, readyTimeoutMs = 15_000, serverRequests = null } = {}) {
   const SocketCtor = WebSocketImpl || (typeof WebSocket !== 'undefined' ? WebSocket : null);
   const serverRequestHandler = typeof serverRequests?.handle === 'function' ? serverRequests : null;
@@ -730,6 +817,7 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
         }
         rejectAllPending(new Error('WebSocket closed'));
         emit('close', { type: 'close', payload: { code: event?.code, reason: event?.reason } });
+        notifyClosed();
       });
     });
   }
@@ -779,7 +867,31 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
     }
   }
 
+  // The prompts a session authority lists as open for a session (its resume
+  // snapshot), handed over like the events that announced them.
+  function deliverPrompts(prompts, sessionId = '') {
+    if (typeof serverRequests?.prompts !== 'function') return;
+    try {
+      serverRequests.prompts(Array.isArray(prompts) ? prompts : [], { sessionId: String(sessionId || ''), client: api });
+    } catch {
+      // A card that cannot be built must not break the session resume.
+    }
+  }
+
+  // Whatever this connection carried is withdrawn when it ends, whether the
+  // socket dropped or the owner closed it: the browser's own close() raises no
+  // socket-close event, and a card left behind could never be answered.
+  function notifyClosed() {
+    if (typeof serverRequests?.closed !== 'function') return;
+    try {
+      serverRequests.closed(api);
+    } catch {
+      /* ignore */
+    }
+  }
+
   function close() {
+    const hadSocket = Boolean(socket);
     if (connectAttempt) {
       const attempt = connectAttempt;
       connectAttempt = null;
@@ -794,6 +906,8 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
     }
     socket = null;
     readyPayload = null;
+    // A socket that already dropped told the owner when it did.
+    if (hadSocket) notifyClosed();
   }
 
   const api = {
@@ -802,6 +916,7 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
     on,
     close,
     deliverOpenRequests,
+    deliverPrompts,
     getSeqWatermarks() {
       return Object.fromEntries(lastSeenSeq);
     },
@@ -814,6 +929,11 @@ export function createGatewayClient({ WebSocketImpl, requestTimeoutMs = 30_000, 
   };
   if (typeof serverRequestHandler?.cancel === 'function') {
     on(WS_EVENTS.requestCancel, (event) => serverRequestHandler.cancel(event.payload || {}));
+  }
+  if (typeof serverRequests?.event === 'function') {
+    for (const type of PROMPT_EVENT_TYPES) {
+      on(type, (event) => serverRequests.event(type, event, api));
+    }
   }
   return api;
 }

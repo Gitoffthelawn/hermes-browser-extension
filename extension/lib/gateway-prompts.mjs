@@ -110,20 +110,29 @@ export function normalizeApprovalChoices(choices) {
   return APPROVAL_CHOICES.filter((choice) => offered.has(choice));
 }
 
+const MAX_EDIT_CHARS = 200_000;
+
+// True when a text field is longer than the card keeps of it.
+function exceeds(value, max) {
+  return typeof value === 'string' && value.length > max;
+}
+
 function normalizeEdit(value) {
   if (!isRecord(value)) return null;
   const paths = Array.isArray(value.paths) ? value.paths.map((item) => cleanText(item, 1_000)).filter(Boolean) : [];
   const path = cleanText(value.path, 2_000) || paths.join(', ');
-  const newText = cleanText(value.new_text ?? value.newText, 200_000);
+  const newText = cleanText(value.new_text ?? value.newText, MAX_EDIT_CHARS);
   const oldText = value.old_text === null || value.old_text === undefined
     ? null
-    : cleanText(value.old_text ?? value.oldText, 200_000);
+    : cleanText(value.old_text ?? value.oldText, MAX_EDIT_CHARS);
   if (!path && !newText && oldText === null) return null;
   return {
     path,
     toolName: cleanText(value.tool_name ?? value.toolName, 200),
     oldText,
     newText,
+    // The change is longer than what is kept here, so the diff is only its start.
+    truncated: exceeds(value.new_text ?? value.newText, MAX_EDIT_CHARS) || exceeds(value.old_text ?? value.oldText, MAX_EDIT_CHARS),
   };
 }
 
@@ -131,9 +140,17 @@ export function promptKey({ transport = 'rest', scope = '', id = '' } = {}) {
   return `${transport}:${scope}:${id}`;
 }
 
+// null and '' read as 0 through Number(); a generation the gateway did not send
+// must stay unknown, never become the first generation.
+function parseGeneration(value) {
+  if (typeof value === 'number') return Number.isInteger(value) && value >= 0 ? value : null;
+  if (typeof value === 'string' && /^\d{1,15}$/.test(value.trim())) return Number(value.trim());
+  return null;
+}
+
 function baseEntry({ kind, transport, scope, id, sessionId, now, data, wsRequestId }) {
   const timeoutS = positiveSeconds(data.timeout_s ?? data.timeoutS);
-  const generation = Number(data.execution_generation);
+  const generation = parseGeneration(data.execution_generation);
   return {
     key: promptKey({ transport, scope, id }),
     kind,
@@ -142,7 +159,7 @@ function baseEntry({ kind, transport, scope, id, sessionId, now, data, wsRequest
     requestId: id,
     wsRequestId: wsRequestId || '',
     sessionId: cleanId(sessionId),
-    executionGeneration: Number.isInteger(generation) && generation >= 0 ? generation : null,
+    executionGeneration: generation,
     timeoutS,
     receivedAt: now,
     // An approval always has a gateway timeout, so one that did not say so still
@@ -169,6 +186,9 @@ export function normalizeApprovalPrompt(raw, {
     ...baseEntry({ kind: PROMPT_KINDS.approval, transport, scope, id, sessionId, now, data: raw, wsRequestId }),
     requestId,
     command,
+    // What the person approves is what the card shows: a command cut short for
+    // display says so, instead of looking complete.
+    commandTruncated: exceeds(raw.command, MAX_FIELD_CHARS),
     description: cleanText(raw.description ?? raw.reason),
     // An edit approval is a one-time consent, never a session or permanent grant.
     choices: normalizeApprovalChoices(edit ? ['once', 'deny'] : raw.choices),
@@ -239,8 +259,44 @@ export function promptsFromRunStatus(payload, { runId = '', sessionId = '', now 
   return {
     entries,
     authoritative: Boolean(controls),
-    terminal: ['completed', 'failed', 'cancelled', 'canceled', 'interrupted', 'stopped'].includes(status),
+    terminal: TERMINAL_RUN_STATUSES.includes(status),
   };
+}
+
+const TERMINAL_RUN_STATUSES = ['completed', 'failed', 'cancelled', 'canceled', 'interrupted', 'stopped'];
+
+// True once GET /v1/runs/{id} says the run is over: nothing more will be asked.
+export function isRunStatusTerminal(payload) {
+  return isRecord(payload) && TERMINAL_RUN_STATUSES.includes(String(payload.status || '').trim().toLowerCase());
+}
+
+// A session-authority gateway announces a prompt as a session event whose
+// payload is the same entry GET /v1/runs/{id} lists in pending_controls, and
+// lists the open ones in the resume snapshot. The id the answer must carry is
+// the prompt id, with the session id and the execution generation beside it.
+export function promptFromAuthorityEvent(type, event, { sessionId = '', now = Date.now() } = {}) {
+  const payload = isRecord(event?.payload) ? event.payload : null;
+  const scope = cleanId(event?.sessionId ?? event?.session_id);
+  if (!payload || !scope) return null;
+  const ctx = { transport: 'ws-authority', scope, sessionId: sessionId || scope, now };
+  if (type === PROMPT_EVENT_NAMES.approvalRequest) return normalizeApprovalPrompt(payload, ctx);
+  if (type === PROMPT_EVENT_NAMES.clarifyRequest) return normalizeClarifyPrompt(payload, ctx);
+  return null;
+}
+
+export function authorityPromptsFromSnapshot(prompts, { sessionId = '', storedSessionId = '', now = Date.now() } = {}) {
+  const scope = cleanId(sessionId);
+  if (!scope || !Array.isArray(prompts)) return [];
+  const ctx = { transport: 'ws-authority', scope, sessionId: cleanId(storedSessionId) || scope, now };
+  const entries = [];
+  for (const prompt of prompts.slice(0, MAX_QUEUED_PROMPTS)) {
+    if (!isRecord(prompt)) continue;
+    const entry = prompt.kind === PROMPT_KINDS.clarify
+      ? normalizeClarifyPrompt(prompt, ctx)
+      : prompt.kind === PROMPT_KINDS.approval ? normalizeApprovalPrompt(prompt, ctx) : null;
+    if (entry) entries.push(entry);
+  }
+  return entries;
 }
 
 // A server→client request frame {id, method, params}.
@@ -366,7 +422,7 @@ function capabilitiesUnprobed(caps) {
 // the card, but informational: the user is told where to answer instead of
 // being offered buttons that would fail.
 export function isPromptActionable({ transport = 'rest', kind = PROMPT_KINDS.approval, capabilities = null } = {}) {
-  if (transport === 'ws') return true;
+  if (transport === 'ws' || transport === 'ws-authority') return true;
   if (capabilitiesUnprobed(capabilities)) return true;
   if (kind === PROMPT_KINDS.clarify) {
     return capabilities.runClarify === true || capabilities.runApproval === true;
@@ -402,6 +458,51 @@ export function buildWsApprovalResult(entry, choice) {
   const picked = typeof choice === 'string' ? choice.trim().toLowerCase() : '';
   if (!entry || entry.kind !== PROMPT_KINDS.approval || !entry.choices.includes(picked)) return null;
   return { choice: picked };
+}
+
+// A session authority takes an answer as `approval.respond` / `clarify.respond`
+// with exactly these four keys; it refuses any other set, and a generation that
+// is not the turn's current one comes back `stale_generation`.
+export const AUTHORITY_RESPOND_METHODS = Object.freeze({
+  approval: 'approval.respond',
+  clarify: 'clarify.respond',
+});
+
+export function buildAuthorityApprovalRequest(entry, choice) {
+  const picked = typeof choice === 'string' ? choice.trim().toLowerCase() : '';
+  if (!entry || entry.kind !== PROMPT_KINDS.approval || entry.transport !== 'ws-authority') return null;
+  if (!APPROVAL_CHOICES.includes(picked) || !entry.choices.includes(picked)) return null;
+  if (!entry.requestId || !entry.scope || !Number.isInteger(entry.executionGeneration)) return null;
+  return {
+    method: AUTHORITY_RESPOND_METHODS.approval,
+    params: {
+      session_id: entry.scope,
+      execution_generation: entry.executionGeneration,
+      prompt_id: entry.requestId,
+      choice: picked,
+    },
+  };
+}
+
+export function buildAuthorityClarifyRequest(entry, answer) {
+  if (!entry || entry.kind !== PROMPT_KINDS.clarify || entry.transport !== 'ws-authority') return null;
+  const text = typeof answer === 'string' ? answer : '';
+  if (text.length > MAX_ANSWER_CHARS) return null;
+  if (!entry.requestId || !entry.scope || !Number.isInteger(entry.executionGeneration)) return null;
+  return {
+    method: AUTHORITY_RESPOND_METHODS.clarify,
+    params: {
+      session_id: entry.scope,
+      execution_generation: entry.executionGeneration,
+      prompt_id: entry.requestId,
+      answer: text,
+    },
+  };
+}
+
+// The error a refused respond call carries: the store's reason, in data.reason.
+export function authorityRespondFailureCode(error) {
+  return String(error?.data?.reason || error?.message || '').trim().toLowerCase();
 }
 
 // answers: {qid: string | null}. null skips a question. A result without
