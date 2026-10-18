@@ -50,3 +50,36 @@ test('a live updater restores accumulated text and tool activity after its DOM n
   assert.equal(painted.get(newNode), 'Final answer');
   assert.equal(tools.get(newNode), null);
 });
+
+test('disposing a live updater paints text that was still waiting for its frame', () => {
+  const { document } = parseHTML('<html><body><div class=message-row><article id=bubble></article></div></body></html>');
+  const painted = [];
+  const frames = new Map();
+  let nextFrame = 0;
+  const context = vm.createContext({
+    document, createToolCallGroup, updateToolCallGroup, mergeToolCallActivity, translateUiText: value => value, t: (_key, {count}) => `${count} tools`,
+    renderThinkingIndicator: () => {},
+    THINKING_PLACEHOLDER: 'Hermes is thinking...',
+    requestAnimationFrame: (callback) => { nextFrame += 1; frames.set(nextFrame, callback); return nextFrame; },
+    cancelAnimationFrame: (id) => { frames.delete(id); },
+    setMessageContent: (_node, text) => painted.push(text),
+    setToolActivity: () => {},
+    activeImageGenerationPlaceholder: () => null,
+    extractRenderableImageSource: () => '',
+    panelMessageThread: null,
+    setRailCopyEnabled: () => {},
+  });
+  const create = vm.runInContext(`${updaterSource}; createStreamingMessageUpdater`, context);
+  const view = create(document.getElementById('bubble'));
+  view.updateText('Streaming failed, retrying non-streaming...');
+  assert.deepEqual(painted, [], 'the text is painted on the next frame');
+  // The turn fails before that frame runs.
+  view.dispose();
+  assert.equal(painted.at(-1), 'Streaming failed, retrying non-streaming...', 'the notice must not be replaced by the thinking indicator');
+  assert.equal(frames.size, 0, 'no frame is left to run after the turn ended');
+
+  painted.length = 0;
+  const idle = create(document.getElementById('bubble'));
+  idle.dispose();
+  assert.deepEqual(painted, [], 'disposing with nothing pending paints nothing');
+});

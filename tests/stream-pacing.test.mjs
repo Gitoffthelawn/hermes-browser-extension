@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createStreamPacer, STREAM_PACER_DEFAULTS } from '../extension/lib/stream-pacing.mjs';
+import { createStreamPacer, pacerFramePaint, STREAM_PACER_DEFAULTS } from '../extension/lib/stream-pacing.mjs';
 
 const FRAME_MS = 16;
 
@@ -331,4 +331,20 @@ test('property: revealed length always equals pushed length exactly (random spli
       assert.ok(pushed.startsWith(frame.text), `seed ${seed}: frame must be a prefix of the pushed text`);
     }
   }
+});
+
+test('a pacer frame paints revealed text, the placeholder while waiting, and nothing when a run closes empty', () => {
+  assert.equal(pacerFramePaint('Hello', { done: false }, 'thinking'), 'Hello');
+  assert.equal(pacerFramePaint('Hello', { done: true }, 'thinking'), 'Hello');
+  assert.equal(pacerFramePaint('', { done: false }, 'thinking'), 'thinking');
+  assert.equal(pacerFramePaint('', { done: true }, 'thinking'), null, 'closing with nothing revealed leaves the bubble as it is');
+  assert.equal(pacerFramePaint(undefined, undefined, 'thinking'), 'thinking');
+});
+
+test('flushing a pacer that never received text reports a closing frame with nothing to paint', () => {
+  const frames = [];
+  const pacer = createStreamPacer({ onFrame: (text, meta) => frames.push([text, meta.done]), schedule: () => 0, cancel: () => {} });
+  pacer.flush();
+  assert.deepEqual(frames, [['', true]]);
+  assert.equal(pacerFramePaint(frames[0][0], { done: frames[0][1] }, 'thinking'), null);
 });

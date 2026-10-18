@@ -1741,7 +1741,7 @@ test('assistant thinking placeholder renders animated indicator markup and reduc
   assert.match(source, /<span class="thinking-dots" aria-hidden="true"><i><\/i><i><\/i><i><\/i><\/span>/);
   assert.match(source, /<span class="thinking-words" aria-hidden="true">\$\{phrases\}<\/span>/);
   assert.match(source, /streamPacer\.push\(liveText\.slice\(pushedLive\)\);/);
-  assert.match(source, /streamView\.updateText\(text \|\| \(meta\.done \? '' : THINKING_PLACEHOLDER\)\);/);
+  assert.match(source, /const paint = pacerFramePaint\(text, meta, THINKING_PLACEHOLDER\);/);
   assert.match(css, /\.thinking-indicator[\s\S]*overflow: hidden/);
   assert.match(css, /\.thinking-words[\s\S]*overflow: hidden/);
   assert.match(css, /\.thinking-words[\s\S]*height: 1\.46em/);
