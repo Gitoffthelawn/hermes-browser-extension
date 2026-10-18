@@ -288,6 +288,12 @@ export function createControllerServiceWorker({
       leasedTabIds: ownedLeases.map((ownedLease) => ownedLease.tabId),
       ownedTabIds: ownedLeases.map((ownedLease) => ownedLease.tabId),
       currentWindowId: lease.windowId,
+      // A batch asks this between steps: Pause, a debugger detach or turning
+      // control off while it runs must end it, not let the rest of the steps
+      // re-attach and carry on.
+      controlHalted: () => settings?.browserControlEnabled !== true
+        || settings?.browserControlPaused === true
+        || Boolean(pausedLeases[String(tabId)]),
       // The executor mints post-action refs under the generation the next
       // command will carry, which a navigation advances while it runs.
       currentDocumentGeneration: (hookTabId, hookFrameId = 0) => Number(
