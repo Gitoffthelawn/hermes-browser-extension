@@ -475,6 +475,8 @@ export default Object.freeze({
   "ui.approval.opened.approve.hermes.browser.extension.then.return.here": "Đã mở phê duyệt. Phê duyệt Hermes Browser Extension, sau đó quay lại đây.",
   "ui.approve": "Phê duyệt",
   "ui.artifacts": "Tạo phẩm",
+  "ui.artifact.open_on_computer.confirm": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+  "ui.artifact.open_on_computer.blocked": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
   "ui.ask": "Hỏi",
   "ui.ask.about.any.page.hermes.sees.the.active.tab.selected.text.pag.b2a32c39": "Hỏi về bất kỳ trang nào. Hermes xem tab đang hoạt động, văn bản đã chọn, ngữ cảnh trang và các tab đang mở.",
   "ui.ask.every.time": "Hỏi mọi lúc",

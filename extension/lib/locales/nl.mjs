@@ -475,6 +475,8 @@ export default Object.freeze({
   "ui.approval.opened.approve.hermes.browser.extension.then.return.here": "Goedkeuring geopend. Keur Hermes Browser Extension goed en kom dan hier terug.",
   "ui.approve": "Goedkeuren",
   "ui.artifacts": "Artefacten",
+  "ui.artifact.open_on_computer.confirm": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+  "ui.artifact.open_on_computer.blocked": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
   "ui.ask": "Vraag",
   "ui.ask.about.any.page.hermes.sees.the.active.tab.selected.text.pag.b2a32c39": "Vraag naar elke pagina. Hermes ziet het actieve tabblad, de geselecteerde tekst, de paginacontext en de geopende tabbladen.",
   "ui.ask.every.time": "Vraag het elke keer",

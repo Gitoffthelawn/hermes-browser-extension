@@ -475,6 +475,8 @@ export default Object.freeze({
   "ui.approval.opened.approve.hermes.browser.extension.then.return.here": "承認画面を開きました。Hermes Browser Extension を承認してから、ここに戻ってください。",
   "ui.approve": "承認",
   "ui.artifacts": "アーティファクト",
+  "ui.artifact.open_on_computer.confirm": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+  "ui.artifact.open_on_computer.blocked": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
   "ui.ask": "質問",
   "ui.ask.about.any.page.hermes.sees.the.active.tab.selected.text.pag.b2a32c39": "どんなページについても質問できます。Hermes はアクティブタブ、選択中のテキスト、ページコンテキスト、開いているタブを確認します。",
   "ui.ask.every.time": "毎回確認",

@@ -475,6 +475,8 @@ export default Object.freeze({
   "ui.approval.opened.approve.hermes.browser.extension.then.return.here": "已開啟核准視窗。請核准 Hermes Browser 擴充功能，然後返回此處。",
   "ui.approve": "核准",
   "ui.artifacts": "成品",
+  "ui.artifact.open_on_computer.confirm": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+  "ui.artifact.open_on_computer.blocked": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
   "ui.ask": "詢問",
   "ui.ask.about.any.page.hermes.sees.the.active.tab.selected.text.pag.b2a32c39": "可詢問任何頁面。Hermes 可看到活動分頁、選取文字、頁面內容和開啟的分頁。",
   "ui.ask.every.time": "每次都詢問",

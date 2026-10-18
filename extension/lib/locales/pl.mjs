@@ -475,6 +475,8 @@ export default Object.freeze({
   "ui.approval.opened.approve.hermes.browser.extension.then.return.here": "Zatwierdzenie otwarte. Zatwierdź Hermes Browser Extension i wróć tutaj.",
   "ui.approve": "Zatwierdź",
   "ui.artifacts": "Artefakty",
+  "ui.artifact.open_on_computer.confirm": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+  "ui.artifact.open_on_computer.blocked": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
   "ui.ask": "Zapytaj",
   "ui.ask.about.any.page.hermes.sees.the.active.tab.selected.text.pag.b2a32c39": "Zapytaj o dowolną stronę. Hermes widzi aktywną kartę, wybrany tekst, kontekst strony i otwarte karty.",
   "ui.ask.every.time": "Zapytaj za każdym razem",

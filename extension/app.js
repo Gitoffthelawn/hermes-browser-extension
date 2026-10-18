@@ -122,7 +122,7 @@ import {
 } from './lib/image-render.mjs';
 import { classifyMediaKind, resolveMediaFetchPlan } from './lib/media-persistence.mjs';
 import { probeArtifactFileSource, resolveArtifactDownloadSource, resolveArtifactFileSource } from './lib/media-source.mjs';
-import { artifactActionPlan, artifactFailureNotice } from './lib/artifact-actions.mjs';
+import { artifactActionPlan, artifactFailureNotice, artifactOpenOnComputerPolicy } from './lib/artifact-actions.mjs';
 import { hydrateArtifactCards, setArtifactCardBusy, setArtifactCardNote } from './lib/artifact-card.mjs';
 import {
   activeSubagentView,
@@ -2225,7 +2225,18 @@ async function fulltabArtifactDownloadUrlFor(plan) {
   return source.url;
 }
 
+// Hermes chooses the file name and contents, so handing the download to the OS
+// handler needs an explicit yes from the person, shown by the extension itself
+// before anything is downloaded. Programs and scripts are never opened from here.
+function confirmFulltabArtifactOpenOnComputer(plan) {
+  const policy = artifactOpenOnComputerPolicy(plan.source);
+  const name = policy.name || plan.name;
+  if (policy.blocked) throw new Error(t('ui.artifact.open_on_computer.blocked', { name }));
+  return window.confirm(t('ui.artifact.open_on_computer.confirm', { name }));
+}
+
 async function openArtifactCardOnComputer(plan) {
+  if (!confirmFulltabArtifactOpenOnComputer(plan)) return;
   const url = await fulltabArtifactDownloadUrlFor(plan);
   const downloadId = await browserApi.downloads.download({ url, filename: plan.name });
   if (!Number.isInteger(Number(downloadId))) throw new Error('The browser did not start the download.');

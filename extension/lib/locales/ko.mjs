@@ -475,6 +475,8 @@ export default Object.freeze({
   "ui.approval.opened.approve.hermes.browser.extension.then.return.here": "승인 창이 열렸습니다. Hermes Browser Extension을 승인한 후 여기로 돌아오세요.",
   "ui.approve": "승인",
   "ui.artifacts": "아티팩트",
+  "ui.artifact.open_on_computer.confirm": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+  "ui.artifact.open_on_computer.blocked": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
   "ui.ask": "질문",
   "ui.ask.about.any.page.hermes.sees.the.active.tab.selected.text.pag.b2a32c39": "모든 페이지에 대해 질문하세요. Hermes는 활성 탭, 선택한 텍스트, 페이지 컨텍스트, 열려 있는 탭을 확인할 수 있습니다.",
   "ui.ask.every.time": "매번 확인",
