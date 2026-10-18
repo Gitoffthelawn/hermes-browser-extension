@@ -271,6 +271,10 @@
     "message": "원본 파일을 사용할 수 없습니다. 다시 첨부하세요.",
     "description": "Runtime interface message attachments.file_unavailable"
   },
+  "runtime_attachments_paste_excerpt_notice": {
+    "message": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
+    "description": "Runtime interface message attachments.paste_excerpt_notice"
+  },
   "runtime_attachments_preview_limited": {
     "message": "미리보기가 제한됩니다. 전체 파일을 다운로드하세요.",
     "description": "Runtime interface message attachments.preview_limited"
@@ -856,7 +860,7 @@
     "description": "Runtime interface message browser_control.detach"
   },
   "runtime_browser_control_detached_detail": {
-    "message": "브라우저 작업이 중지되고 모든 제어 탭의 임대가 해제되었습니다.",
+    "message": "브라우저 작업을 중지했습니다. Hermes는 연결된 탭을 더 이상 사용할 수 없습니다.",
     "description": "Runtime interface message browser_control.detached_detail"
   },
   "runtime_browser_control_detached_toast": {
@@ -868,12 +872,64 @@
     "description": "Runtime interface message browser_control.enable"
   },
   "runtime_browser_control_enabled_detail": {
-    "message": "선택한 임대 탭만 브라우저 작업을 받을 수 있습니다.",
+    "message": "연결된 탭만 브라우저 작업을 받을 수 있습니다.",
     "description": "Runtime interface message browser_control.enabled_detail"
   },
   "runtime_browser_control_enabled_toast": {
     "message": "Hermes 컨트롤이 활성화되었습니다",
     "description": "Runtime interface message browser_control.enabled_toast"
+  },
+  "runtime_browser_control_error_active_tab": {
+    "message": "먼저 일반 웹 페이지를 활성 탭으로 만드세요.",
+    "description": "Runtime interface message browser_control.error_active_tab"
+  },
+  "runtime_browser_control_error_approval_failed": {
+    "message": "Hermes 컨트롤이 이 결정을 수락하지 않았습니다.",
+    "description": "Runtime interface message browser_control.error_approval_failed"
+  },
+  "runtime_browser_control_error_attach_busy": {
+    "message": "다른 탭을 연결하기 전에 현재 브라우저 작업이 끝날 때까지 기다리세요.",
+    "description": "Runtime interface message browser_control.error_attach_busy"
+  },
+  "runtime_browser_control_error_attach_failed": {
+    "message": "이 탭을 연결하지 못했습니다.",
+    "description": "Runtime interface message browser_control.error_attach_failed"
+  },
+  "runtime_browser_control_error_attach_reconnecting": {
+    "message": "Hermes 컨트롤이 아직 다시 연결되는 중입니다. 잠시 후 이 탭을 다시 연결하세요.",
+    "description": "Runtime interface message browser_control.error_attach_reconnecting"
+  },
+  "runtime_browser_control_error_attach_restricted": {
+    "message": "Hermes 컨트롤을 연결하기 전에 일반 HTTP 또는 HTTPS 페이지를 여세요.",
+    "description": "Runtime interface message browser_control.error_attach_restricted"
+  },
+  "runtime_browser_control_error_attach_unavailable": {
+    "message": "이 탭은 지금 연결할 수 없습니다.",
+    "description": "Runtime interface message browser_control.error_attach_unavailable"
+  },
+  "runtime_browser_control_error_enable_failed": {
+    "message": "선택한 탭을 연결하지 못했습니다.",
+    "description": "Runtime interface message browser_control.error_enable_failed"
+  },
+  "runtime_browser_control_error_refresh_failed": {
+    "message": "Hermes 컨트롤이 연결 설정을 새로 고치지 못했습니다.",
+    "description": "Runtime interface message browser_control.error_refresh_failed"
+  },
+  "runtime_browser_control_error_release_failed": {
+    "message": "이전에 연결된 탭을 해제하지 못했습니다.",
+    "description": "Runtime interface message browser_control.error_release_failed"
+  },
+  "runtime_browser_control_error_select_tabs": {
+    "message": "이 범위를 켜기 전에 목록에서 탭을 하나 이상 선택하세요.",
+    "description": "Runtime interface message browser_control.error_select_tabs"
+  },
+  "runtime_browser_control_error_session_attach": {
+    "message": "Hermes 세션을 시작하거나 선택한 다음 이 탭을 연결하세요.",
+    "description": "Runtime interface message browser_control.error_session_attach"
+  },
+  "runtime_browser_control_error_session_enable": {
+    "message": "Hermes 컨트롤을 켜기 전에 Hermes 세션을 시작하거나 선택하세요.",
+    "description": "Runtime interface message browser_control.error_session_enable"
   },
   "runtime_browser_control_follow": {
     "message": "Hermes 따라가기",
@@ -892,15 +948,15 @@
     "description": "Runtime interface message browser_control.help_follow"
   },
   "runtime_browser_control_help_off": {
-    "message": "브라우저 제어를 끄고 이 패널을 닫습니다. 설정에서 다시 켤 수 있습니다.",
+    "message": "Hermes 컨트롤을 끄고 이 패널을 닫습니다. 설정에서 다시 켤 수 있습니다.",
     "description": "Runtime interface message browser_control.help_off"
   },
   "runtime_browser_control_help_pause": {
-    "message": "브라우저 제어를 끄지 않고 일시 중지합니다. 연결된 탭은 유지됩니다.",
+    "message": "Hermes 컨트롤을 끄지 않고 일시 중지합니다. 연결된 탭은 유지됩니다.",
     "description": "Runtime interface message browser_control.help_pause"
   },
   "runtime_browser_control_help_resume": {
-    "message": "계속 연결되어 있는 탭에서 브라우저 제어를 재개합니다.",
+    "message": "계속 연결되어 있는 탭에서 Hermes 컨트롤을 재개합니다.",
     "description": "Runtime interface message browser_control.help_resume"
   },
   "runtime_browser_control_help_scope_selected_tabs": {
@@ -908,7 +964,7 @@
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
   },
   "runtime_browser_control_help_scope_task_set": {
-    "message": "아래에서 선택한 탭만 하나의 공유 브라우저 작업으로 제어합니다. 선택한 탭과 달리 작업 식별자를 공유하며, 열려 있는 모든 탭을 포함하지는 않습니다.",
+    "message": "아래에서 선택한 탭만 하나의 공유 작업으로 제어합니다. Hermes는 브라우저에서 이 탭들을 그룹화할 수 있습니다. 열려 있는 다른 탭은 포함되지 않습니다.",
     "description": "Runtime interface message browser_control.help_scope_task_set"
   },
   "runtime_browser_control_help_scope_this_tab": {
@@ -927,8 +983,12 @@
     "message": "HERMES 컨트롤",
     "description": "Runtime interface message browser_control.kicker"
   },
+  "runtime_browser_control_local_document_detail": {
+    "message": "이 파일을 검사하고 슬라이드나 텍스트를 추출하며 Hermes 컨트롤이 해당 탭을 사용하도록 하려면 로컬 문서 접근을 승인하세요.",
+    "description": "Runtime interface message browser_control.local_document_detail"
+  },
   "runtime_browser_control_note": {
-    "message": "이 확장 프로그램 또는 업데이트를 설치할 때 Chromium 컨트롤러 액세스 권한이 부여되었습니다. Hermes는 승인된 임대 작업 중에만 연결되며, 브라우저 창을 절대 앞으로 가져오지 않고 자격 증명, MFA, 결제 입력란, 비밀 텍스트를 차단합니다.",
+    "message": "Chromium은 이 확장 프로그램을 설치하거나 업데이트할 때 디버거 액세스 권한을 부여합니다. Hermes는 연결한 탭에서만 디버거를 사용하며, 브라우저 창을 앞으로 가져오지 않고, 자격 증명, MFA, 결제 필드, 비밀 텍스트를 차단합니다.",
     "description": "Runtime interface message browser_control.note"
   },
   "runtime_browser_control_pause": {
@@ -954,6 +1014,10 @@
   "runtime_browser_control_scope_failed": {
     "message": "이 제어 범위를 확인하지 못했습니다. 탭을 확인하고 다시 시도하세요.",
     "description": "Runtime interface message browser_control.scope_failed"
+  },
+  "runtime_browser_control_scope_help_locked": {
+    "message": "사용할 수 있는 탭을 변경하려면 Hermes 컨트롤을 끄세요.",
+    "description": "Runtime interface message browser_control.scope_help_locked"
   },
   "runtime_browser_control_scope_locked": {
     "message": "여기서 제어 범위를 선택한 뒤 적용하세요. 여러 탭은 직접 선택해야 합니다.",
@@ -999,6 +1063,10 @@
     "message": "중지",
     "description": "Runtime interface message browser_control.stop"
   },
+  "runtime_browser_control_tab_restricted": {
+    "message": "사용할 수 없습니다. 브라우저 페이지와 은행 또는 비밀번호 페이지 같은 민감한 페이지는 제어할 수 없습니다.",
+    "description": "Runtime interface message browser_control.tab_restricted"
+  },
   "runtime_browser_control_task_set": {
     "message": "작업 세트",
     "description": "Runtime interface message browser_control.task_set"
@@ -1008,8 +1076,52 @@
     "description": "Runtime interface message browser_control.this_tab"
   },
   "runtime_browser_control_title": {
-    "message": "임대 탭 조작",
+    "message": "Hermes 컨트롤",
     "description": "Runtime interface message browser_control.title"
+  },
+  "runtime_browser_control_toast_approval_failed": {
+    "message": "승인이 수락되지 않았습니다",
+    "description": "Runtime interface message browser_control.toast_approval_failed"
+  },
+  "runtime_browser_control_toast_attach_failed": {
+    "message": "이 탭은 연결되지 않았습니다",
+    "description": "Runtime interface message browser_control.toast_attach_failed"
+  },
+  "runtime_browser_control_toast_attached": {
+    "message": "이 탭이 연결되었습니다",
+    "description": "Runtime interface message browser_control.toast_attached"
+  },
+  "runtime_browser_control_toast_attached_detail": {
+    "message": "Hermes 컨트롤이 첫 브라우저 작업을 실행할 준비가 되었습니다.",
+    "description": "Runtime interface message browser_control.toast_attached_detail"
+  },
+  "runtime_browser_control_toast_authorize_failed": {
+    "message": "Hermes 컨트롤이 승인되지 않았습니다",
+    "description": "Runtime interface message browser_control.toast_authorize_failed"
+  },
+  "runtime_browser_control_toast_enable_failed": {
+    "message": "Hermes 컨트롤을 켜지 못했습니다",
+    "description": "Runtime interface message browser_control.toast_enable_failed"
+  },
+  "runtime_browser_control_toast_rejection_failed": {
+    "message": "거부가 수락되지 않았습니다",
+    "description": "Runtime interface message browser_control.toast_rejection_failed"
+  },
+  "runtime_browser_control_toast_scope_unchanged": {
+    "message": "제어 탭이 변경되지 않았습니다",
+    "description": "Runtime interface message browser_control.toast_scope_unchanged"
+  },
+  "runtime_browser_control_toast_state_unchanged": {
+    "message": "Hermes 컨트롤 상태가 변경되지 않았습니다",
+    "description": "Runtime interface message browser_control.toast_state_unchanged"
+  },
+  "runtime_browser_control_toast_stop_failed": {
+    "message": "브라우저 작업을 중지하지 못했습니다",
+    "description": "Runtime interface message browser_control.toast_stop_failed"
+  },
+  "runtime_browser_control_toast_view_unchanged": {
+    "message": "보기 설정이 변경되지 않았습니다",
+    "description": "Runtime interface message browser_control.toast_view_unchanged"
   },
   "runtime_browser_control_turn_off": {
     "message": "끄기",
@@ -1463,6 +1575,10 @@
     "message": "Approve once runs this command a single time. Session allows matching commands until this session ends. Always saves a permanent rule for matching commands.",
     "description": "Runtime interface message exec_approval.choice_help"
   },
+  "runtime_exec_approval_command_truncated": {
+    "message": "Only the first part of this command is shown. Deny it unless you trust the rest.",
+    "description": "Runtime interface message exec_approval.command_truncated"
+  },
   "runtime_exec_approval_countdown": {
     "message": "{time} left to answer",
     "description": "Runtime interface message exec_approval.countdown"
@@ -1731,6 +1847,10 @@
     "message": "개의 프로필 사용 가능",
     "description": "Runtime interface message profile.available_suffix"
   },
+  "runtime_profile_companion_not_configured": {
+    "message": "Dashboard companion not configured. Remote API mode does not search this computer for a Hermes Dashboard, so profile switching and Bot Mode need a dashboard companion.",
+    "description": "Runtime interface message profile.companion_not_configured"
+  },
   "runtime_profile_default": {
     "message": "기본 프로필",
     "description": "Runtime interface message profile.default"
@@ -1747,12 +1867,20 @@
     "message": "사용 중: {name}{model}{skills}",
     "description": "Runtime interface message profile.using"
   },
+  "runtime_run_release": {
+    "message": "Release",
+    "description": "Runtime interface message run.release"
+  },
+  "runtime_run_release_detail": {
+    "message": "Browser released the composer without Hermes confirming the stop. Check the session before sending another message.",
+    "description": "Runtime interface message run.release_detail"
+  },
   "runtime_run_stop": {
     "message": "■ 중지",
     "description": "Runtime interface message run.stop"
   },
   "runtime_run_stop_cancelled_commands": {
-    "message": "Cancelled {count} pending browser-control commands.",
+    "message": "대기 중이던 Hermes 컨트롤 명령 {count}개를 취소했습니다.",
     "description": "Runtime interface message run.stop_cancelled_commands"
   },
   "runtime_run_stop_controller_toast": {
@@ -1803,6 +1931,10 @@
     "message": "{title}의 세션 ID 복사",
     "description": "Runtime interface message session.copy_id_for"
   },
+  "runtime_session_long_shared_notice": {
+    "message": "This session has {count} messages. Long shared sessions can fall out of sync with other Hermes clients, such as the desktop app, the CLI, or Hermes Web, that write to the same session, so replies can arrive late or out of order. Start a new chat when you can.",
+    "description": "Runtime interface message session.long_shared_notice"
+  },
   "runtime_session_new_extension_session": {
     "message": "＋ 새 Hermes Browser Extension 세션",
     "description": "Runtime interface message session.new_extension_session"
@@ -1810,6 +1942,14 @@
   "runtime_session_opening": {
     "message": "{title} 여는 중",
     "description": "Runtime interface message session.opening"
+  },
+  "runtime_session_origin_refused": {
+    "message": "Hermes refused this browser origin, {origin}, on a session request (HTTP 403 with no JSON error body). Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
+    "description": "Runtime interface message session.origin_refused"
+  },
+  "runtime_session_origin_refused_title": {
+    "message": "Hermes refused this browser origin",
+    "description": "Runtime interface message session.origin_refused_title"
   },
   "runtime_session_rail_save_failed": {
     "message": "세션 레일 저장 실패: {error}",
@@ -1892,7 +2032,7 @@
     "description": "Runtime interface message settings.categories.models.title"
   },
   "runtime_settings_categories_permissions_summary": {
-    "message": "브라우저 제어, 탭 범위, 페이지 공유 승인.",
+    "message": "Hermes 컨트롤, 탭 범위, 페이지 공유 승인.",
     "description": "Runtime interface message settings.categories.permissions.summary"
   },
   "runtime_settings_categories_permissions_title": {
@@ -2826,6 +2966,46 @@
   "runtime_ui_component": {
     "message": "컴포넌트",
     "description": "Runtime interface message ui.component"
+  },
+  "runtime_ui_composer_ask": {
+    "message": "질문",
+    "description": "Runtime interface message ui.composer.ask"
+  },
+  "runtime_ui_composer_ask_bot": {
+    "message": "{name}에게 질문",
+    "description": "Runtime interface message ui.composer.ask_bot"
+  },
+  "runtime_ui_composer_ask_bot_label": {
+    "message": "{name}에게 질문",
+    "description": "Runtime interface message ui.composer.ask_bot_label"
+  },
+  "runtime_ui_composer_ask_hermes": {
+    "message": "Hermes에게 질문",
+    "description": "Runtime interface message ui.composer.ask_hermes"
+  },
+  "runtime_ui_composer_ask_hermes_label": {
+    "message": "HERMES에게 질문",
+    "description": "Runtime interface message ui.composer.ask_hermes_label"
+  },
+  "runtime_ui_composer_bot_running": {
+    "message": "{name} 실행 중",
+    "description": "Runtime interface message ui.composer.bot_running"
+  },
+  "runtime_ui_composer_group_chat": {
+    "message": "그룹 채팅",
+    "description": "Runtime interface message ui.composer.group_chat"
+  },
+  "runtime_ui_composer_hermes_running": {
+    "message": "Hermes 실행 중",
+    "description": "Runtime interface message ui.composer.hermes_running"
+  },
+  "runtime_ui_composer_new_thread": {
+    "message": "새 스레드",
+    "description": "Runtime interface message ui.composer.new_thread"
+  },
+  "runtime_ui_composer_send": {
+    "message": "보내기",
+    "description": "Runtime interface message ui.composer.send"
   },
   "runtime_ui_config": {
     "message": "구성",
@@ -6370,6 +6550,10 @@
   "runtime_voice_transcription_failed": {
     "message": "음성 녹음에 실패했습니다.\n\n{error}",
     "description": "Runtime interface message voice.transcription_failed"
+  },
+  "runtime_wake_native_local_only": {
+    "message": "Native wake needs the local Hermes gateway on this computer. Remote connections can use browser wake instead.",
+    "description": "Runtime interface message wake.native_local_only"
   },
   "runtime_wake_turn_off": {
     "message": "호출어 끄기",

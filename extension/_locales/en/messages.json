@@ -271,6 +271,10 @@
     "message": "Original file unavailable. Reattach it to restore access.",
     "description": "Runtime interface message attachments.file_unavailable"
   },
+  "runtime_attachments_paste_excerpt_notice": {
+    "message": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
+    "description": "Runtime interface message attachments.paste_excerpt_notice"
+  },
   "runtime_attachments_preview_limited": {
     "message": "Preview limited. Download the complete file.",
     "description": "Runtime interface message attachments.preview_limited"
@@ -856,7 +860,7 @@
     "description": "Runtime interface message browser_control.detach"
   },
   "runtime_browser_control_detached_detail": {
-    "message": "Browser actions stopped and all controlled-tab leases were released.",
+    "message": "Browser actions stopped. Hermes can no longer use any attached tab.",
     "description": "Runtime interface message browser_control.detached_detail"
   },
   "runtime_browser_control_detached_toast": {
@@ -868,12 +872,64 @@
     "description": "Runtime interface message browser_control.enable"
   },
   "runtime_browser_control_enabled_detail": {
-    "message": "Only the selected leased tabs can receive browser actions.",
+    "message": "Only attached tabs can receive browser actions.",
     "description": "Runtime interface message browser_control.enabled_detail"
   },
   "runtime_browser_control_enabled_toast": {
     "message": "Hermes Control enabled",
     "description": "Runtime interface message browser_control.enabled_toast"
+  },
+  "runtime_browser_control_error_active_tab": {
+    "message": "Make a normal web page the active tab first.",
+    "description": "Runtime interface message browser_control.error_active_tab"
+  },
+  "runtime_browser_control_error_approval_failed": {
+    "message": "Hermes Control did not accept this decision.",
+    "description": "Runtime interface message browser_control.error_approval_failed"
+  },
+  "runtime_browser_control_error_attach_busy": {
+    "message": "Wait for the current browser action to finish before attaching another tab.",
+    "description": "Runtime interface message browser_control.error_attach_busy"
+  },
+  "runtime_browser_control_error_attach_failed": {
+    "message": "Could not attach this tab.",
+    "description": "Runtime interface message browser_control.error_attach_failed"
+  },
+  "runtime_browser_control_error_attach_reconnecting": {
+    "message": "Hermes Control is still reconnecting. Try attaching this tab again in a moment.",
+    "description": "Runtime interface message browser_control.error_attach_reconnecting"
+  },
+  "runtime_browser_control_error_attach_restricted": {
+    "message": "Open a normal HTTP or HTTPS page before attaching Hermes Control.",
+    "description": "Runtime interface message browser_control.error_attach_restricted"
+  },
+  "runtime_browser_control_error_attach_unavailable": {
+    "message": "This tab cannot be attached right now.",
+    "description": "Runtime interface message browser_control.error_attach_unavailable"
+  },
+  "runtime_browser_control_error_enable_failed": {
+    "message": "Could not attach the selected tabs.",
+    "description": "Runtime interface message browser_control.error_enable_failed"
+  },
+  "runtime_browser_control_error_refresh_failed": {
+    "message": "Hermes Control could not refresh its connection settings.",
+    "description": "Runtime interface message browser_control.error_refresh_failed"
+  },
+  "runtime_browser_control_error_release_failed": {
+    "message": "Could not release the previously attached tab.",
+    "description": "Runtime interface message browser_control.error_release_failed"
+  },
+  "runtime_browser_control_error_select_tabs": {
+    "message": "Choose at least one tab in the list before turning on this scope.",
+    "description": "Runtime interface message browser_control.error_select_tabs"
+  },
+  "runtime_browser_control_error_session_attach": {
+    "message": "Start or select a Hermes session, then attach this tab.",
+    "description": "Runtime interface message browser_control.error_session_attach"
+  },
+  "runtime_browser_control_error_session_enable": {
+    "message": "Start or select a Hermes session before turning on Hermes Control.",
+    "description": "Runtime interface message browser_control.error_session_enable"
   },
   "runtime_browser_control_follow": {
     "message": "Follow Hermes",
@@ -892,15 +948,15 @@
     "description": "Runtime interface message browser_control.help_follow"
   },
   "runtime_browser_control_help_off": {
-    "message": "Turn browser control off and close this panel. Enable it again in Settings.",
+    "message": "Turn Hermes Control off and close this panel. Turn it on again in Settings.",
     "description": "Runtime interface message browser_control.help_off"
   },
   "runtime_browser_control_help_pause": {
-    "message": "Pause browser control without turning it off. Attached tabs are kept.",
+    "message": "Pause Hermes Control without turning it off. Attached tabs are kept.",
     "description": "Runtime interface message browser_control.help_pause"
   },
   "runtime_browser_control_help_resume": {
-    "message": "Resume browser control on the tabs that are still attached.",
+    "message": "Resume Hermes Control on the tabs that are still attached.",
     "description": "Runtime interface message browser_control.help_resume"
   },
   "runtime_browser_control_help_scope_selected_tabs": {
@@ -908,7 +964,7 @@
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
   },
   "runtime_browser_control_help_scope_task_set": {
-    "message": "Control only the tabs you choose below as one shared browser task. Unlike Selected tabs, these tabs share a task identity; this does not include every open tab.",
+    "message": "Control only the tabs you choose below, as one shared task. Hermes can group them in the browser. Other open tabs are not included.",
     "description": "Runtime interface message browser_control.help_scope_task_set"
   },
   "runtime_browser_control_help_scope_this_tab": {
@@ -927,8 +983,12 @@
     "message": "HERMES CONTROL",
     "description": "Runtime interface message browser_control.kicker"
   },
+  "runtime_browser_control_local_document_detail": {
+    "message": "Approve local document access to inspect this file, extract its slides or text, and let Hermes Control use its tab.",
+    "description": "Runtime interface message browser_control.local_document_detail"
+  },
   "runtime_browser_control_note": {
-    "message": "Chromium controller access was granted when this extension or update was installed. Hermes attaches only during an authorized leased action, never raises a browser window, and blocks credentials, MFA, payment fields, and secret text.",
+    "message": "Chromium grants this extension debugger access when it is installed or updated. Hermes uses the debugger only on tabs you attach, never brings a browser window to the front, and blocks credentials, MFA, payment fields, and secret text.",
     "description": "Runtime interface message browser_control.note"
   },
   "runtime_browser_control_pause": {
@@ -954,6 +1014,10 @@
   "runtime_browser_control_scope_failed": {
     "message": "Could not confirm this scope. Check the tabs and try again.",
     "description": "Runtime interface message browser_control.scope_failed"
+  },
+  "runtime_browser_control_scope_help_locked": {
+    "message": "Turn off Hermes Control to change the tabs it can use.",
+    "description": "Runtime interface message browser_control.scope_help_locked"
   },
   "runtime_browser_control_scope_locked": {
     "message": "Choose the scope here, then apply. Multiple tabs must be selected explicitly.",
@@ -999,6 +1063,10 @@
     "message": "Stop",
     "description": "Runtime interface message browser_control.stop"
   },
+  "runtime_browser_control_tab_restricted": {
+    "message": "Not available. Browser pages and sensitive pages, such as banking or password pages, cannot be controlled.",
+    "description": "Runtime interface message browser_control.tab_restricted"
+  },
   "runtime_browser_control_task_set": {
     "message": "Task set",
     "description": "Runtime interface message browser_control.task_set"
@@ -1008,8 +1076,52 @@
     "description": "Runtime interface message browser_control.this_tab"
   },
   "runtime_browser_control_title": {
-    "message": "Operate leased tabs",
+    "message": "Hermes Control",
     "description": "Runtime interface message browser_control.title"
+  },
+  "runtime_browser_control_toast_approval_failed": {
+    "message": "Approval was not accepted",
+    "description": "Runtime interface message browser_control.toast_approval_failed"
+  },
+  "runtime_browser_control_toast_attach_failed": {
+    "message": "This tab was not attached",
+    "description": "Runtime interface message browser_control.toast_attach_failed"
+  },
+  "runtime_browser_control_toast_attached": {
+    "message": "This tab is attached",
+    "description": "Runtime interface message browser_control.toast_attached"
+  },
+  "runtime_browser_control_toast_attached_detail": {
+    "message": "Hermes Control is ready for the first browser action.",
+    "description": "Runtime interface message browser_control.toast_attached_detail"
+  },
+  "runtime_browser_control_toast_authorize_failed": {
+    "message": "Hermes Control was not authorized",
+    "description": "Runtime interface message browser_control.toast_authorize_failed"
+  },
+  "runtime_browser_control_toast_enable_failed": {
+    "message": "Hermes Control did not turn on",
+    "description": "Runtime interface message browser_control.toast_enable_failed"
+  },
+  "runtime_browser_control_toast_rejection_failed": {
+    "message": "Rejection was not accepted",
+    "description": "Runtime interface message browser_control.toast_rejection_failed"
+  },
+  "runtime_browser_control_toast_scope_unchanged": {
+    "message": "Control tabs unchanged",
+    "description": "Runtime interface message browser_control.toast_scope_unchanged"
+  },
+  "runtime_browser_control_toast_state_unchanged": {
+    "message": "Hermes Control state unchanged",
+    "description": "Runtime interface message browser_control.toast_state_unchanged"
+  },
+  "runtime_browser_control_toast_stop_failed": {
+    "message": "Could not stop browser actions",
+    "description": "Runtime interface message browser_control.toast_stop_failed"
+  },
+  "runtime_browser_control_toast_view_unchanged": {
+    "message": "View setting unchanged",
+    "description": "Runtime interface message browser_control.toast_view_unchanged"
   },
   "runtime_browser_control_turn_off": {
     "message": "Turn off",
@@ -1463,6 +1575,10 @@
     "message": "Approve once runs this command a single time. Session allows matching commands until this session ends. Always saves a permanent rule for matching commands.",
     "description": "Runtime interface message exec_approval.choice_help"
   },
+  "runtime_exec_approval_command_truncated": {
+    "message": "Only the first part of this command is shown. Deny it unless you trust the rest.",
+    "description": "Runtime interface message exec_approval.command_truncated"
+  },
   "runtime_exec_approval_countdown": {
     "message": "{time} left to answer",
     "description": "Runtime interface message exec_approval.countdown"
@@ -1731,6 +1847,10 @@
     "message": "profiles available",
     "description": "Runtime interface message profile.available_suffix"
   },
+  "runtime_profile_companion_not_configured": {
+    "message": "Dashboard companion not configured. Remote API mode does not search this computer for a Hermes Dashboard, so profile switching and Bot Mode need a dashboard companion.",
+    "description": "Runtime interface message profile.companion_not_configured"
+  },
   "runtime_profile_default": {
     "message": "Default profile",
     "description": "Runtime interface message profile.default"
@@ -1747,12 +1867,20 @@
     "message": "Using {name}{model}{skills}",
     "description": "Runtime interface message profile.using"
   },
+  "runtime_run_release": {
+    "message": "Release",
+    "description": "Runtime interface message run.release"
+  },
+  "runtime_run_release_detail": {
+    "message": "Browser released the composer without Hermes confirming the stop. Check the session before sending another message.",
+    "description": "Runtime interface message run.release_detail"
+  },
   "runtime_run_stop": {
     "message": "■ Stop",
     "description": "Runtime interface message run.stop"
   },
   "runtime_run_stop_cancelled_commands": {
-    "message": "Cancelled {count} pending browser-control commands.",
+    "message": "Cancelled {count} pending Hermes Control commands.",
     "description": "Runtime interface message run.stop_cancelled_commands"
   },
   "runtime_run_stop_controller_toast": {
@@ -1803,6 +1931,10 @@
     "message": "Copy session ID for {title}",
     "description": "Runtime interface message session.copy_id_for"
   },
+  "runtime_session_long_shared_notice": {
+    "message": "This session has {count} messages. Long shared sessions can fall out of sync with other Hermes clients, such as the desktop app, the CLI, or Hermes Web, that write to the same session, so replies can arrive late or out of order. Start a new chat when you can.",
+    "description": "Runtime interface message session.long_shared_notice"
+  },
   "runtime_session_new_extension_session": {
     "message": "＋ New Hermes Browser Extension Session",
     "description": "Runtime interface message session.new_extension_session"
@@ -1810,6 +1942,14 @@
   "runtime_session_opening": {
     "message": "Opening {title}",
     "description": "Runtime interface message session.opening"
+  },
+  "runtime_session_origin_refused": {
+    "message": "Hermes refused this browser origin, {origin}, on a session request (HTTP 403 with no JSON error body). Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
+    "description": "Runtime interface message session.origin_refused"
+  },
+  "runtime_session_origin_refused_title": {
+    "message": "Hermes refused this browser origin",
+    "description": "Runtime interface message session.origin_refused_title"
   },
   "runtime_session_rail_save_failed": {
     "message": "Session rail save failed: {error}",
@@ -1892,7 +2032,7 @@
     "description": "Runtime interface message settings.categories.models.title"
   },
   "runtime_settings_categories_permissions_summary": {
-    "message": "Browser control, tab scope and page-sharing approval.",
+    "message": "Hermes Control, tab scope and page-sharing approval.",
     "description": "Runtime interface message settings.categories.permissions.summary"
   },
   "runtime_settings_categories_permissions_title": {
@@ -2826,6 +2966,46 @@
   "runtime_ui_component": {
     "message": "Component",
     "description": "Runtime interface message ui.component"
+  },
+  "runtime_ui_composer_ask": {
+    "message": "Ask",
+    "description": "Runtime interface message ui.composer.ask"
+  },
+  "runtime_ui_composer_ask_bot": {
+    "message": "Ask {name}",
+    "description": "Runtime interface message ui.composer.ask_bot"
+  },
+  "runtime_ui_composer_ask_bot_label": {
+    "message": "ASK {name}",
+    "description": "Runtime interface message ui.composer.ask_bot_label"
+  },
+  "runtime_ui_composer_ask_hermes": {
+    "message": "Ask Hermes",
+    "description": "Runtime interface message ui.composer.ask_hermes"
+  },
+  "runtime_ui_composer_ask_hermes_label": {
+    "message": "ASK HERMES",
+    "description": "Runtime interface message ui.composer.ask_hermes_label"
+  },
+  "runtime_ui_composer_bot_running": {
+    "message": "{name} running",
+    "description": "Runtime interface message ui.composer.bot_running"
+  },
+  "runtime_ui_composer_group_chat": {
+    "message": "GROUP CHAT",
+    "description": "Runtime interface message ui.composer.group_chat"
+  },
+  "runtime_ui_composer_hermes_running": {
+    "message": "Hermes running",
+    "description": "Runtime interface message ui.composer.hermes_running"
+  },
+  "runtime_ui_composer_new_thread": {
+    "message": "New Thread",
+    "description": "Runtime interface message ui.composer.new_thread"
+  },
+  "runtime_ui_composer_send": {
+    "message": "Send",
+    "description": "Runtime interface message ui.composer.send"
   },
   "runtime_ui_config": {
     "message": "Config",
@@ -6370,6 +6550,10 @@
   "runtime_voice_transcription_failed": {
     "message": "Voice transcription failed.\n\n{error}",
     "description": "Runtime interface message voice.transcription_failed"
+  },
+  "runtime_wake_native_local_only": {
+    "message": "Native wake needs the local Hermes gateway on this computer. Remote connections can use browser wake instead.",
+    "description": "Runtime interface message wake.native_local_only"
   },
   "runtime_wake_turn_off": {
     "message": "Turn off wake word",

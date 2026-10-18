@@ -271,6 +271,10 @@
     "message": "File asli tidak tersedia. Lampirkan kembali untuk memulihkan akses.",
     "description": "Runtime interface message attachments.file_unavailable"
   },
+  "runtime_attachments_paste_excerpt_notice": {
+    "message": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
+    "description": "Runtime interface message attachments.paste_excerpt_notice"
+  },
   "runtime_attachments_preview_limited": {
     "message": "Pratinjau terbatas. Unduh file lengkap.",
     "description": "Runtime interface message attachments.preview_limited"
@@ -856,7 +860,7 @@
     "description": "Runtime interface message browser_control.detach"
   },
   "runtime_browser_control_detached_detail": {
-    "message": "Tindakan browser dihentikan dan semua sewa tab yang dikontrol telah dilepaskan.",
+    "message": "Tindakan browser dihentikan. Hermes tidak lagi dapat menggunakan tab yang terhubung.",
     "description": "Runtime interface message browser_control.detached_detail"
   },
   "runtime_browser_control_detached_toast": {
@@ -868,12 +872,64 @@
     "description": "Runtime interface message browser_control.enable"
   },
   "runtime_browser_control_enabled_detail": {
-    "message": "Hanya tab sewaan yang dipilih yang dapat menerima tindakan browser.",
+    "message": "Hanya tab yang terhubung yang dapat menerima tindakan browser.",
     "description": "Runtime interface message browser_control.enabled_detail"
   },
   "runtime_browser_control_enabled_toast": {
     "message": "Kontrol Hermes diaktifkan",
     "description": "Runtime interface message browser_control.enabled_toast"
+  },
+  "runtime_browser_control_error_active_tab": {
+    "message": "Jadikan halaman web biasa sebagai tab aktif terlebih dahulu.",
+    "description": "Runtime interface message browser_control.error_active_tab"
+  },
+  "runtime_browser_control_error_approval_failed": {
+    "message": "Hermes Control tidak menerima keputusan ini.",
+    "description": "Runtime interface message browser_control.error_approval_failed"
+  },
+  "runtime_browser_control_error_attach_busy": {
+    "message": "Tunggu hingga tindakan browser saat ini selesai sebelum menghubungkan tab lain.",
+    "description": "Runtime interface message browser_control.error_attach_busy"
+  },
+  "runtime_browser_control_error_attach_failed": {
+    "message": "Tab ini tidak dapat dihubungkan.",
+    "description": "Runtime interface message browser_control.error_attach_failed"
+  },
+  "runtime_browser_control_error_attach_reconnecting": {
+    "message": "Hermes Control masih menghubung ulang. Coba hubungkan tab ini lagi sebentar lagi.",
+    "description": "Runtime interface message browser_control.error_attach_reconnecting"
+  },
+  "runtime_browser_control_error_attach_restricted": {
+    "message": "Buka halaman HTTP atau HTTPS biasa sebelum menghubungkan Hermes Control.",
+    "description": "Runtime interface message browser_control.error_attach_restricted"
+  },
+  "runtime_browser_control_error_attach_unavailable": {
+    "message": "Tab ini belum dapat dihubungkan saat ini.",
+    "description": "Runtime interface message browser_control.error_attach_unavailable"
+  },
+  "runtime_browser_control_error_enable_failed": {
+    "message": "Tab yang dipilih tidak dapat dihubungkan.",
+    "description": "Runtime interface message browser_control.error_enable_failed"
+  },
+  "runtime_browser_control_error_refresh_failed": {
+    "message": "Hermes Control tidak dapat memperbarui pengaturan koneksinya.",
+    "description": "Runtime interface message browser_control.error_refresh_failed"
+  },
+  "runtime_browser_control_error_release_failed": {
+    "message": "Tab yang terhubung sebelumnya tidak dapat dilepas.",
+    "description": "Runtime interface message browser_control.error_release_failed"
+  },
+  "runtime_browser_control_error_select_tabs": {
+    "message": "Pilih minimal satu tab dalam daftar sebelum mengaktifkan cakupan ini.",
+    "description": "Runtime interface message browser_control.error_select_tabs"
+  },
+  "runtime_browser_control_error_session_attach": {
+    "message": "Mulai atau pilih sesi Hermes, lalu hubungkan tab ini.",
+    "description": "Runtime interface message browser_control.error_session_attach"
+  },
+  "runtime_browser_control_error_session_enable": {
+    "message": "Mulai atau pilih sesi Hermes sebelum mengaktifkan Hermes Control.",
+    "description": "Runtime interface message browser_control.error_session_enable"
   },
   "runtime_browser_control_follow": {
     "message": "Ikuti Hermes",
@@ -892,15 +948,15 @@
     "description": "Runtime interface message browser_control.help_follow"
   },
   "runtime_browser_control_help_off": {
-    "message": "Nonaktifkan kontrol browser dan tutup panel ini. Aktifkan kembali di Pengaturan.",
+    "message": "Matikan Hermes Control dan tutup panel ini. Aktifkan lagi di Pengaturan.",
     "description": "Runtime interface message browser_control.help_off"
   },
   "runtime_browser_control_help_pause": {
-    "message": "Jeda kontrol browser tanpa menonaktifkannya. Tab yang terhubung tetap dipertahankan.",
+    "message": "Jeda Hermes Control tanpa menonaktifkannya. Tab yang terhubung tetap dipertahankan.",
     "description": "Runtime interface message browser_control.help_pause"
   },
   "runtime_browser_control_help_resume": {
-    "message": "Lanjutkan kontrol browser pada tab yang masih terhubung.",
+    "message": "Lanjutkan Hermes Control pada tab yang masih terhubung.",
     "description": "Runtime interface message browser_control.help_resume"
   },
   "runtime_browser_control_help_scope_selected_tabs": {
@@ -908,7 +964,7 @@
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
   },
   "runtime_browser_control_help_scope_task_set": {
-    "message": "Kendalikan hanya tab yang Anda pilih di bawah sebagai satu tugas browser bersama. Berbeda dari Tab terpilih, tab ini berbagi identitas tugas; tidak semua tab terbuka disertakan.",
+    "message": "Kendalikan hanya tab yang Anda pilih di bawah sebagai satu tugas bersama. Hermes dapat mengelompokkannya di browser. Tab terbuka lainnya tidak disertakan.",
     "description": "Runtime interface message browser_control.help_scope_task_set"
   },
   "runtime_browser_control_help_scope_this_tab": {
@@ -927,8 +983,12 @@
     "message": "HERMES CONTROL",
     "description": "Runtime interface message browser_control.kicker"
   },
+  "runtime_browser_control_local_document_detail": {
+    "message": "Setujui akses dokumen lokal untuk memeriksa file ini, mengekstrak slide atau teksnya, dan mengizinkan Hermes Control menggunakan tab-nya.",
+    "description": "Runtime interface message browser_control.local_document_detail"
+  },
   "runtime_browser_control_note": {
-    "message": "Akses pengontrol Chromium diberikan saat ekstensi atau pembaruan ini dipasang. Hermes hanya terhubung selama tindakan sewaan yang sah, tidak pernah memunculkan jendela browser, dan memblokir kredensial, MFA, kolom pembayaran, serta teks rahasia.",
+    "message": "Chromium memberi ekstensi ini akses debugger saat dipasang atau diperbarui. Hermes hanya menggunakan debugger pada tab yang Anda hubungkan, tidak pernah memunculkan jendela browser, dan memblokir kredensial, MFA, kolom pembayaran, dan teks rahasia.",
     "description": "Runtime interface message browser_control.note"
   },
   "runtime_browser_control_pause": {
@@ -954,6 +1014,10 @@
   "runtime_browser_control_scope_failed": {
     "message": "Cakupan ini tidak dapat dikonfirmasi. Periksa tab dan coba lagi.",
     "description": "Runtime interface message browser_control.scope_failed"
+  },
+  "runtime_browser_control_scope_help_locked": {
+    "message": "Matikan Hermes Control untuk mengubah tab yang dapat digunakannya.",
+    "description": "Runtime interface message browser_control.scope_help_locked"
   },
   "runtime_browser_control_scope_locked": {
     "message": "Pilih cakupan di sini, lalu terapkan. Beberapa tab harus dipilih secara eksplisit.",
@@ -999,6 +1063,10 @@
     "message": "Berhenti",
     "description": "Runtime interface message browser_control.stop"
   },
+  "runtime_browser_control_tab_restricted": {
+    "message": "Tidak tersedia. Halaman browser dan halaman sensitif, seperti halaman perbankan atau kata sandi, tidak dapat dikendalikan.",
+    "description": "Runtime interface message browser_control.tab_restricted"
+  },
   "runtime_browser_control_task_set": {
     "message": "Set tugas",
     "description": "Runtime interface message browser_control.task_set"
@@ -1008,8 +1076,52 @@
     "description": "Runtime interface message browser_control.this_tab"
   },
   "runtime_browser_control_title": {
-    "message": "Operasikan tab sewaan",
+    "message": "Hermes Control",
     "description": "Runtime interface message browser_control.title"
+  },
+  "runtime_browser_control_toast_approval_failed": {
+    "message": "Persetujuan tidak diterima",
+    "description": "Runtime interface message browser_control.toast_approval_failed"
+  },
+  "runtime_browser_control_toast_attach_failed": {
+    "message": "Tab ini tidak terhubung",
+    "description": "Runtime interface message browser_control.toast_attach_failed"
+  },
+  "runtime_browser_control_toast_attached": {
+    "message": "Tab ini terhubung",
+    "description": "Runtime interface message browser_control.toast_attached"
+  },
+  "runtime_browser_control_toast_attached_detail": {
+    "message": "Hermes Control siap untuk tindakan browser pertama.",
+    "description": "Runtime interface message browser_control.toast_attached_detail"
+  },
+  "runtime_browser_control_toast_authorize_failed": {
+    "message": "Hermes Control tidak diotorisasi",
+    "description": "Runtime interface message browser_control.toast_authorize_failed"
+  },
+  "runtime_browser_control_toast_enable_failed": {
+    "message": "Hermes Control tidak aktif",
+    "description": "Runtime interface message browser_control.toast_enable_failed"
+  },
+  "runtime_browser_control_toast_rejection_failed": {
+    "message": "Penolakan tidak diterima",
+    "description": "Runtime interface message browser_control.toast_rejection_failed"
+  },
+  "runtime_browser_control_toast_scope_unchanged": {
+    "message": "Tab kontrol tidak berubah",
+    "description": "Runtime interface message browser_control.toast_scope_unchanged"
+  },
+  "runtime_browser_control_toast_state_unchanged": {
+    "message": "Status Hermes Control tidak berubah",
+    "description": "Runtime interface message browser_control.toast_state_unchanged"
+  },
+  "runtime_browser_control_toast_stop_failed": {
+    "message": "Tindakan browser tidak dapat dihentikan",
+    "description": "Runtime interface message browser_control.toast_stop_failed"
+  },
+  "runtime_browser_control_toast_view_unchanged": {
+    "message": "Pengaturan tampilan tidak berubah",
+    "description": "Runtime interface message browser_control.toast_view_unchanged"
   },
   "runtime_browser_control_turn_off": {
     "message": "Nonaktifkan",
@@ -1463,6 +1575,10 @@
     "message": "Approve once runs this command a single time. Session allows matching commands until this session ends. Always saves a permanent rule for matching commands.",
     "description": "Runtime interface message exec_approval.choice_help"
   },
+  "runtime_exec_approval_command_truncated": {
+    "message": "Only the first part of this command is shown. Deny it unless you trust the rest.",
+    "description": "Runtime interface message exec_approval.command_truncated"
+  },
   "runtime_exec_approval_countdown": {
     "message": "{time} left to answer",
     "description": "Runtime interface message exec_approval.countdown"
@@ -1731,6 +1847,10 @@
     "message": "profil tersedia",
     "description": "Runtime interface message profile.available_suffix"
   },
+  "runtime_profile_companion_not_configured": {
+    "message": "Dashboard companion not configured. Remote API mode does not search this computer for a Hermes Dashboard, so profile switching and Bot Mode need a dashboard companion.",
+    "description": "Runtime interface message profile.companion_not_configured"
+  },
   "runtime_profile_default": {
     "message": "Profil default",
     "description": "Runtime interface message profile.default"
@@ -1747,12 +1867,20 @@
     "message": "Menggunakan {name}{model}{skills}",
     "description": "Runtime interface message profile.using"
   },
+  "runtime_run_release": {
+    "message": "Release",
+    "description": "Runtime interface message run.release"
+  },
+  "runtime_run_release_detail": {
+    "message": "Browser released the composer without Hermes confirming the stop. Check the session before sending another message.",
+    "description": "Runtime interface message run.release_detail"
+  },
   "runtime_run_stop": {
     "message": "■ Berhenti",
     "description": "Runtime interface message run.stop"
   },
   "runtime_run_stop_cancelled_commands": {
-    "message": "Cancelled {count} pending browser-control commands.",
+    "message": "Membatalkan {count} perintah Hermes Control yang tertunda.",
     "description": "Runtime interface message run.stop_cancelled_commands"
   },
   "runtime_run_stop_controller_toast": {
@@ -1803,6 +1931,10 @@
     "message": "Salin ID sesi untuk {title}",
     "description": "Runtime interface message session.copy_id_for"
   },
+  "runtime_session_long_shared_notice": {
+    "message": "This session has {count} messages. Long shared sessions can fall out of sync with other Hermes clients, such as the desktop app, the CLI, or Hermes Web, that write to the same session, so replies can arrive late or out of order. Start a new chat when you can.",
+    "description": "Runtime interface message session.long_shared_notice"
+  },
   "runtime_session_new_extension_session": {
     "message": "＋ Sesi Hermes Browser Extension baru",
     "description": "Runtime interface message session.new_extension_session"
@@ -1810,6 +1942,14 @@
   "runtime_session_opening": {
     "message": "Membuka {title}",
     "description": "Runtime interface message session.opening"
+  },
+  "runtime_session_origin_refused": {
+    "message": "Hermes refused this browser origin, {origin}, on a session request (HTTP 403 with no JSON error body). Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
+    "description": "Runtime interface message session.origin_refused"
+  },
+  "runtime_session_origin_refused_title": {
+    "message": "Hermes refused this browser origin",
+    "description": "Runtime interface message session.origin_refused_title"
   },
   "runtime_session_rail_save_failed": {
     "message": "Gagal menyimpan rel sesi: {error}",
@@ -1892,7 +2032,7 @@
     "description": "Runtime interface message settings.categories.models.title"
   },
   "runtime_settings_categories_permissions_summary": {
-    "message": "Kontrol browser, cakupan tab, dan persetujuan berbagi halaman.",
+    "message": "Hermes Control, cakupan tab, dan persetujuan berbagi halaman.",
     "description": "Runtime interface message settings.categories.permissions.summary"
   },
   "runtime_settings_categories_permissions_title": {
@@ -2826,6 +2966,46 @@
   "runtime_ui_component": {
     "message": "Komponen",
     "description": "Runtime interface message ui.component"
+  },
+  "runtime_ui_composer_ask": {
+    "message": "Tanya",
+    "description": "Runtime interface message ui.composer.ask"
+  },
+  "runtime_ui_composer_ask_bot": {
+    "message": "Tanyakan {name}",
+    "description": "Runtime interface message ui.composer.ask_bot"
+  },
+  "runtime_ui_composer_ask_bot_label": {
+    "message": "TANYA {name}",
+    "description": "Runtime interface message ui.composer.ask_bot_label"
+  },
+  "runtime_ui_composer_ask_hermes": {
+    "message": "Tanyakan Hermes",
+    "description": "Runtime interface message ui.composer.ask_hermes"
+  },
+  "runtime_ui_composer_ask_hermes_label": {
+    "message": "TANYA HERMES",
+    "description": "Runtime interface message ui.composer.ask_hermes_label"
+  },
+  "runtime_ui_composer_bot_running": {
+    "message": "{name} sedang berjalan",
+    "description": "Runtime interface message ui.composer.bot_running"
+  },
+  "runtime_ui_composer_group_chat": {
+    "message": "OBROLAN GRUP",
+    "description": "Runtime interface message ui.composer.group_chat"
+  },
+  "runtime_ui_composer_hermes_running": {
+    "message": "Hermes sedang berjalan",
+    "description": "Runtime interface message ui.composer.hermes_running"
+  },
+  "runtime_ui_composer_new_thread": {
+    "message": "Utas baru",
+    "description": "Runtime interface message ui.composer.new_thread"
+  },
+  "runtime_ui_composer_send": {
+    "message": "Kirim",
+    "description": "Runtime interface message ui.composer.send"
   },
   "runtime_ui_config": {
     "message": "Konfigurasi",
@@ -6370,6 +6550,10 @@
   "runtime_voice_transcription_failed": {
     "message": "Transkripsi suara gagal.\n\n{error}",
     "description": "Runtime interface message voice.transcription_failed"
+  },
+  "runtime_wake_native_local_only": {
+    "message": "Native wake needs the local Hermes gateway on this computer. Remote connections can use browser wake instead.",
+    "description": "Runtime interface message wake.native_local_only"
   },
   "runtime_wake_turn_off": {
     "message": "Matikan kata bangun",

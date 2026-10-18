@@ -4,6 +4,10 @@
 
 ### Added
 
+- Approval and question cards also work on session-authority gateways, using their prompt events and resume snapshot.
+- A note under a long paste says how much is sent as a head and tail excerpt and how much stays on this device (#94). Thanks to @Isneezekittens and @MingChunWing (#95).
+- A one-time note when a session passes 100 messages, since long shared sessions can fall out of sync with other Hermes clients. Thanks to @iamformlesslol (#76) and @RawNuke (#70).
+- Dashboard connections that advertise a heartbeat are pinged every 30 seconds, and a socket silent for 45 seconds is closed so the panel can reconnect.
 - Approval and clarify requests from Hermes appear as a card above the composer in the side panel and the full view: Approve once, Session, Always or Reject (Reject is focused by default), the command or file-edit diff, and a countdown. Clarify questions take options, multi-select, free text or Skip. A flagged command no longer stalls a turn for up to 300 seconds, and nothing is approved automatically. Thanks to @Alex130988 (#122).
 - The dashboard WebSocket answers Hermes server requests, closes a card when Hermes cancels it, and shows requests that are still open after a reconnect.
 - A batched browser-control action runs up to 20 steps as one command, each through the same safety checks and approvals as a single action, with one page snapshot at the end. It stays inactive until Hermes adds a matching tool.
@@ -22,6 +26,11 @@
 
 ### Changed
 
+- Hermes Control has one name across the panel, settings and docs, says "attached tabs" instead of "leased tabs", explains scope choices in visible text, and lists tabs it cannot control as disabled rows with the reason. Its toasts, errors and the composer send button are translated.
+- Remote API connections no longer look for a Hermes Dashboard on this computer. Profiles and Bot Mode say a dashboard companion is not configured (#103). Thanks to @kidclone3.
+- Connect to Hermes uses a Gateway URL typed in Settings even before Save (#82). Thanks to @JonesGit4.
+- Ordinary gateway requests give up after 60 seconds. Streams, uploads, transcription, compaction and agent turns are not limited.
+- The real-browser e2e checks run headless on Linux and macOS, drive Inline Assist with trusted input, report Hermes Control latency and debugger attach counts, and cover the approval and question cards (`npm run test:e2e:prompt-cards`).
 - While Hermes waits on you, the status line reads "Waiting for your approval" or "Waiting for your answer" instead of "Still waiting on the model".
 - Hermes Control approvals are bound to the exact element and value they were requested for, so an approval for one target cannot be used for another with the same label.
 - Dashboard WebSocket tickets travel in the Sec-WebSocket-Protocol header instead of the URL, with a one-time fallback for older dashboards. Extension pages set a stricter content security policy.
@@ -37,6 +46,16 @@
 
 ### Fixed
 
+- Hermes Control clicks and scrolls no longer hang on a background tab. Hover, drag or a screenshot of a hidden tab fail at once with `tab_hidden` and tell Hermes to bring the tab forward.
+- Stop on a dashboard connection confirms from the gateway's own status instead of waiting 30 seconds. A Stop pressed before Hermes has a run id stays held, with a Release button, and the reads before an interrupt no longer delay it.
+- Cards from a connection the panel closed are withdrawn, a refused WebSocket handshake retries with a fresh ticket, and an approval raised during a slow status read is no longer closed as answered elsewhere.
+- The approval card focuses Reject when it appears, and a failed turn keeps its "Streaming failed" notice instead of the thinking indicator.
+- Pausing Hermes Control ends a running batched action before its next step.
+- Redaction keeps JSON valid, catches credentials inside escaped JSON, and no longer treats ordinary links such as `?state=CA&code=US` or `?ticket=1234` as credential-bearing.
+- Dashboard session lists keep paging while the server reports more sessions (#9). Thanks to @AIalliAI (#2) and @KeyArgo (#10).
+- A session request refused by the API server's CORS gate names the exact extension origin and the `API_SERVER_CORS_ORIGINS` line to add, and keeps your draft and connection (#89). Thanks to @mck156.
+- A failed automatic pairing start opens manual setup instead of an error (#116). Thanks to @davidgoh16-collab.
+- Fields a gateway refuses are remembered per gateway instead of being resent on every list load and turn, and dashboard videos play without a token in the URL.
 - Stop no longer says "Hermes stopped" before Hermes has confirmed it. A turn without a confirmed run id is held as unconfirmed, with your draft and queued messages kept (#69).
 - Stop on dashboard and attached sessions sends the execution generation Hermes requires, retries once on a stale generation, falls back to stopping the run by id, and cancels pending Hermes Control commands (#69). Hermes Web stops the same way.
 - Context compaction works over the dashboard WebSocket instead of always starting a new session.

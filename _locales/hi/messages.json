@@ -271,6 +271,10 @@
     "message": "मूल फ़ाइल उपलब्ध नहीं है। पहुँच वापस पाने के लिए इसे फिर संलग्न करें।",
     "description": "Runtime interface message attachments.file_unavailable"
   },
+  "runtime_attachments_paste_excerpt_notice": {
+    "message": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
+    "description": "Runtime interface message attachments.paste_excerpt_notice"
+  },
   "runtime_attachments_preview_limited": {
     "message": "पूर्वावलोकन सीमित है। पूरी फ़ाइल डाउनलोड करें।",
     "description": "Runtime interface message attachments.preview_limited"
@@ -856,7 +860,7 @@
     "description": "Runtime interface message browser_control.detach"
   },
   "runtime_browser_control_detached_detail": {
-    "message": "ब्राउज़र क्रियाएँ रोक दी गईं और सभी नियंत्रित-टैब लीज़ें जारी कर दी गईं।",
+    "message": "ब्राउज़र क्रियाएँ रोक दी गईं। Hermes अब किसी भी जुड़े टैब का उपयोग नहीं कर सकता।",
     "description": "Runtime interface message browser_control.detached_detail"
   },
   "runtime_browser_control_detached_toast": {
@@ -868,12 +872,64 @@
     "description": "Runtime interface message browser_control.enable"
   },
   "runtime_browser_control_enabled_detail": {
-    "message": "केवल चयनित लीज़्ड टैब ही ब्राउज़र क्रियाएँ प्राप्त कर सकते हैं।",
+    "message": "केवल जुड़े टैब ही ब्राउज़र क्रियाएँ प्राप्त कर सकते हैं।",
     "description": "Runtime interface message browser_control.enabled_detail"
   },
   "runtime_browser_control_enabled_toast": {
     "message": "Hermes नियंत्रण सक्षम",
     "description": "Runtime interface message browser_control.enabled_toast"
+  },
+  "runtime_browser_control_error_active_tab": {
+    "message": "पहले किसी सामान्य वेब पेज को सक्रिय टैब बनाएँ।",
+    "description": "Runtime interface message browser_control.error_active_tab"
+  },
+  "runtime_browser_control_error_approval_failed": {
+    "message": "Hermes Control ने यह निर्णय स्वीकार नहीं किया।",
+    "description": "Runtime interface message browser_control.error_approval_failed"
+  },
+  "runtime_browser_control_error_attach_busy": {
+    "message": "कोई और टैब जोड़ने से पहले वर्तमान ब्राउज़र क्रिया पूरी होने की प्रतीक्षा करें।",
+    "description": "Runtime interface message browser_control.error_attach_busy"
+  },
+  "runtime_browser_control_error_attach_failed": {
+    "message": "यह टैब नहीं जोड़ा जा सका।",
+    "description": "Runtime interface message browser_control.error_attach_failed"
+  },
+  "runtime_browser_control_error_attach_reconnecting": {
+    "message": "Hermes Control अभी भी फिर से कनेक्ट हो रहा है। कुछ देर बाद यह टैब फिर से जोड़ने का प्रयास करें।",
+    "description": "Runtime interface message browser_control.error_attach_reconnecting"
+  },
+  "runtime_browser_control_error_attach_restricted": {
+    "message": "Hermes Control जोड़ने से पहले कोई सामान्य HTTP या HTTPS पेज खोलें।",
+    "description": "Runtime interface message browser_control.error_attach_restricted"
+  },
+  "runtime_browser_control_error_attach_unavailable": {
+    "message": "यह टैब अभी नहीं जोड़ा जा सकता।",
+    "description": "Runtime interface message browser_control.error_attach_unavailable"
+  },
+  "runtime_browser_control_error_enable_failed": {
+    "message": "चयनित टैब नहीं जोड़े जा सके।",
+    "description": "Runtime interface message browser_control.error_enable_failed"
+  },
+  "runtime_browser_control_error_refresh_failed": {
+    "message": "Hermes Control अपनी कनेक्शन सेटिंग रीफ़्रेश नहीं कर सका।",
+    "description": "Runtime interface message browser_control.error_refresh_failed"
+  },
+  "runtime_browser_control_error_release_failed": {
+    "message": "पहले जुड़े टैब को मुक्त नहीं किया जा सका।",
+    "description": "Runtime interface message browser_control.error_release_failed"
+  },
+  "runtime_browser_control_error_select_tabs": {
+    "message": "इस दायरे को चालू करने से पहले सूची में कम से कम एक टैब चुनें।",
+    "description": "Runtime interface message browser_control.error_select_tabs"
+  },
+  "runtime_browser_control_error_session_attach": {
+    "message": "एक Hermes सत्र शुरू करें या चुनें, फिर यह टैब जोड़ें।",
+    "description": "Runtime interface message browser_control.error_session_attach"
+  },
+  "runtime_browser_control_error_session_enable": {
+    "message": "Hermes Control चालू करने से पहले एक Hermes सत्र शुरू करें या चुनें।",
+    "description": "Runtime interface message browser_control.error_session_enable"
   },
   "runtime_browser_control_follow": {
     "message": "Hermes का अनुसरण करें",
@@ -892,15 +948,15 @@
     "description": "Runtime interface message browser_control.help_follow"
   },
   "runtime_browser_control_help_off": {
-    "message": "ब्राउज़र नियंत्रण बंद करें और यह पैनल बंद करें। इसे सेटिंग्स में फिर से चालू करें।",
+    "message": "Hermes Control बंद करें और यह पैनल बंद करें। सेटिंग में जाकर इसे फिर से चालू करें।",
     "description": "Runtime interface message browser_control.help_off"
   },
   "runtime_browser_control_help_pause": {
-    "message": "ब्राउज़र नियंत्रण बंद किए बिना रोकें। जुड़े टैब बने रहते हैं।",
+    "message": "Hermes Control बंद किए बिना रोकें। जुड़े टैब बने रहते हैं।",
     "description": "Runtime interface message browser_control.help_pause"
   },
   "runtime_browser_control_help_resume": {
-    "message": "अभी भी जुड़े टैब पर ब्राउज़र नियंत्रण फिर शुरू करें।",
+    "message": "अभी भी जुड़े टैब पर Hermes Control फिर शुरू करें।",
     "description": "Runtime interface message browser_control.help_resume"
   },
   "runtime_browser_control_help_scope_selected_tabs": {
@@ -908,7 +964,7 @@
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
   },
   "runtime_browser_control_help_scope_task_set": {
-    "message": "केवल नीचे चुने गए टैब को एक साझा ब्राउज़र कार्य के रूप में नियंत्रित करें। चयनित टैब के विपरीत, इन टैब की कार्य पहचान साझा होती है; सभी खुले टैब शामिल नहीं होते।",
+    "message": "नीचे चुने गए टैब को केवल एक साझा कार्य के रूप में नियंत्रित करें। Hermes उन्हें ब्राउज़र में समूहित कर सकता है। खुले अन्य टैब शामिल नहीं हैं।",
     "description": "Runtime interface message browser_control.help_scope_task_set"
   },
   "runtime_browser_control_help_scope_this_tab": {
@@ -927,8 +983,12 @@
     "message": "HERMES CONTROL",
     "description": "Runtime interface message browser_control.kicker"
   },
+  "runtime_browser_control_local_document_detail": {
+    "message": "इस फ़ाइल की जाँच करने, उसकी स्लाइड या टेक्स्ट निकालने, और Hermes Control को उसके टैब का उपयोग करने देने के लिए स्थानीय दस्तावेज़ों की पहुँच स्वीकृत करें।",
+    "description": "Runtime interface message browser_control.local_document_detail"
+  },
   "runtime_browser_control_note": {
-    "message": "Chromium नियंत्रक पहुँच इस एक्सटेंशन या अपडेट की स्थापना के समय प्रदान की गई थी। Hermes केवल किसी अधिकृत लीज़्ड कार्रवाई के दौरान जुड़ता है, कभी भी ब्राउज़र विंडो को ऊपर नहीं लाता है, और क्रेडेंशियल, MFA, भुगतान फ़ील्ड और गोपनीय टेक्स्ट को ब्लॉक करता है।",
+    "message": "Chromium इस एक्सटेंशन को इंस्टॉल या अपडेट होने पर डीबगर एक्सेस देता है। Hermes डीबगर का उपयोग केवल उन टैब पर करता है जिन्हें आप जोड़ते हैं, कभी ब्राउज़र विंडो को सामने नहीं लाता, और क्रेडेंशियल, MFA, भुगतान फ़ील्ड और गोपनीय टेक्स्ट को ब्लॉक करता है।",
     "description": "Runtime interface message browser_control.note"
   },
   "runtime_browser_control_pause": {
@@ -954,6 +1014,10 @@
   "runtime_browser_control_scope_failed": {
     "message": "इस दायरे की पुष्टि नहीं हुई। टैब जाँचें और फिर प्रयास करें।",
     "description": "Runtime interface message browser_control.scope_failed"
+  },
+  "runtime_browser_control_scope_help_locked": {
+    "message": "जिन टैब का उपयोग यह कर सकता है उन्हें बदलने के लिए Hermes Control बंद करें।",
+    "description": "Runtime interface message browser_control.scope_help_locked"
   },
   "runtime_browser_control_scope_locked": {
     "message": "यहाँ दायरा चुनें, फिर लागू करें। एक से अधिक टैब स्पष्ट रूप से चुनने होंगे।",
@@ -999,6 +1063,10 @@
     "message": "रोकें",
     "description": "Runtime interface message browser_control.stop"
   },
+  "runtime_browser_control_tab_restricted": {
+    "message": "उपलब्ध नहीं है। ब्राउज़र पेज और संवेदनशील पेज, जैसे बैंकिंग या पासवर्ड पेज, नियंत्रित नहीं किए जा सकते।",
+    "description": "Runtime interface message browser_control.tab_restricted"
+  },
   "runtime_browser_control_task_set": {
     "message": "कार्य सेट",
     "description": "Runtime interface message browser_control.task_set"
@@ -1008,8 +1076,52 @@
     "description": "Runtime interface message browser_control.this_tab"
   },
   "runtime_browser_control_title": {
-    "message": "लीज़्ड टैब संचालित करें",
+    "message": "Hermes Control",
     "description": "Runtime interface message browser_control.title"
+  },
+  "runtime_browser_control_toast_approval_failed": {
+    "message": "स्वीकृति स्वीकार नहीं हुई",
+    "description": "Runtime interface message browser_control.toast_approval_failed"
+  },
+  "runtime_browser_control_toast_attach_failed": {
+    "message": "यह टैब जुड़ नहीं सका",
+    "description": "Runtime interface message browser_control.toast_attach_failed"
+  },
+  "runtime_browser_control_toast_attached": {
+    "message": "यह टैब जुड़ा हुआ है",
+    "description": "Runtime interface message browser_control.toast_attached"
+  },
+  "runtime_browser_control_toast_attached_detail": {
+    "message": "Hermes Control पहली ब्राउज़र क्रिया के लिए तैयार है।",
+    "description": "Runtime interface message browser_control.toast_attached_detail"
+  },
+  "runtime_browser_control_toast_authorize_failed": {
+    "message": "Hermes Control को अधिकृत नहीं किया गया",
+    "description": "Runtime interface message browser_control.toast_authorize_failed"
+  },
+  "runtime_browser_control_toast_enable_failed": {
+    "message": "Hermes Control चालू नहीं हुआ",
+    "description": "Runtime interface message browser_control.toast_enable_failed"
+  },
+  "runtime_browser_control_toast_rejection_failed": {
+    "message": "अस्वीकृति स्वीकार नहीं हुई",
+    "description": "Runtime interface message browser_control.toast_rejection_failed"
+  },
+  "runtime_browser_control_toast_scope_unchanged": {
+    "message": "नियंत्रण टैब अपरिवर्तित",
+    "description": "Runtime interface message browser_control.toast_scope_unchanged"
+  },
+  "runtime_browser_control_toast_state_unchanged": {
+    "message": "Hermes Control की स्थिति अपरिवर्तित",
+    "description": "Runtime interface message browser_control.toast_state_unchanged"
+  },
+  "runtime_browser_control_toast_stop_failed": {
+    "message": "ब्राउज़र क्रियाएँ रोकी नहीं जा सकीं",
+    "description": "Runtime interface message browser_control.toast_stop_failed"
+  },
+  "runtime_browser_control_toast_view_unchanged": {
+    "message": "व्यू सेटिंग अपरिवर्तित",
+    "description": "Runtime interface message browser_control.toast_view_unchanged"
   },
   "runtime_browser_control_turn_off": {
     "message": "बंद करें",
@@ -1463,6 +1575,10 @@
     "message": "Approve once runs this command a single time. Session allows matching commands until this session ends. Always saves a permanent rule for matching commands.",
     "description": "Runtime interface message exec_approval.choice_help"
   },
+  "runtime_exec_approval_command_truncated": {
+    "message": "Only the first part of this command is shown. Deny it unless you trust the rest.",
+    "description": "Runtime interface message exec_approval.command_truncated"
+  },
   "runtime_exec_approval_countdown": {
     "message": "{time} left to answer",
     "description": "Runtime interface message exec_approval.countdown"
@@ -1731,6 +1847,10 @@
     "message": "प्रोफ़ाइल उपलब्ध",
     "description": "Runtime interface message profile.available_suffix"
   },
+  "runtime_profile_companion_not_configured": {
+    "message": "Dashboard companion not configured. Remote API mode does not search this computer for a Hermes Dashboard, so profile switching and Bot Mode need a dashboard companion.",
+    "description": "Runtime interface message profile.companion_not_configured"
+  },
   "runtime_profile_default": {
     "message": "डिफ़ॉल्ट प्रोफ़ाइल",
     "description": "Runtime interface message profile.default"
@@ -1747,12 +1867,20 @@
     "message": "उपयोग में: {name}{model}{skills}",
     "description": "Runtime interface message profile.using"
   },
+  "runtime_run_release": {
+    "message": "Release",
+    "description": "Runtime interface message run.release"
+  },
+  "runtime_run_release_detail": {
+    "message": "Browser released the composer without Hermes confirming the stop. Check the session before sending another message.",
+    "description": "Runtime interface message run.release_detail"
+  },
   "runtime_run_stop": {
     "message": "■ रुकें",
     "description": "Runtime interface message run.stop"
   },
   "runtime_run_stop_cancelled_commands": {
-    "message": "Cancelled {count} pending browser-control commands.",
+    "message": "{count} लंबित Hermes Control कमांड रद्द किए गए।",
     "description": "Runtime interface message run.stop_cancelled_commands"
   },
   "runtime_run_stop_controller_toast": {
@@ -1803,6 +1931,10 @@
     "message": "{title} के लिए सत्र आईडी कॉपी करें",
     "description": "Runtime interface message session.copy_id_for"
   },
+  "runtime_session_long_shared_notice": {
+    "message": "This session has {count} messages. Long shared sessions can fall out of sync with other Hermes clients, such as the desktop app, the CLI, or Hermes Web, that write to the same session, so replies can arrive late or out of order. Start a new chat when you can.",
+    "description": "Runtime interface message session.long_shared_notice"
+  },
   "runtime_session_new_extension_session": {
     "message": "＋ नया Hermes Browser Extension सत्र",
     "description": "Runtime interface message session.new_extension_session"
@@ -1810,6 +1942,14 @@
   "runtime_session_opening": {
     "message": "{title} खोला जा रहा है",
     "description": "Runtime interface message session.opening"
+  },
+  "runtime_session_origin_refused": {
+    "message": "Hermes refused this browser origin, {origin}, on a session request (HTTP 403 with no JSON error body). Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
+    "description": "Runtime interface message session.origin_refused"
+  },
+  "runtime_session_origin_refused_title": {
+    "message": "Hermes refused this browser origin",
+    "description": "Runtime interface message session.origin_refused_title"
   },
   "runtime_session_rail_save_failed": {
     "message": "सत्र रेल सहेजना विफल: {error}",
@@ -1892,7 +2032,7 @@
     "description": "Runtime interface message settings.categories.models.title"
   },
   "runtime_settings_categories_permissions_summary": {
-    "message": "ब्राउज़र नियंत्रण, टैब दायरा और पेज साझा करने की स्वीकृति।",
+    "message": "Hermes Control, टैब दायरा और पेज साझाकरण की स्वीकृति।",
     "description": "Runtime interface message settings.categories.permissions.summary"
   },
   "runtime_settings_categories_permissions_title": {
@@ -2826,6 +2966,46 @@
   "runtime_ui_component": {
     "message": "अवयव",
     "description": "Runtime interface message ui.component"
+  },
+  "runtime_ui_composer_ask": {
+    "message": "पूछें",
+    "description": "Runtime interface message ui.composer.ask"
+  },
+  "runtime_ui_composer_ask_bot": {
+    "message": "{name} से पूछें",
+    "description": "Runtime interface message ui.composer.ask_bot"
+  },
+  "runtime_ui_composer_ask_bot_label": {
+    "message": "{name} से पूछें",
+    "description": "Runtime interface message ui.composer.ask_bot_label"
+  },
+  "runtime_ui_composer_ask_hermes": {
+    "message": "Hermes से पूछें",
+    "description": "Runtime interface message ui.composer.ask_hermes"
+  },
+  "runtime_ui_composer_ask_hermes_label": {
+    "message": "HERMES से पूछें",
+    "description": "Runtime interface message ui.composer.ask_hermes_label"
+  },
+  "runtime_ui_composer_bot_running": {
+    "message": "{name} चल रहा है",
+    "description": "Runtime interface message ui.composer.bot_running"
+  },
+  "runtime_ui_composer_group_chat": {
+    "message": "ग्रुप चैट",
+    "description": "Runtime interface message ui.composer.group_chat"
+  },
+  "runtime_ui_composer_hermes_running": {
+    "message": "Hermes चल रहा है",
+    "description": "Runtime interface message ui.composer.hermes_running"
+  },
+  "runtime_ui_composer_new_thread": {
+    "message": "नया थ्रेड",
+    "description": "Runtime interface message ui.composer.new_thread"
+  },
+  "runtime_ui_composer_send": {
+    "message": "भेजें",
+    "description": "Runtime interface message ui.composer.send"
   },
   "runtime_ui_config": {
     "message": "कॉन्फ़िग",
@@ -6370,6 +6550,10 @@
   "runtime_voice_transcription_failed": {
     "message": "ध्वनि प्रतिलेखन विफल रहा.\n\n{error}",
     "description": "Runtime interface message voice.transcription_failed"
+  },
+  "runtime_wake_native_local_only": {
+    "message": "Native wake needs the local Hermes gateway on this computer. Remote connections can use browser wake instead.",
+    "description": "Runtime interface message wake.native_local_only"
   },
   "runtime_wake_turn_off": {
     "message": "वेक वर्ड बंद करें",
