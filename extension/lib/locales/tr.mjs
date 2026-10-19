@@ -207,6 +207,7 @@ export default Object.freeze({
   "browser_control.state_off": "Kapalı",
   "browser_control.state_paused": "Duraklatıldı",
   "browser_control.state_ready": "Hazır",
+  "browser_control.status_on": "Açık",
   "browser_control.stay": "Sekmemde kal",
   "browser_control.stop": "Durdur",
   "browser_control.task_set": "Görev seti",

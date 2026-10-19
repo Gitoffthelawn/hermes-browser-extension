@@ -207,6 +207,7 @@ export default Object.freeze({
   "browser_control.state_off": "बंद",
   "browser_control.state_paused": "विरामित",
   "browser_control.state_ready": "तैयार",
+  "browser_control.status_on": "चालू",
   "browser_control.stay": "मेरे टैब पर रहें",
   "browser_control.stop": "रोकें",
   "browser_control.task_set": "कार्य सेट",

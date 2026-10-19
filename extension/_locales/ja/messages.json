@@ -987,6 +987,10 @@
     "message": "準備完了",
     "description": "Runtime interface message browser_control.state_ready"
   },
+  "runtime_browser_control_status_on": {
+    "message": "オン",
+    "description": "Runtime interface message browser_control.status_on"
+  },
   "runtime_browser_control_stay": {
     "message": "自分のタブに留まる",
     "description": "Runtime interface message browser_control.stay"

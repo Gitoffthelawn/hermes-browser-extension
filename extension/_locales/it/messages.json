@@ -987,6 +987,10 @@
     "message": "Pronto",
     "description": "Runtime interface message browser_control.state_ready"
   },
+  "runtime_browser_control_status_on": {
+    "message": "Attivo",
+    "description": "Runtime interface message browser_control.status_on"
+  },
   "runtime_browser_control_stay": {
     "message": "Resta sulla mia scheda",
     "description": "Runtime interface message browser_control.stay"

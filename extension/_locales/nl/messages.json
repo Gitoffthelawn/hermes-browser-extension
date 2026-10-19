@@ -987,6 +987,10 @@
     "message": "Klaar",
     "description": "Runtime interface message browser_control.state_ready"
   },
+  "runtime_browser_control_status_on": {
+    "message": "Aan",
+    "description": "Runtime interface message browser_control.status_on"
+  },
   "runtime_browser_control_stay": {
     "message": "Blijf op mijn tabblad",
     "description": "Runtime interface message browser_control.stay"

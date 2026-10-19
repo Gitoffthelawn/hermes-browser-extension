@@ -185,6 +185,7 @@ export default Object.freeze({
   "browser_control.state_off": "关闭",
   "browser_control.state_paused": "已暂停",
   "browser_control.state_ready": "就绪",
+  "browser_control.status_on": "开启",
   "browser_control.stay": "停留在我的标签页",
   "browser_control.stop": "停止",
   "browser_control.task_set": "任务集",

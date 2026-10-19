@@ -207,6 +207,7 @@ export default Object.freeze({
   "browser_control.state_off": "متوقف",
   "browser_control.state_paused": "متوقف مؤقتًا",
   "browser_control.state_ready": "جاهز",
+  "browser_control.status_on": "تشغيل",
   "browser_control.stay": "البقاء في تبويبي",
   "browser_control.stop": "إيقاف",
   "browser_control.task_set": "مجموعة المهام",

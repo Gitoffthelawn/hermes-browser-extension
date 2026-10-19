@@ -987,6 +987,10 @@
     "message": "Bereit",
     "description": "Runtime interface message browser_control.state_ready"
   },
+  "runtime_browser_control_status_on": {
+    "message": "An",
+    "description": "Runtime interface message browser_control.status_on"
+  },
   "runtime_browser_control_stay": {
     "message": "Auf meinem Tab bleiben",
     "description": "Runtime interface message browser_control.stay"

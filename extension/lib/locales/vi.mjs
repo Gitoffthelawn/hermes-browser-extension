@@ -207,6 +207,7 @@ export default Object.freeze({
   "browser_control.state_off": "Tắt",
   "browser_control.state_paused": "Đã tạm dừng",
   "browser_control.state_ready": "Sẵn sàng",
+  "browser_control.status_on": "Bật",
   "browser_control.stay": "Ở lại tab của tôi",
   "browser_control.stop": "Dừng",
   "browser_control.task_set": "Tập tác vụ",

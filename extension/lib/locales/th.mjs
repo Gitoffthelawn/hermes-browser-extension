@@ -207,6 +207,7 @@ export default Object.freeze({
   "browser_control.state_off": "ปิด",
   "browser_control.state_paused": "ถูกหยุดชั่วคราว",
   "browser_control.state_ready": "พร้อม",
+  "browser_control.status_on": "เปิด",
   "browser_control.stay": "อยู่บนแท็บของฉัน",
   "browser_control.stop": "หยุด",
   "browser_control.task_set": "ชุดงาน",

@@ -207,6 +207,7 @@ export default Object.freeze({
   "browser_control.state_off": "オフ",
   "browser_control.state_paused": "一時停止中",
   "browser_control.state_ready": "準備完了",
+  "browser_control.status_on": "オン",
   "browser_control.stay": "自分のタブに留まる",
   "browser_control.stop": "停止",
   "browser_control.task_set": "タスクセット",

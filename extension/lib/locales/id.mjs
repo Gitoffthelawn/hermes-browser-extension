@@ -207,6 +207,7 @@ export default Object.freeze({
   "browser_control.state_off": "Mati",
   "browser_control.state_paused": "Dijeda",
   "browser_control.state_ready": "Siap",
+  "browser_control.status_on": "Aktif",
   "browser_control.stay": "Tetap di tab saya",
   "browser_control.stop": "Berhenti",
   "browser_control.task_set": "Set tugas",

@@ -987,6 +987,10 @@
     "message": "준비됨",
     "description": "Runtime interface message browser_control.state_ready"
   },
+  "runtime_browser_control_status_on": {
+    "message": "켜짐",
+    "description": "Runtime interface message browser_control.status_on"
+  },
   "runtime_browser_control_stay": {
     "message": "내 탭에 머무르기",
     "description": "Runtime interface message browser_control.stay"

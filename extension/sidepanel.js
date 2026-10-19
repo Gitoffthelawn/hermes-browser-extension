@@ -601,6 +601,8 @@ import { resolveBrowserApi } from './lib/browser-api.mjs';
 import { detectBrowserProduct, probeBrowserCapabilities, browserSpeechCloudFallbackAllowed } from './lib/browser-runtime.mjs';
 import { controllerAdapterContractFor } from './lib/browser-controller-adapter.mjs';
 import {
+  browserControlLightState,
+  browserControlStatusLine,
   browserControlView,
   controlLeaseRequest,
   currentTabLeaseReplacement,
@@ -934,6 +936,8 @@ const els = {
   browserControlStripSignal: $('#browserControlStripSignal'),
   browserControlStripTitle: $('#browserControlStripTitle'),
   browserControlStripDetail: $('#browserControlStripDetail'),
+  browserControlLight: $('#browserControlLight'),
+  browserControlLightWord: $('#browserControlLightWord'),
   browserControlAttachButton: $('#browserControlAttachButton'),
   browserControlAuthorizeButton: $('#browserControlAuthorizeButton'),
   browserControlDismissButton: $('#browserControlDismissButton'),
@@ -2404,6 +2408,8 @@ function renderBrowserControl() {
   const viewBehavior = settings.browserControlViewBehavior === 'follow' ? 'follow' : 'stay';
   const paused = browserControlStatus?.paused === true;
   const pendingApproval = browserControlStatus?.pendingApproval || null;
+  const lightState = browserControlLightState(view, { paused });
+  const statusLine = browserControlStatusLine({ title: translateUiText(view.title), detail: translateUiText(view.detail) });
 
   const stateKey = {
     off: 'browser_control.state_off',
@@ -2441,6 +2447,7 @@ function renderBrowserControl() {
       attach: t('browser_control.help_attach'), off: t('browser_control.help_off'),
       pause: t(paused ? 'browser_control.help_resume' : 'browser_control.help_pause'),
       stop: t('browser_control.help_stop'), close: t('browser_control.help_close'),
+      status: statusLine,
     },
   });
   // The dialog owns an explicit draft; status polling must not erase it.
@@ -2448,8 +2455,14 @@ function renderBrowserControl() {
   els.browserControlDialogFollowButton.setAttribute('aria-pressed', String(viewBehavior === 'follow'));
   els.browserControlStrip.hidden = !enabled;
   els.browserControlStrip.dataset.tone = view.tone;
+  // The title and detail stay in the DOM for screen readers; the window shows the detail only when the person must act.
+  els.browserControlStrip.dataset.attention = String(view.attention === true);
   els.browserControlStripTitle.textContent = translateUiText(view.title);
   els.browserControlStripDetail.textContent = translateUiText(view.detail);
+  if (els.browserControlLight) els.browserControlLight.dataset.state = lightState;
+  if (els.browserControlLightWord) {
+    els.browserControlLightWord.textContent = t(lightState === 'on' ? 'browser_control.status_on' : 'browser_control.state_off');
+  }
   els.browserControlAttachButton.hidden = !view.canAttach || view.canAuthorize;
   els.browserControlAuthorizeButton.hidden = !view.canAuthorize;
   els.browserControlAttachButton.textContent = t('ui.attach.to.current.tab');

@@ -1500,16 +1500,21 @@
     <dialog id="browserControlDialog" class="browser-control-dialog" aria-labelledby="browserControlDialogTitle" aria-describedby="browserControlStripDetail">
       <span class="browser-control-energy" aria-hidden="true"></span>
       <span class="browser-control-flare" aria-hidden="true"></span>
-      <h2 id="browserControlDialogTitle" class="browser-control-dialog-title" tabindex="-1" autofocus data-i18n="browser_control.kicker">HERMES CONTROL</h2>
+      <div class="browser-control-titlebar">
+        <h2 id="browserControlDialogTitle" class="browser-control-dialog-title" tabindex="-1" autofocus data-i18n="browser_control.kicker">HERMES CONTROL</h2>
+        <span id="browserControlLight" class="browser-control-light" role="img" tabindex="0" data-state="off" data-control-help="status" data-help-as-name>
+          <span class="browser-control-light-dot" aria-hidden="true"></span>
+          <span id="browserControlLightWord" class="browser-control-light-word" aria-hidden="true" data-i18n-runtime data-i18n="browser_control.state_off">Off</span>
+        </span>
+        <button id="browserControlDismissButton" class="browser-control-dismiss" type="button" data-control-help="close" aria-label="Close" data-i18n-aria-label="ui.close">
+          <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+      </div>
         <section id="browserControlStrip" class="browser-control-strip" aria-live="polite" hidden>
           <div class="browser-control-strip-copy">
-            <span class="browser-control-live-indicator" aria-hidden="true"></span>
             <strong id="browserControlStripTitle" data-i18n-runtime data-i18n="browser_control.control_ready">Control ready</strong>
             <span id="browserControlStripDetail" data-i18n-runtime data-i18n="browser_control.waiting">Waiting for Hermes.</span>
           </div>
-          <button id="browserControlDismissButton" class="browser-control-dismiss" type="button" data-control-help="close" aria-label="Close" data-i18n-aria-label="ui.close">
-            <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-          </button>
           <div class="browser-control-strip-actions">
             <button id="browserControlAuthorizeButton" class="browser-control-action" type="button" hidden data-i18n="browser_control.authorize">Authorize control</button>
             <button id="browserControlAttachButton" data-control-help="attach" class="browser-control-action" type="button" hidden data-i18n-runtime data-i18n="ui.attach">Attach</button>

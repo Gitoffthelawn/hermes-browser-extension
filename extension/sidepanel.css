@@ -1781,9 +1781,7 @@ body.startup-active .startup-actions #startupConnectButton:not([hidden]):focus-v
 .browser-control-strip[data-tone="warn"] { --strip-tone: var(--hermes-warning); }
 /* Close button: the Settings close icon (.settings-close-icon), a 30px square with a 1px line. */
 .browser-control-dismiss {
-  position: absolute;
-  top: 12px;
-  right: 10px;
+  position: static;
   width: 30px;
   min-width: 30px;
   height: 30px;
@@ -1871,64 +1869,91 @@ body.startup-active .startup-actions #startupConnectButton:not([hidden]):focus-v
 .browser-control-dialog:is([data-state="ready"], [data-state="active"]) { --control-energy: var(--control-accent); }
 html[data-hermes-mode="light"] .browser-control-dialog { --control-accent: color-mix(in srgb, var(--hermes-accent) 35%, var(--hermes-ink)); }
 .browser-control-dialog[data-state="approval"] { --control-energy: var(--danger); }
-/* The sparkle flare and the top energy line are retired; the status chip carries the state. */
+/* The sparkle flare and the top energy line are retired; the status light carries the state. */
 .browser-control-dialog .browser-control-flare,
 .browser-control-dialog .browser-control-energy { display: none; }
 
-/* Status line: a square label like the Settings READY chip, with the live dot inside it. */
+/* Title row: the heading, then the status light right after it, then the close button at the far right.
+   A long title or large text wraps, and the light may drop to the line below. */
+.browser-control-dialog .browser-control-titlebar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin: 0 0 12px;
+}
+.browser-control-dialog .browser-control-titlebar .browser-control-dismiss { margin-left: auto; }
+
+/* Hermes Control status light: a round dot and an ON or OFF word. The colours are theme tokens
+   (--control-on, --control-off in sidepanel-themes.css), fixed per mode to hold 3:1 on the window. */
+.browser-control-dialog .browser-control-light {
+  --light-color: var(--control-off);
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 7px;
+  min-height: 24px;
+  color: var(--hermes-ink);
+  font: 700 calc(11px * var(--hermes-text-zoom, 1))/1 var(--hermes-font-ui);
+  font-synthesis: none;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: default;
+}
+.browser-control-dialog .browser-control-light[data-state="on"] { --light-color: var(--control-on); }
+.browser-control-dialog .browser-control-light:focus-visible { outline: 2px solid var(--hermes-accent); outline-offset: 3px; }
+.browser-control-dialog .browser-control-light-dot {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--light-color);
+  /* A surface-coloured ring, then a thin ring in the dot colour, so the dot separates from any background. */
+  box-shadow: 0 0 0 2px var(--hermes-paper), 0 0 0 3px var(--light-color);
+}
+.browser-control-dialog .browser-control-light[data-state="on"] .browser-control-light-dot { animation: control-heartbeat 2.8s ease-in-out infinite; }
+@keyframes control-heartbeat { 0%, 100% { opacity: 0.9; } 50% { opacity: 1; } }
+
+/* The status title and detail stay in the DOM for screen readers and take no room in the window.
+   The person must act (approval, or control blocked): then the detail shows as one plain mono line
+   under the title row. The title itself is never shown; the light and the tooltip carry it. */
 .browser-control-dialog .browser-control-strip-copy {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  justify-items: start;
-  gap: 6px;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
   padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.browser-control-dialog .browser-control-strip[data-attention="true"] .browser-control-strip-copy {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip-path: none;
+  white-space: normal;
 }
 .browser-control-dialog .browser-control-strip-copy strong {
-  grid-area: 1 / 1;
-  display: block;
-  max-width: 100%;
-  min-height: 32px;
-  padding: 6px 12px 6px 28px;
-  border: 1px solid var(--hermes-line-strong);
-  background: rgba(var(--hermes-ink-rgb), 0.05);
-  color: var(--hermes-muted);
-  font: 650 calc(12px * var(--hermes-text-zoom, 1))/1 var(--hermes-font-ui);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
-.browser-control-dialog:is([data-state="ready"], [data-state="active"]) .browser-control-strip-copy strong,
-.browser-control-dialog[data-state="approval"] .browser-control-strip-copy strong {
-  border-color: var(--control-energy);
-  background: color-mix(in srgb, var(--control-energy) 14%, transparent);
-  color: var(--control-energy);
-}
-.browser-control-dialog .browser-control-live-indicator {
-  grid-area: 1 / 1;
-  position: relative;
-  z-index: 1;
-  align-self: center;
-  justify-self: start;
-  width: 7px;
-  height: 7px;
-  margin: 0 0 0 12px;
-  border-radius: 50%;
-  background: var(--control-energy);
-}
-.browser-control-dialog:is([data-state="ready"], [data-state="active"]) .browser-control-live-indicator { animation: control-heartbeat 2.8s ease-in-out infinite; }
-.browser-control-dialog[data-state="active"] .browser-control-live-indicator { animation-duration: 1.6s; }
-@keyframes control-heartbeat { 0%, 100% { opacity: 0.75; } 50% { opacity: 1; } }
-.browser-control-dialog .browser-control-strip-copy strong,
+/* Detail line: mono helper text, as on the Settings card. */
 .browser-control-dialog .browser-control-strip-copy span {
   overflow: visible;
   text-overflow: clip;
   white-space: normal;
   overflow-wrap: anywhere;
-}
-/* Detail line: mono helper text, as on the Settings card. */
-.browser-control-dialog .browser-control-strip-copy > span:not(.browser-control-live-indicator) {
-  grid-area: 2 / 1;
-  justify-self: stretch;
   margin-top: 0;
   color: var(--hermes-muted);
   font: calc(11px * var(--hermes-text-zoom, 1))/1.45 var(--hermes-font-mono);
@@ -1985,16 +2010,17 @@ html[data-hermes-mode="light"] .browser-control-dialog { --control-accent: color
 .browser-control-dialog.is-pointer-open[open] { animation: control-dialog-enter 180ms cubic-bezier(0.23, 1, 0.32, 1); }
 @keyframes control-dialog-enter { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: none; } }
 
-/* Title: the Settings Hermes Control heading (.browser-control-kicker), on one line. */
+/* Title: the Settings Hermes Control heading (.browser-control-kicker). It wraps only between words.
+   The display scale makes the narrow signature face read at the size of the other profiles. */
 .browser-control-dialog .browser-control-dialog-title {
-  margin: 0 40px 10px 0;
+  margin: 0;
+  min-width: 0;
   /* --control-accent darkens the accent in light modes, where some themes' accent is too pale for a heading. */
   color: var(--control-accent);
-  font: 500 calc(16px * var(--hermes-text-zoom, 1))/1.15 var(--hermes-font-display);
+  font: 500 calc(16px * var(--hermes-text-zoom, 1) * var(--hermes-display-scale, 1))/1.15 var(--hermes-font-display);
   font-synthesis: none;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  overflow-wrap: anywhere;
   outline: none;
 }
 .browser-control-dialog .browser-control-strip {
@@ -2010,9 +2036,11 @@ html[data-hermes-mode="light"] .browser-control-dialog { --control-accent: color
   backdrop-filter: none;
   box-shadow: none;
 }
+/* Visual order: the detail (shown only when the person must act), then the scope, then the actions. No row is
+   pinned, so a hidden detail leaves no empty track above the scope; order keeps the scope above the actions. */
 .browser-control-dialog-config {
   grid-column: 1 / -1;
-  grid-row: 2;
+  order: 2;
   padding: 0;
   border: 0;
 }
@@ -2022,16 +2050,17 @@ html[data-hermes-mode="light"] .browser-control-dialog { --control-accent: color
 }
 .browser-control-dialog .browser-control-strip-actions {
   grid-column: 1 / -1;
-  grid-row: 3;
+  order: 3;
   display: flex;
   align-items: stretch;
   justify-content: flex-start;
   gap: 8px;
 }
-/* Buttons are the Settings buttons (.browser-control-action); only the layout is set here. */
+/* Buttons are the Settings buttons (.browser-control-action); only the layout is set here.
+   Each keeps its whole label and the row wraps, so an approval's five actions never squeeze a label. */
 .browser-control-dialog .browser-control-strip-actions .browser-control-action {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 1 1 auto;
+  min-width: min(100%, max-content);
 }
 /* Settings sizes its controls through .settings-dialog (the label eyebrow weight and the
    default signature profile's control sizes). The window takes the same values, so its
@@ -2081,7 +2110,7 @@ html[data-hermes-font-profile="signature"] .browser-control-dialog .browser-cont
 }
 @media (prefers-reduced-motion: reduce) {
   .browser-control-dialog.is-pointer-open[open],
-  .browser-control-dialog:is([data-state="ready"], [data-state="active"]) .browser-control-live-indicator { animation: none; }
+  .browser-control-dialog .browser-control-light[data-state="on"] .browser-control-light-dot { animation: none; }
 }
 @media (max-width: 560px) {
   .browser-control-strip { grid-template-columns: 32px minmax(0, 1fr); align-items: start; }

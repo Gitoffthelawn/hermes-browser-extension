@@ -207,6 +207,7 @@ export default Object.freeze({
   "browser_control.state_off": "Aus",
   "browser_control.state_paused": "Pausiert",
   "browser_control.state_ready": "Bereit",
+  "browser_control.status_on": "An",
   "browser_control.stay": "Auf meinem Tab bleiben",
   "browser_control.stop": "Stoppen",
   "browser_control.task_set": "Aufgabensatz",

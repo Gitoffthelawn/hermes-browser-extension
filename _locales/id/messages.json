@@ -987,6 +987,10 @@
     "message": "Siap",
     "description": "Runtime interface message browser_control.state_ready"
   },
+  "runtime_browser_control_status_on": {
+    "message": "Aktif",
+    "description": "Runtime interface message browser_control.status_on"
+  },
   "runtime_browser_control_stay": {
     "message": "Tetap di tab saya",
     "description": "Runtime interface message browser_control.stay"

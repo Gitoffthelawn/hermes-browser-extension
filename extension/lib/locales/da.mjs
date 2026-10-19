@@ -207,6 +207,7 @@ export default Object.freeze({
   "browser_control.state_off": "Slukket",
   "browser_control.state_paused": "Sat på pause",
   "browser_control.state_ready": "Klar",
+  "browser_control.status_on": "Til",
   "browser_control.stay": "Bliv på min fane",
   "browser_control.stop": "Stop",
   "browser_control.task_set": "Opgavesæt",

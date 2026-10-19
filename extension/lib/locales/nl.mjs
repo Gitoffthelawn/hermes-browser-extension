@@ -207,6 +207,7 @@ export default Object.freeze({
   "browser_control.state_off": "Uit",
   "browser_control.state_paused": "Gepauzeerd",
   "browser_control.state_ready": "Klaar",
+  "browser_control.status_on": "Aan",
   "browser_control.stay": "Blijf op mijn tabblad",
   "browser_control.stop": "Stoppen",
   "browser_control.task_set": "Taakset",

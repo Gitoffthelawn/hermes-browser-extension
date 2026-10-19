@@ -987,6 +987,10 @@
     "message": "Готово",
     "description": "Runtime interface message browser_control.state_ready"
   },
+  "runtime_browser_control_status_on": {
+    "message": "Увімкнено",
+    "description": "Runtime interface message browser_control.status_on"
+  },
   "runtime_browser_control_stay": {
     "message": "Залишатися на моїй вкладці",
     "description": "Runtime interface message browser_control.stay"

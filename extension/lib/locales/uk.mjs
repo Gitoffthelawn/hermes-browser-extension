@@ -207,6 +207,7 @@ export default Object.freeze({
   "browser_control.state_off": "Вимкнено",
   "browser_control.state_paused": "Призупинено",
   "browser_control.state_ready": "Готово",
+  "browser_control.status_on": "Увімкнено",
   "browser_control.stay": "Залишатися на моїй вкладці",
   "browser_control.stop": "Зупинити",
   "browser_control.task_set": "Набір завдань",

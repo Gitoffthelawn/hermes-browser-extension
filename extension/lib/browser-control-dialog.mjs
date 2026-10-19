@@ -113,7 +113,8 @@ export function createBrowserControlDialog({ dialog, launcher, closeButton, focu
     helpTarget = button;
     tooltip.textContent = button.dataset.help;
     if (!tooltip.matches(':popover-open')) tooltip.showPopover();
-    button.setAttribute('aria-describedby', tooltip.id);
+    // A control named by its help text already says it; describing it with the same text would repeat it.
+    if (!button.hasAttribute('data-help-as-name')) button.setAttribute('aria-describedby', tooltip.id);
     // Anchor option help to the picker, so a lower option's explanation cannot
     // cover the choices above it while the user moves through the menu.
     const picker = button.getAttribute('role') === 'option' ? button.closest('.branded-select') : null;
@@ -196,7 +197,9 @@ export function createBrowserControlDialog({ dialog, launcher, closeButton, focu
         const text = help[key] || (key.startsWith('scope_') ? translate(`browser_control.help_${key}`) : '');
         if (text !== button.dataset.help) {
           button.dataset.help = text;
-          button.setAttribute('aria-description', text);
+          // The status light is named by its help text (the full status), so the text is its name, not a description.
+          if (button.hasAttribute('data-help-as-name')) button.setAttribute('aria-label', text);
+          else button.setAttribute('aria-description', text);
           if (helpTarget === button) showHelp(button);
         }
       }

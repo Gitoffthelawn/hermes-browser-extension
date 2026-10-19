@@ -207,6 +207,7 @@ export default Object.freeze({
   "browser_control.state_off": "꺼짐",
   "browser_control.state_paused": "일시 중지됨",
   "browser_control.state_ready": "준비됨",
+  "browser_control.status_on": "켜짐",
   "browser_control.stay": "내 탭에 머무르기",
   "browser_control.stop": "중지",
   "browser_control.task_set": "작업 세트",

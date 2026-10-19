@@ -207,6 +207,7 @@ export default Object.freeze({
   "browser_control.state_off": "關閉",
   "browser_control.state_paused": "已暫停",
   "browser_control.state_ready": "就緒",
+  "browser_control.status_on": "開啟",
   "browser_control.stay": "停留在我的分頁",
   "browser_control.stop": "停止",
   "browser_control.task_set": "任務集",
