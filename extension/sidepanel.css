@@ -2007,6 +2007,13 @@ html[data-hermes-mode="light"] .browser-control-dialog { --control-accent: color
   background: rgba(var(--hermes-fg-rgb), 0.22);
   backdrop-filter: blur(6px);
 }
+/* With reduced transparency or forced colours, the backdrop only dims. */
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  .browser-control-dialog::backdrop {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
 .browser-control-dialog.is-pointer-open[open] { animation: control-dialog-enter 180ms cubic-bezier(0.23, 1, 0.32, 1); }
 @keyframes control-dialog-enter { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: none; } }
 

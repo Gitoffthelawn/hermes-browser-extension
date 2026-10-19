@@ -48,6 +48,10 @@ test('Hermes Control window keeps a frosted surface, with a reduced-transparency
   assert.ok(backdrop, 'the backdrop rule exists');
   assert.match(backdrop.body, /backdrop-filter:\s*blur\(/);
   assert.doesNotMatch(backdrop.body, /border-radius|box-shadow/);
+  // With reduced transparency or forced colours the backdrop drops its blur too.
+  const backdropFallback = css.match(/@media \(prefers-reduced-transparency:\s*reduce\),\s*\(forced-colors:\s*active\)\s*\{\s*\.browser-control-dialog::backdrop\s*\{([^}]*)\}\s*\}/);
+  assert.ok(backdropFallback, 'the backdrop has a reduced-transparency fallback');
+  assert.match(backdropFallback[1], /(?:^|[;\s])backdrop-filter:\s*none/);
 });
 
 test('Hermes Control title is the Settings heading: display face, accent colour, one line, no 28px or 34px size', () => {
