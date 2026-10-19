@@ -1,5 +1,6 @@
 import { mintTicketInPage, wsTicketUrl } from './dashboard-bridge.mjs';
 import { buildDashboardWsUrlWithCredential, createGatewayClient, WS_EVENTS, WS_METHODS } from './gateway-ws.mjs';
+import { legacyGatewayModeForConnection } from './connection-modes.mjs';
 import { extractDashboardSessionToken } from './model-discovery.mjs';
 import {
   WAKE_MESSAGES,
@@ -7,10 +8,13 @@ import {
   isLoopbackDashboardUrl,
   normalizeWakeStatus,
   normalizeWakeWordSettings,
+  pickWakeSettings,
 } from './wake-word.mjs';
 import { getBrowserApi } from './browser-api.mjs';
 
 const LOCAL_DASHBOARD_URL = 'http://127.0.0.1:9119';
+// Shown through translateUiText, so the English text must match an en.mjs value.
+const NATIVE_WAKE_LOCAL_ONLY_DETAIL = 'Native wake needs the local Hermes gateway on this computer. Remote connections can use browser wake instead.';
 const NATIVE_WAKE_SESSION_ID = 'hermes-browser-wake';
 const WAKE_REPLY_TIMEOUT_MS = 3 * 60 * 1000;
 
@@ -257,7 +261,17 @@ export function createWakeBackgroundController({
     await queueWakeTurn(text, 'native');
   }
 
+  // The native engine runs on this computer's Desktop dashboard. A remote API or
+  // cloud connection has no such companion, so it must never probe loopback.
+  async function localGatewayIsActive() {
+    const stored = await chromeApi.storage.local.get('hermesBrowserSettings').catch(() => null);
+    return legacyGatewayModeForConnection(stored?.hermesBrowserSettings || {}) === 'local-api';
+  }
+
   async function tryNativeWake() {
+    if (!(await localGatewayIsActive())) {
+      return { ok: false, reason: NATIVE_WAKE_LOCAL_ONLY_DETAIL };
+    }
     const baseUrl = LOCAL_DASHBOARD_URL;
     const credential = await localDashboardCredential(baseUrl);
     if (!credential.ok) return { ok: false, reason: credential.reason || 'dashboard-auth-unavailable' };
@@ -360,7 +374,7 @@ export function createWakeBackgroundController({
 
   async function setEnabled(enabled, settings = {}) {
     const stored = await chromeApi.storage.local.get('hermesBrowserSettings');
-    const merged = { ...(stored?.hermesBrowserSettings || {}), ...settings, wakeWordEnabled: Boolean(enabled) };
+    const merged = { ...(stored?.hermesBrowserSettings || {}), ...pickWakeSettings(settings), wakeWordEnabled: Boolean(enabled) };
     await chromeApi.storage.local.set({ hermesBrowserSettings: merged });
     return configureSerialized(merged);
   }

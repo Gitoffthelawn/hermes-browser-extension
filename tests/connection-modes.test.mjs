@@ -187,8 +187,13 @@ test('creating the browser session never reuses the colliding default title', ()
   const ensureBody = sidepanelSource.match(/async function ensureHermesSession\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
   assert.match(ensureBody, /isDefaultBrowserSessionTitle\(settings\.sessionTitle\)/, 'the default title must be detected before the create');
   assert.match(ensureBody, /makeBrowserSessionTitle\(\)/);
+  // The GET/POST sequence is shared with session-materialization.mjs. The side
+  // panel mints the unique title in its pre-create hook, and the module runs
+  // that hook after the lookup and before the create POST.
+  assert.match(ensureBody, /beforeCreate:\s*async \(\) => \{[\s\S]*?makeBrowserSessionTitle\(\)/);
+  const materialization = readFileSync(new URL('../extension/lib/session-materialization.mjs', import.meta.url), 'utf8');
   assert.ok(
-    ensureBody.indexOf('makeBrowserSessionTitle()') < ensureBody.indexOf("apiFetch('/api/sessions'"),
+    materialization.indexOf('await beforeCreate()') < materialization.indexOf("apiFetch('/api/sessions'"),
     'a unique title must be minted before the create POST',
   );
 });
@@ -271,6 +276,21 @@ test('clearing an API token falls back to ticket-based dashboard transport for r
   assert.equal(legacyRemoteApi.connectionMode, 'remote');
   assert.equal(legacyRemoteApi.connectionTransport, CONNECTION_TRANSPORTS.REMOTE_DASHBOARD);
   assert.equal(legacyRemoteApi.gatewayMode, 'remote-dashboard');
+});
+
+test('clearing the stored token also drops the legacy agentToken credential', () => {
+  const cleared = connectionSettingsAfterTokenClear({
+    connectionSchemaVersion: CONNECTION_SCHEMA_VERSION,
+    connectionMode: 'remote',
+    connectionTransport: CONNECTION_TRANSPORTS.REMOTE_API,
+    apiKey: 'current-token',
+    agentToken: 'legacy-token',
+  });
+  assert.equal(cleared.apiKey, '');
+  assert.equal(cleared.agentToken, '');
+  // The side panel merges the result over stored settings, so the key must be
+  // present (empty) rather than simply omitted.
+  assert.equal(JSON.stringify({ agentToken: 'legacy-token', ...cleared }).includes('legacy-token'), false);
 });
 
 test('clearStoredToken applies the post-clear transport fallback and re-runs readiness on transport change', () => {

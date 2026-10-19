@@ -8,6 +8,8 @@ import path from 'node:path';
 import process from 'node:process';
 
 import { crc32 } from '../extension/lib/vsix-theme-extractor.mjs';
+import { assistClick, assistClickWhenVisible, assistEvaluate } from './e2e-assist-driver.mjs';
+import { ensureExtensionStartupPage, killProcessTree, resolveChromeExecutable } from './e2e-chrome-env.mjs';
 import { AGENT_THEME_END, AGENT_THEME_START } from '../extension/lib/agent-theme-authoring.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -181,16 +183,12 @@ function marketplaceGalleryFixture() {
 }
 
 function chromeExecutable() {
-  const candidates = [
-    process.env.CHROME_PATH,
+  return resolveChromeExecutable([
     'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  ].filter(Boolean);
-  const found = candidates.find((candidate) => existsSync(candidate));
-  if (!found) throw new Error('System Chrome/Edge not found. Set CHROME_PATH.');
-  return found;
+  ]);
 }
 
 function unpackedExtensionId(extensionPath) {
@@ -744,13 +742,24 @@ async function fetchJson(url, options) {
 }
 
 function killChrome(child) {
-  if (!child?.pid) return;
-  try {
-    spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-  } catch { /* best-effort cleanup or diagnostics */ }
+  killProcessTree(child);
+}
+
+// Settings opens on a category home; each control lives in one pane. Open the
+// pane that owns `selector` the way a person would (back to the home, then the
+// category card), then wait until the control is showing.
+async function revealSettingsControl(client, selector) {
+  await waitFor(() => client.evaluate(`(() => {
+    const target = document.querySelector(${JSON.stringify(selector)});
+    if (!target) return false;
+    const pane = target.closest('[data-settings-pane]');
+    if (!pane) return target.getClientRects().length > 0;
+    if (!pane.hidden) return target.getClientRects().length > 0;
+    const open = document.querySelector('[data-settings-pane]:not([hidden])');
+    if (open) open.querySelector('[data-settings-back]')?.click();
+    document.querySelector('[data-settings-category="' + pane.dataset.settingsPane + '"]')?.click();
+    return false;
+  })()`));
 }
 
 async function saveScreenshot(client, filePath, { captureBeyondViewport = true } = {}) {
@@ -772,24 +781,46 @@ async function assertSequentialTabReach(client, selectors, label) {
   }
 }
 
+// Resource-load failures that are expected in this journey and not page errors:
+//  - the licensed "Rules" typefaces are not in the public source tree (see
+//    extension/lib/fonts.css), so their @font-face files 404 and the fallback stack is used;
+//  - connection discovery probes loopback gateway/dashboard candidates, and the
+//    stub gateway deliberately lacks optional routes (profiles, health detail).
+function expectedResourceFailure(entry = {}) {
+  if (entry.source !== 'network') return false;
+  const url = String(entry.url || '');
+  if (/\/assets\/fonts\/Rules[^/]*\.woff2$/.test(url)) return true;
+  return /^http:\/\/127\.0\.0\.1:\d+\//.test(url);
+}
+
 function consoleErrorsSince(client, startIndex) {
   return client.events.slice(startIndex).filter((event) => (
     event.method === 'Runtime.exceptionThrown'
     || (event.method === 'Runtime.consoleAPICalled' && event.params?.type === 'error')
-    || (event.method === 'Log.entryAdded' && event.params?.entry?.level === 'error')
+    || (event.method === 'Log.entryAdded' && event.params?.entry?.level === 'error' && !expectedResourceFailure(event.params.entry))
   ));
 }
 
-async function clickInlineLauncher(client) {
-  const point = await client.evaluate(`(() => {
-    const launcher = document.querySelector('#hermes-inline-draft-host')?.shadowRoot?.querySelector('.launcher');
-    if (!launcher || launcher.hidden) return null;
-    const rect = launcher.getBoundingClientRect();
-    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+// Focuses the draft field, optionally replaces its text with trusted typing,
+// opens Assist from the launcher and starts "Improve", all with real input.
+async function startAssistImprove(client, { text, closeFirst = false } = {}) {
+  await client.evaluate(`(() => {
+    const field = document.querySelector('#draft');
+    field.focus();
+    field.setSelectionRange?.(0, field.value.length);
   })()`);
-  assert.ok(point, 'Inline launcher was not available for a real pointer click.');
-  await client.call('Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', buttons: 1, clickCount: 1 });
-  await client.call('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', buttons: 0, clickCount: 1 });
+  if (text !== undefined) await client.call('Input.insertText', { text });
+  if (closeFirst) {
+    const open = await assistEvaluate(client, `__assistRoot?.querySelector('.panel')?.hidden === false`);
+    if (open) await assistClick(client, '.close');
+  }
+  await waitFor(() => assistClickWhenVisible(client, '.launcher'));
+  await waitFor(() => assistClickWhenVisible(client, '[data-action-id="improve"]'));
+}
+
+async function clickInlineLauncher(client) {
+  const clicked = await assistClickWhenVisible(client, '.launcher');
+  assert.ok(clicked, 'Inline launcher was not available for a real pointer click.');
 }
 
 async function main() {
@@ -832,6 +863,7 @@ async function main() {
     await waitFor(() => existsSync(activePort));
     const [portLine] = (await readFile(activePort, 'utf8')).trim().split('\n');
     const devtoolsBase = `http://127.0.0.1:${Number(portLine)}`;
+    await ensureExtensionStartupPage(devtoolsBase, extensionId);
 
     const initialTargets = await fetchJson(`${devtoolsBase}/json/list`);
     const wakeTarget = initialTargets.find((target) => (
@@ -1074,6 +1106,10 @@ async function main() {
       return first?.hermesBrowserSettings?.sessionId === second?.hermesBrowserSettings?.sessionId ? second : null;
     });
     assert.match(storedBeforeSend.hermesBrowserSettings.sessionId, /^hermes-browser-extension-/);
+    await waitFor(() => setup.evaluate(`chrome.storage.local.get('hermesBrowserSettings')`).then((value) => value.hermesBrowserSettings.inlineAssistModel === 'e2e::e2e/test-model'), 10_000).catch(async (error) => {
+      throw new Error(`${error.message}; stored=${JSON.stringify(await setup.evaluate(`chrome.storage.local.get('hermesBrowserSettings')`).then((value) => ({ m: value.hermesBrowserSettings.inlineAssistModel, r: value.hermesBrowserSettings.inlineAssistRawModel, p: value.hermesBrowserSettings.inlineAssistProvider })))}`);
+    });
+    storedBeforeSend.hermesBrowserSettings = (await setup.evaluate(`chrome.storage.local.get('hermesBrowserSettings')`)).hermesBrowserSettings;
     assert.equal(storedBeforeSend.hermesBrowserSettings.inlineAssistModel, 'e2e::e2e/test-model');
     assert.equal(storedBeforeSend.hermesBrowserSettings.inlineAssistRawModel, 'e2e/test-model');
     assert.equal(storedBeforeSend.hermesBrowserSettings.inlineAssistProvider, 'e2e');
@@ -1431,6 +1467,7 @@ async function main() {
     await panel.evaluate(`document.querySelector('#settingsButton').click()`);
     await waitFor(() => panel.evaluate(`document.querySelector('#settingsDialog')?.hidden === false`));
     const settingsPolishProof = {};
+    await revealSettingsControl(panel, '#profileSelect');
     await panel.evaluate(`document.querySelector('#profileSelect').scrollIntoView({ block: 'center' })`);
     settingsPolishProof.profile = await panel.evaluate(`(() => {
       const select = document.querySelector('#profileSelect').getBoundingClientRect();
@@ -1441,6 +1478,7 @@ async function main() {
     assert.ok(settingsPolishProof.profile.buttonHeight >= 36, JSON.stringify(settingsPolishProof.profile));
     await saveScreenshot(panel, SETTINGS_PROFILE_POLISH_SCREENSHOT, { captureBeyondViewport: false });
 
+    await revealSettingsControl(panel, '.text-zoom-stepper');
     await panel.evaluate(`document.querySelector('.text-zoom-stepper').scrollIntoView({ block: 'center' })`);
     settingsPolishProof.zoom = await panel.evaluate(`(() => {
       const rect = (selector) => document.querySelector(selector).getBoundingClientRect();
@@ -1463,6 +1501,7 @@ async function main() {
     assert.ok(settingsPolishProof.zoom.overflow <= 1, JSON.stringify(settingsPolishProof.zoom));
     await saveScreenshot(panel, SETTINGS_ZOOM_POLISH_SCREENSHOT, { captureBeyondViewport: false });
 
+    await revealSettingsControl(panel, '#contextMenuActionsDisclosure');
     await panel.evaluate(`document.querySelector('#contextMenuActionsDisclosure').scrollIntoView({ block: 'center' })`);
     settingsPolishProof.contextCollapsed = await panel.evaluate(`(() => {
       const disclosure = document.querySelector('#contextMenuActionsDisclosure');
@@ -1530,6 +1569,7 @@ async function main() {
     await panel.call('Emulation.setDeviceMetricsOverride', { width: 320, height: 900, deviceScaleFactor: 1, mobile: false });
     await panel.evaluate(`document.querySelector('#settingsButton').click()`);
     await waitFor(() => panel.evaluate(`document.querySelector('#settingsDialog')?.hidden === false`));
+    await revealSettingsControl(panel, '#textZoomInput');
     await panel.evaluate(`document.querySelector('#textZoomInput').value = '200'; document.querySelector('#textZoomInput').dispatchEvent(new Event('change', { bubbles: true }))`);
     const panelAt320 = await waitFor(() => panel.evaluate(`(() => {
       const dialog = document.querySelector('#settingsDialog');
@@ -1570,7 +1610,8 @@ async function main() {
       '#textZoomDecreaseButton',
       '#textZoomInput',
       '#textZoomIncreaseButton',
-      '#fontProfileSelect',
+      // The native select is mounted as a branded listbox; its button is the tab stop.
+      '#fontProfileSelectButton',
     ], 'Side panel appearance controls');
     await saveScreenshot(panel, READABILITY_PANEL_SCREENSHOT, { captureBeyondViewport: false });
 
@@ -1688,7 +1729,7 @@ async function main() {
       '#settingsTextZoomDecreaseButton',
       '#settingsTextZoomInput',
       '#settingsTextZoomIncreaseButton',
-      '#settingsFontProfileSelect',
+      '#settingsFontProfileSelectButton',
       '#settingsCustomFontFamilyInput',
     ], 'Hermes Web appearance controls');
     await saveScreenshot(web, READABILITY_WEB_SCREENSHOT, { captureBeyondViewport: false });
@@ -1719,6 +1760,7 @@ async function main() {
         && state.theme === 'nous' && state.mode === 'dark' ? state : null;
     })()`));
     assert.ok(panelAt420.horizontalOverflow <= 1, JSON.stringify(panelAt420));
+    await revealSettingsControl(panel, '.appearance-settings');
     await panel.evaluate(`document.querySelector('.appearance-settings')?.scrollIntoView({ block: 'start' })`);
     await saveScreenshot(panel, READABILITY_PANEL_420_SCREENSHOT, { captureBeyondViewport: false });
 
@@ -1753,6 +1795,7 @@ async function main() {
         && state.theme === 'mono' && state.mode === 'dark' ? state : null;
     })()`));
     assert.ok(panelAt520.horizontalOverflow <= 1, JSON.stringify(panelAt520));
+    await revealSettingsControl(panel, '.appearance-settings');
     await panel.evaluate(`document.querySelector('.appearance-settings')?.scrollIntoView({ block: 'start' })`);
     await saveScreenshot(panel, READABILITY_PANEL_520_SCREENSHOT, { captureBeyondViewport: false });
 
@@ -1826,6 +1869,7 @@ async function main() {
 
     await panel.evaluate(`document.querySelector('#settingsButton').click()`);
     await waitFor(() => panel.evaluate(`document.querySelector('#settingsDialog')?.hidden === false`));
+    await revealSettingsControl(panel, '#customThemeManager');
     await panel.evaluate(`(() => {
       const manager = document.querySelector('#customThemeManager');
       manager.open = true;
@@ -1941,6 +1985,7 @@ async function main() {
       document.querySelector('[data-custom-theme-export="${customThemeId}"]').click();
     })()`);
     const exportProof = await waitFor(() => panel.evaluate(`window.__customThemeExportProof?.created === 1 && window.__customThemeExportProof?.clicked === 1 && window.__customThemeExportProof?.revoked === 1 ? window.__customThemeExportProof : null`));
+    await revealSettingsControl(panel, '#customThemeManager');
     await panel.evaluate(`document.querySelector('#customThemeManager').open = true; document.querySelector('#customThemeManager').scrollIntoView({ block: 'start' })`);
     await saveScreenshot(panel, CUSTOM_THEME_PANEL_SCREENSHOT, { captureBeyondViewport: false });
     await panel.evaluate(`document.querySelector('[data-custom-theme-id="${customThemeId}"]').scrollIntoView({ block: 'center' })`);
@@ -2071,7 +2116,14 @@ async function main() {
         && settings.appearanceTheme === 'nous' && settings.webAppearanceTheme === 'nous'
         ? { settings }
         : null;
-    })()`));
+    })()`)).catch(async (error) => {
+      const state = await setup.evaluate(`(async () => {
+        const stored = await chrome.storage.local.get([${JSON.stringify(customThemeStorageKey)}, 'hermesBrowserSettings']);
+        return { themes: stored[${JSON.stringify(customThemeStorageKey)}]?.themes?.map((theme) => theme.id), appearanceTheme: stored.hermesBrowserSettings?.appearanceTheme, webAppearanceTheme: stored.hermesBrowserSettings?.webAppearanceTheme };
+      })()`);
+      const ui = await web.evaluate(`(() => { const button = document.querySelector('[data-custom-theme-delete]'); return { present: Boolean(button), text: button?.textContent || '', theme: document.documentElement.dataset.hermesTheme }; })()`);
+      throw new Error(`${error.message}; stored=${JSON.stringify(state)}; web=${JSON.stringify(ui)}`);
+    });
     const clearedSurfaces = await waitFor(async () => {
       const panelState = await panel.evaluate(`(() => {
         const root = document.documentElement;
@@ -2120,6 +2172,7 @@ async function main() {
     await panel.evaluate(`document.querySelector('#customThemeResetButton').click()`);
     await waitFor(() => setup.evaluate(`chrome.storage.local.get(${JSON.stringify(customThemeStorageKey)}).then((stored) => !stored[${JSON.stringify(customThemeStorageKey)}])`));
 
+    await revealSettingsControl(panel, '#agentThemeDescription');
     await panel.evaluate(`(() => {
       document.querySelector('[data-theme="mono"]')?.click();
       document.querySelector('[data-color-mode="dark"]')?.click();
@@ -2192,6 +2245,7 @@ async function main() {
     assert.ok(agentThemeProof.geometry.searchButton.left - agentThemeProof.geometry.searchInput.right >= 10, JSON.stringify(agentThemeProof.geometry));
     assert.ok(Math.abs(agentThemeProof.geometry.file.top - agentThemeProof.geometry.preview.top) <= 1, JSON.stringify(agentThemeProof.geometry));
     assert.equal(agentThemeProof.geometry.fileFont, agentThemeProof.geometry.previewFont);
+    await revealSettingsControl(panel, '#agentThemeDescription');
     await panel.evaluate(`document.querySelector('#agentThemeDescription').scrollIntoView({ block: 'center' })`);
     await saveScreenshot(panel, AGENT_THEME_STUDIO_SCREENSHOT, { captureBeyondViewport: false });
     await setup.evaluate(`chrome.storage.local.remove(${JSON.stringify(customThemeStorageKey)})`);
@@ -2311,9 +2365,9 @@ async function main() {
       return result?.result || null;
     })()`);
     assert.deepEqual(inlineRuntimeState, { policy: true, helper: true, host: true });
-    await waitFor(() => fixture.evaluate(`Boolean(document.querySelector('#hermes-inline-draft-host')?.shadowRoot?.querySelector('.launcher'))`));
-    const logoState = await fixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host').shadowRoot;
+    await waitFor(() => assistEvaluate(fixture, `Boolean(__assistRoot?.querySelector('.launcher'))`));
+    const logoState = await assistEvaluate(fixture, `(() => {
+      const root = __assistRoot;
       const launcher = root.querySelector('.launcher');
       const logo = root.querySelector('.launcher-logo');
       const host = document.querySelector('#hermes-inline-draft-host');
@@ -2332,10 +2386,10 @@ async function main() {
     assert.deepEqual(logoState.launcher, [36, 36]);
     assert.deepEqual(logoState.logo, [30, 30]);
 
-    const launcherPlacementBeforeShift = await fixture.evaluate(`(() => {
+    const launcherPlacementBeforeShift = await assistEvaluate(fixture, `(() => {
       const field = document.querySelector('#draft').getBoundingClientRect();
-      const launcher = document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.launcher').getBoundingClientRect();
-      const element = document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.launcher');
+      const launcher = __assistRoot.querySelector('.launcher').getBoundingClientRect();
+      const element = __assistRoot.querySelector('.launcher');
       const overlapsDraft = launcher.left < field.right && launcher.right > field.left && launcher.top < field.bottom && launcher.bottom > field.top;
       return { rightGap: field.right - launcher.right, bottomGap: field.bottom - launcher.bottom, top: launcher.top, strategy: element.dataset.placement, overlapsDraft };
     })()`);
@@ -2350,10 +2404,10 @@ async function main() {
       shift.setAttribute('aria-hidden', 'true');
       field.parentElement.insertBefore(shift, field.previousElementSibling);
     })()`);
-    const launcherPlacementAfterShift = await waitFor(() => fixture.evaluate(`(() => {
+    const launcherPlacementAfterShift = await waitFor(() => assistEvaluate(fixture, `(() => {
       const field = document.querySelector('#draft').getBoundingClientRect();
-      const launcher = document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.launcher').getBoundingClientRect();
-      const element = document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.launcher');
+      const launcher = __assistRoot.querySelector('.launcher').getBoundingClientRect();
+      const element = __assistRoot.querySelector('.launcher');
       const overlapsDraft = launcher.left < field.right && launcher.right > field.left && launcher.top < field.bottom && launcher.bottom > field.top;
       const state = { rightGap: field.right - launcher.right, bottomGap: field.bottom - launcher.bottom, top: launcher.top, strategy: element.dataset.placement, overlapsDraft };
       return state.top > ${launcherPlacementBeforeShift.top} + 80 ? state : null;
@@ -2365,9 +2419,9 @@ async function main() {
       document.querySelector('#qa-layout-shift')?.remove();
       document.querySelector('#draft').style.minHeight = '';
     })()`);
-    await waitFor(() => fixture.evaluate(`(() => {
+    await waitFor(() => assistEvaluate(fixture, `(() => {
       const field = document.querySelector('#draft').getBoundingClientRect();
-      const launcher = document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.launcher').getBoundingClientRect();
+      const launcher = __assistRoot.querySelector('.launcher').getBoundingClientRect();
       const overlapsDraft = launcher.left < field.right && launcher.right > field.left && launcher.top < field.bottom && launcher.bottom > field.top;
       return overlapsDraft ? null : { ok: true };
     })()`));
@@ -2395,8 +2449,8 @@ async function main() {
     })()`);
     assert.ok(chatgptTabId > 0, 'Could not inject the packaged content scripts into the ChatGPT composer fixture.');
     await chatgptFixture.evaluate(`document.querySelector('#prompt-textarea').focus()`);
-    const chatgptPlacement = await waitFor(() => chatgptFixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    const chatgptPlacement = await waitFor(() => assistEvaluate(chatgptFixture, `(() => {
+      const root = __assistRoot;
       const launcher = root?.querySelector('.launcher');
       if (!launcher || launcher.hidden) return null;
       const composer = document.querySelector('#composer').getBoundingClientRect();
@@ -2415,9 +2469,9 @@ async function main() {
     assert.equal(chatgptPlacement.overlaps, false);
     assert.ok(Math.abs(chatgptPlacement.gap - 8) <= 1, JSON.stringify(chatgptPlacement));
     await clickInlineLauncher(chatgptFixture);
-    const assistScrollbarState = await chatgptFixture.evaluate(`(() => {
+    const assistScrollbarState = await assistEvaluate(chatgptFixture, `(() => {
       const host = document.querySelector('#hermes-inline-draft-host');
-      const panel = host?.shadowRoot?.querySelector('.panel');
+      const panel = __assistRoot?.querySelector('.panel');
       const panelStyle = getComputedStyle(panel);
       const scrollbarStyle = getComputedStyle(panel, '::-webkit-scrollbar');
       const thumbStyle = getComputedStyle(panel, '::-webkit-scrollbar-thumb');
@@ -2438,8 +2492,8 @@ async function main() {
     assert.equal(assistScrollbarState.thumbBorderRadius, '0px');
     assert.match(assistScrollbarState.foregroundRgb, /^\d+,\d+,\d+$/);
     assert.match(assistScrollbarState.lineStrong, /rgba\([^)]*,\s*0\.78\)/);
-    const chatgptAssistState = await waitFor(() => chatgptFixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    const chatgptAssistState = await waitFor(() => assistEvaluate(chatgptFixture, `(() => {
+      const root = __assistRoot;
       const promptAction = root?.querySelector('[data-action-id="chatgpt-prompt"]');
       if (!promptAction) return null;
       const settingLabels = [...root.querySelectorAll('.setting strong')].map((node) => node.textContent.trim());
@@ -2462,8 +2516,8 @@ async function main() {
       previewCopyOnly: true,
       applyToggleDisabled: true,
     });
-    const assistAccessibility = await chatgptFixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    const assistAccessibility = await assistEvaluate(chatgptFixture, `(() => {
+      const root = __assistRoot;
       if (!root) return null;
       const visible = (node) => {
         if (!node || node.hidden || node.getAttribute('aria-hidden') === 'true') return false;
@@ -2492,8 +2546,8 @@ async function main() {
     assert.deepEqual(assistAccessibility.duplicateIds, []);
     assert.deepEqual(assistAccessibility.positiveTabindex, []);
     await chatgptFixture.call('Emulation.setEmulatedMedia', { media: '', features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
-    const assistMotionViolations = await chatgptFixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    const assistMotionViolations = await assistEvaluate(chatgptFixture, `(() => {
+      const root = __assistRoot;
       const seconds = (part) => {
         const value = String(part || '').trim();
         const number = Number.parseFloat(value) || 0;
@@ -2509,9 +2563,9 @@ async function main() {
     assert.deepEqual(assistMotionViolations, []);
     await chatgptFixture.call('Emulation.setEmulatedMedia', { media: '', features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
     await saveScreenshot(chatgptFixture, CHATGPT_LAUNCHER_SCREENSHOT, { captureBeyondViewport: false });
-    await chatgptFixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('input[aria-label="Use visible ChatGPT context"]').click()`);
-    const chatgptVisibleContext = await waitFor(() => chatgptFixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    await assistClick(chatgptFixture, 'input[aria-label="Use visible ChatGPT context"]');
+    const chatgptVisibleContext = await waitFor(() => assistEvaluate(chatgptFixture, `(() => {
+      const root = __assistRoot;
       const toggle = root?.querySelector('input[aria-label="Use visible ChatGPT context"]');
       const warningShown = root?.textContent?.includes('Visible ChatGPT context may be sent to your selected Hermes model.') || false;
       return toggle?.checked && root?.querySelector('.context .secure')?.textContent === 'BOUNDED'
@@ -2521,13 +2575,13 @@ async function main() {
     assert.equal(chatgptVisibleContext.warningShown, true);
     const storedContextPreferences = await setup.evaluate(`chrome.storage.local.get('hermesInlineSiteContextPreferences')`);
     assert.equal(storedContextPreferences.hermesInlineSiteContextPreferences.chatgpt, 'visible');
-    await chatgptFixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('input[aria-label="Use visible ChatGPT context"]').click()`);
-    await waitFor(() => chatgptFixture.evaluate(`document.querySelector('#hermes-inline-draft-host')?.shadowRoot?.querySelector('.context .secure')?.textContent === 'DRAFT ONLY'`));
+    await assistClick(chatgptFixture, 'input[aria-label="Use visible ChatGPT context"]');
+    await waitFor(() => assistEvaluate(chatgptFixture, `__assistRoot?.querySelector('.context .secure')?.textContent === 'DRAFT ONLY'`));
 
     await fixture.evaluate(`window.xPopupBoundField = document.querySelector('#draft')`);
     await clickInlineLauncher(fixture);
-    const xPopupOpenState = await waitFor(() => fixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    const xPopupOpenState = await waitFor(() => assistEvaluate(fixture, `(() => {
+      const root = __assistRoot;
       const field = document.querySelector('#draft');
       if (root?.querySelector('.panel')?.hidden !== false || !root.querySelector('[data-action-id="clean-formatting"]')) return null;
       return {
@@ -2538,26 +2592,26 @@ async function main() {
     })()`));
     assert.deepEqual(xPopupOpenState, { activeField: true, sameField: true, outsideClicks: 0 });
     await clickInlineLauncher(fixture);
-    const xPopupToggleClosed = await waitFor(() => fixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    const xPopupToggleClosed = await waitFor(() => assistEvaluate(fixture, `(() => {
+      const root = __assistRoot;
       const field = document.querySelector('#draft');
       return root?.querySelector('.panel')?.hidden === true && document.activeElement === field && window.xPopupOutsideClicks === 0;
     })()`));
     assert.equal(xPopupToggleClosed, true);
     await clickInlineLauncher(fixture);
-    await waitFor(() => fixture.evaluate(`Boolean(document.querySelector('#hermes-inline-draft-host')?.shadowRoot?.querySelector('[data-action-id="clean-formatting"]'))`));
+    await waitFor(() => assistEvaluate(fixture, `Boolean(__assistRoot?.querySelector('[data-action-id="clean-formatting"]'))`));
     await saveScreenshot(fixture, INLINE_TOGGLE_SCREENSHOT, { captureBeyondViewport: false });
-    await fixture.evaluate(`(() => {
+    await assistEvaluate(fixture, `(() => {
       window.hermesAssistLeakedKeyboardEvents = [];
       for (const type of ['keydown', 'keypress', 'keyup']) {
         document.addEventListener(type, (event) => {
           window.hermesAssistLeakedKeyboardEvents.push({ type, key: event.key });
         });
       }
-      const custom = document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('textarea.custom');
+      const custom = __assistRoot.querySelector('textarea.custom');
       custom.value = '';
-      custom.focus();
     })()`);
+    await assistClick(fixture, 'textarea.custom');
     for (const [key, code, windowsVirtualKeyCode] of [
       ['T', 'KeyT', 84],
       ['h', 'KeyH', 72],
@@ -2567,32 +2621,33 @@ async function main() {
       await fixture.call('Input.dispatchKeyEvent', { type: 'keyDown', key, code, text: key, unmodifiedText: key, windowsVirtualKeyCode });
       await fixture.call('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode });
     }
-    const assistKeyboardContainment = await fixture.evaluate(`(() => {
+    const assistKeyboardContainment = await assistEvaluate(fixture, `(() => {
       const host = document.querySelector('#hermes-inline-draft-host');
-      const custom = host.shadowRoot.querySelector('textarea.custom');
+      const custom = __assistRoot.querySelector('textarea.custom');
       return {
         value: custom.value,
-        shadowFocus: host.shadowRoot.activeElement === custom,
+        shadowFocus: __assistRoot.activeElement === custom,
         leaked: window.hermesAssistLeakedKeyboardEvents,
       };
     })()`);
     assert.deepEqual(assistKeyboardContainment, { value: 'This', shadowFocus: true, leaked: [] });
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('[data-action-id="clean-formatting"]').click()`);
+    await assistClick(fixture, '[data-action-id="clean-formatting"]');
     await waitFor(() => fixture.evaluate(`document.querySelector('#draft').value === 'I wanted to follow up.'`));
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.result-actions button:nth-child(2)').click()`);
+    await assistClick(fixture, '.result-actions button:nth-child(2)');
     await waitFor(() => fixture.evaluate(`document.querySelector('#draft').value === '  I wanted   to follow up.  '`));
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.close').click()`);
+    await assistClick(fixture, '.close');
 
     await fixture.evaluate(`(() => {
       const rich = document.querySelector('#rich-draft');
       window.richNormalizeLikeX = true;
       rich.focus();
-      document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.launcher').click();
-      document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('[data-action-id="clean-formatting"]').click();
     })()`);
-    const richApplyState = await waitFor(() => fixture.evaluate(`(() => {
+    await assistClick(fixture, '.launcher');
+    await waitFor(() => assistEvaluate(fixture, `Boolean(__assistRoot?.querySelector('[data-action-id="clean-formatting"]'))`));
+    await assistClick(fixture, '[data-action-id="clean-formatting"]');
+    const richApplyState = await waitFor(() => assistEvaluate(fixture, `(() => {
       const rich = document.querySelector('#rich-draft');
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+      const root = __assistRoot;
       if (root?.querySelector('.context span:last-child')?.textContent !== 'COMPLETE') return null;
       return {
         text: rich.textContent.trim(),
@@ -2602,10 +2657,10 @@ async function main() {
       };
     })()`));
     assert.deepEqual(richApplyState, { text: 'One clear sentence.', copies: 1, inputEvents: 1, primary: 'Keep replacement' });
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.result-actions button:nth-child(2)').click()`);
-    const richUndoState = await fixture.evaluate(`(() => {
+    await assistClick(fixture, '.result-actions button:nth-child(2)');
+    const richUndoState = await assistEvaluate(fixture, `(() => {
       const rich = document.querySelector('#rich-draft');
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+      const root = __assistRoot;
       return {
         text: rich.textContent.trim(),
         copies: rich.textContent.split('One   clear   sentence.').length - 1,
@@ -2615,9 +2670,9 @@ async function main() {
       };
     })()`);
     assert.deepEqual(richUndoState, { text: 'One   clear   sentence.', copies: 1, inputEvents: 2, state: 'COMPLETE', status: '' });
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.result-actions .main').click()`);
-    await waitFor(() => fixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    await assistClick(fixture, '.result-actions .main');
+    await waitFor(() => assistEvaluate(fixture, `(() => {
+      const root = __assistRoot;
       return root?.querySelector('.panel')?.hidden === true && document.querySelector('#rich-draft')?.textContent.trim() === 'One clear sentence.' && window.richInputEvents === 3;
     })()`));
     await saveScreenshot(fixture, INLINE_SINGLE_COPY_SCREENSHOT, { captureBeyondViewport: false });
@@ -2724,15 +2779,9 @@ async function main() {
     })()`);
     assert.deepEqual(xManagedDeleteState, { stateText: '', domText: '', childNodes: 0 });
 
-    await fixture.evaluate(`(() => {
-      document.querySelector('#draft').focus();
-      const root = document.querySelector('#hermes-inline-draft-host').shadowRoot;
-      root.querySelector('.close').click();
-      root.querySelector('.launcher').click();
-      root.querySelector('[data-action-id="improve"]').click();
-    })()`);
-    const routeState = await waitFor(() => fixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    await startAssistImprove(fixture, { closeFirst: true });
+    const routeState = await waitFor(() => assistEvaluate(fixture, `(() => {
+      const root = __assistRoot;
       const routes = Array.from(root?.querySelectorAll('.route') || []);
       return routes.length === 3 ? {
         title: root.querySelector('.route-title')?.textContent || '',
@@ -2745,9 +2794,9 @@ async function main() {
     assert.ok(routeState.labels.some((label) => label.includes('Run in background')));
     await saveScreenshot(fixture, INLINE_ROUTE_SCREENSHOT, { captureBeyondViewport: false });
 
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('[data-route="background"]').click()`);
-    const inlineResultState = await waitFor(() => fixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    await assistClick(fixture, '[data-route="background"]');
+    const inlineResultState = await waitFor(() => assistEvaluate(fixture, `(() => {
+      const root = __assistRoot;
       const value = document.querySelector('#draft')?.value || '';
       if (value === ${JSON.stringify(INLINE_REPLY)}) return {
         title: root?.querySelector('.run-title')?.textContent || '',
@@ -2774,9 +2823,9 @@ async function main() {
     const retainedAssistCreate = mock.requests.filter((request) => request.method === 'POST' && request.path === '/api/sessions' && request.body?.source === 'hermes_browser').at(-1);
     const retainedAssistSessionId = retainedAssistCreate?.body?.id || retainedAssistCreate?.body?.session_id || '';
     assert.match(retainedAssistSessionId, /^hermes-assist-/);
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.result-actions button:last-child').click()`);
-    const openDestinationState = await waitFor(() => fixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    await assistClick(fixture, '.result-actions button:last-child');
+    const openDestinationState = await waitFor(() => assistEvaluate(fixture, `(() => {
+      const root = __assistRoot;
       const choices = [...(root?.querySelectorAll('[data-session-surface]') || [])];
       return choices.length === 2 ? { title: root.querySelector('.route-title')?.textContent || '', labels: choices.map((button) => button.textContent.trim()) } : null;
     })()`));
@@ -2784,9 +2833,9 @@ async function main() {
     assert.ok(openDestinationState.labels.some((label) => label.includes('Browser Extension')));
     assert.ok(openDestinationState.labels.some((label) => label.includes('Hermes Web')));
     await saveScreenshot(fixture, INLINE_OPEN_SESSION_SCREENSHOT, { captureBeyondViewport: false });
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('[data-session-surface="web"]').click()`);
-    const webNotice = await waitFor(() => fixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    await assistClick(fixture, '[data-session-surface="web"]');
+    const webNotice = await waitFor(() => assistEvaluate(fixture, `(() => {
+      const root = __assistRoot;
       const title = root?.querySelector('.route-title')?.textContent || '';
       return title.includes('new surface') ? title : null;
     })()`));
@@ -2797,7 +2846,7 @@ async function main() {
     })()`);
     assert.equal(openedWebSession, false, 'the Hermes Web choice must show the deprecation notice instead of opening a tab');
 
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.close').click()`);
+    await assistClick(fixture, '.close');
     await setup.evaluate(`(async () => {
       const stored = await chrome.storage.local.get('hermesBrowserSettings');
       await chrome.storage.local.set({ hermesBrowserSettings: {
@@ -2817,12 +2866,12 @@ async function main() {
       field.value = '';
       field.dispatchEvent(new Event('input', { bubbles: true }));
       field.focus();
-      document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.launcher').click();
     })()`);
-    await waitFor(() => fixture.evaluate(`Boolean(document.querySelector('#hermes-inline-draft-host')?.shadowRoot?.querySelector('[data-action-id="draft-for-context"]'))`));
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('[data-action-id="draft-for-context"]').click()`);
-    const smartStart = await waitFor(() => fixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    await assistClick(fixture, '.launcher');
+    await waitFor(() => assistEvaluate(fixture, `Boolean(__assistRoot?.querySelector('[data-action-id="draft-for-context"]'))`));
+    await assistClick(fixture, '[data-action-id="draft-for-context"]');
+    const smartStart = await waitFor(() => assistEvaluate(fixture, `(() => {
+      const root = __assistRoot;
       const state = root?.querySelector('.context span:last-child')?.textContent || '';
       if (root?.querySelector('.working') || state === 'COMPLETE') return { direct: root.querySelectorAll('.route').length === 0, error: '' };
       if (state === 'BLOCKED') {
@@ -2832,8 +2881,8 @@ async function main() {
     })()`));
     assert.equal(smartStart.error, '');
     assert.equal(smartStart.direct, true);
-    const smartResult = await waitFor(() => fixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    const smartResult = await waitFor(() => assistEvaluate(fixture, `(() => {
+      const root = __assistRoot;
       if (root?.querySelector('.context span:last-child')?.textContent !== 'COMPLETE') return null;
       return {
         field: document.querySelector('#draft')?.value || '',
@@ -2855,23 +2904,26 @@ async function main() {
     assert.match(smartResult.lastGridColumn, /1\s*\/\s*-1/);
     assert.equal(smartResult.hasOpenSession, false);
     await saveScreenshot(fixture, INLINE_NO_SESSION_SCREENSHOT, { captureBeyondViewport: false });
-    const emptyDraftApplyState = await fixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host').shadowRoot;
+    const emptyDraftApplyState = await assistEvaluate(fixture, `(() => {
+      const root = __assistRoot;
       const field = document.querySelector('#draft');
       const primary = root.querySelector('.result-actions .main');
-      const before = { label: primary?.textContent || '', disabled: field.disabled, readOnly: field.readOnly };
+      return { label: primary?.textContent || '', disabled: field.disabled, readOnly: field.readOnly };
+    })()`);
+    // Type the extra character the way a person does: focus at the end, trusted input.
+    await fixture.evaluate(`(() => {
+      const field = document.querySelector('#draft');
       field.focus();
       field.setSelectionRange(field.value.length, field.value.length);
-      field.setRangeText('!', field.value.length, field.value.length, 'end');
-      field.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: '!' }));
-      return { ...before, edited: field.value };
     })()`);
+    await fixture.call('Input.insertText', { text: '!' });
+    emptyDraftApplyState.edited = await fixture.evaluate(`document.querySelector('#draft').value`);
     assert.equal(emptyDraftApplyState.label, 'Use draft');
     assert.equal(emptyDraftApplyState.disabled, false);
     assert.equal(emptyDraftApplyState.readOnly, false);
     assert.equal(emptyDraftApplyState.edited, `${INLINE_REPLY}!`);
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.result-actions .main').click()`);
-    await waitFor(() => fixture.evaluate(`document.querySelector('#hermes-inline-draft-host')?.shadowRoot?.querySelector('.panel')?.hidden === true`));
+    await assistClick(fixture, '.result-actions .main');
+    await waitFor(() => assistEvaluate(fixture, `__assistRoot?.querySelector('.panel')?.hidden === true`));
     const smartRequest = mock.getChatRequest();
     assert.match(String(smartRequest?.message || ''), /Draft the text that belongs in the focused field/);
     assert.match(String(smartRequest?.message || ''), /"page_context":"[^"]+/);
@@ -2893,7 +2945,7 @@ async function main() {
     assert.ok(assistChats.every((request) => request.body.fast === false && request.body.model_options?.fast === false && request.body.reasoning_effort === 'low'));
     assert.equal(mock.requests.filter((request) => request.method === 'DELETE' && /^\/api\/sessions\//.test(request.path)).length, 1);
 
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.close').click()`);
+    // "Use draft" already closed the panel; there is nothing left to dismiss.
     await setup.evaluate(`(async () => {
       const stored = await chrome.storage.local.get('hermesBrowserSettings');
       await chrome.storage.local.set({ hermesBrowserSettings: {
@@ -2902,17 +2954,17 @@ async function main() {
         inlineAssistDefaultRoute: 'ask',
       }});
     })()`);
-    await waitFor(() => fixture.evaluate(`document.querySelector('#hermes-inline-draft-host')?.shadowRoot?.querySelector('.launcher')?.hidden === true`));
+    await waitFor(() => assistEvaluate(fixture, `__assistRoot?.querySelector('.launcher')?.hidden === true`));
     await setup.evaluate(`(async () => {
       const stored = await chrome.storage.local.get('hermesBrowserSettings');
       await chrome.storage.local.set({ hermesBrowserSettings: { ...stored.hermesBrowserSettings, inlineAssistEnabled: true }});
     })()`);
     await fixture.evaluate(`document.querySelector('#draft').focus()`);
-    await waitFor(() => fixture.evaluate(`document.querySelector('#hermes-inline-draft-host')?.shadowRoot?.querySelector('.launcher')?.hidden === false`));
+    await waitFor(() => assistEvaluate(fixture, `__assistRoot?.querySelector('.launcher')?.hidden === false`));
 
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.launcher').click()`);
-    const beforeScrollPanel = await waitFor(() => fixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    await assistClick(fixture, '.launcher');
+    const beforeScrollPanel = await waitFor(() => assistEvaluate(fixture, `(() => {
+      const root = __assistRoot;
       const panel = root?.querySelector('.panel');
       return panel && !panel.hidden ? root.querySelector('.body')?.textContent || '' : '';
     })()`));
@@ -2922,21 +2974,23 @@ async function main() {
       return window.scrollY;
     })()`);
     assert.ok(scrolledToBottom > 0);
-    const suspendedPanel = await waitFor(() => fixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    const suspendedPanel = await waitFor(() => assistEvaluate(fixture, `(() => {
+      const root = __assistRoot;
       const panel = root?.querySelector('.panel');
       return root?.querySelector('.launcher')?.hidden === true && panel?.hidden === false && panel?.style.visibility === 'hidden';
     })()`));
     assert.equal(suspendedPanel, true);
     await fixture.evaluate(`(() => { window.scrollTo(0, 0); window.dispatchEvent(new Event('scroll')); document.querySelector('#draft').focus(); })()`);
-    const restoredPanel = await waitFor(() => fixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    const restoredPanel = await waitFor(() => assistEvaluate(fixture, `(() => {
+      const root = __assistRoot;
       const panel = root?.querySelector('.panel');
       if (root?.querySelector('.launcher')?.hidden || panel?.hidden || panel?.style.visibility === 'hidden') return null;
       return root.querySelector('.body')?.textContent || '';
     })()`));
     assert.equal(restoredPanel, beforeScrollPanel);
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.close').click()`);
+    await assistClick(fixture, '.close');
+    // A context-menu action starts from the field the person right-clicked, which is focused.
+    await fixture.evaluate(`document.querySelector('#draft').focus()`);
 
     await setup.evaluate(`(async () => {
       const tabs = await chrome.tabs.query({});
@@ -2944,13 +2998,13 @@ async function main() {
       if (!tab) return { ok: false, reason: 'fixture-tab-missing' };
       return chrome.tabs.sendMessage(tab.id, { type: 'HERMES_INLINE_CONTEXT_ACTION', actionId: 'draft-reply' });
     })()`);
-    const contextRouteTitle = await waitFor(() => fixture.evaluate(`(() => {
-      const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+    const contextRouteTitle = await waitFor(() => assistEvaluate(fixture, `(() => {
+      const root = __assistRoot;
       return root?.querySelectorAll('.route').length === 3 ? root.querySelector('.route-title')?.textContent || '' : '';
     })()`));
     assert.equal(contextRouteTitle, 'Where should Hermes work?');
 
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.close').click()`);
+    await assistClick(fixture, '.close');
     await panel.evaluate(`document.querySelector('#newSessionButton').click()`);
     await waitFor(() => panel.evaluate(`document.querySelector('#browserIntroHero')?.hidden === true && document.querySelector('#messages')?.textContent === ''`));
 
@@ -3001,6 +3055,7 @@ async function main() {
       } : null;
     })()`));
     assert.match(assistSettingsState.modelLabel, /test.?model/i);
+    await revealSettingsControl(panel, '#inlineAssistModelButton');
     await panel.evaluate(`document.querySelector('#inlineAssistModelButton').click()`);
     const sharedPickerState = await waitFor(() => panel.evaluate(`(() => {
       const picker = document.querySelector('#modelMenu');
@@ -3035,7 +3090,8 @@ async function main() {
     assert.equal(sharedPickerState.fast, 'false');
     assert.equal(sharedPickerState.close, true);
     assert.equal(sharedPickerState.parentIsSettings, false);
-    assert.ok(sharedPickerState.rect.height < 500, JSON.stringify(sharedPickerState));
+    // positionSettingsModelMenu caps the floating picker at 560px.
+    assert.ok(sharedPickerState.rect.height <= 560, JSON.stringify(sharedPickerState));
     assert.ok(sharedPickerState.rect.top >= 0 && sharedPickerState.rect.bottom <= sharedPickerState.viewportHeight, JSON.stringify(sharedPickerState));
     assert.equal(sharedPickerState.buttonFont, sharedPickerState.selectFont);
     assert.equal(sharedPickerState.buttonAlign, 'left');
@@ -3089,16 +3145,7 @@ async function main() {
         inlineAssistSessionRetention: 'keep',
       }});
     })()`);
-    await fixture.evaluate(`(() => {
-      const field = document.querySelector('#draft');
-      field.value = 'Route this draft with the newly selected model.';
-      field.dispatchEvent(new Event('input', { bubbles: true }));
-      field.focus();
-      const root = document.querySelector('#hermes-inline-draft-host').shadowRoot;
-      if (!root.querySelector('.panel').hidden) root.querySelector('.close').click();
-      root.querySelector('.launcher').click();
-      root.querySelector('[data-action-id="improve"]').click();
-    })()`);
+    await startAssistImprove(fixture, { text: 'Route this draft with the newly selected model.', closeFirst: true });
     const switchedAssistRequests = await waitFor(() => {
       const recent = mock.requests.slice(switchedAssistRequestStart);
       const create = recent.find((request) => request.method === 'POST' && request.path === '/api/sessions' && request.body?.source === 'hermes_browser');
@@ -3109,27 +3156,21 @@ async function main() {
     assert.equal(switchedAssistRequests.create.body.provider, 'alternate');
     assert.equal(switchedAssistRequests.chat.body.model, 'alternate/provider-model');
     assert.equal(switchedAssistRequests.chat.body.provider, 'alternate');
-    await waitFor(() => fixture.evaluate(`document.querySelector('#hermes-inline-draft-host')?.shadowRoot?.querySelector('.context span:last-child')?.textContent === 'COMPLETE'`));
+    await waitFor(() => assistEvaluate(fixture, `__assistRoot?.querySelector('.context span:last-child')?.textContent === 'COMPLETE'`));
     mock.setAssistCreateAcknowledgement('direct');
     mock.setAssistChatAcknowledgement('direct');
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.close').click()`);
+    await assistClick(fixture, '.close');
 
     mock.setAssistCreateAcknowledgement('missing');
     const rejectedAssistRequestStart = mock.requests.length;
-    await fixture.evaluate(`(() => {
-      const field = document.querySelector('#draft');
-      field.focus();
-      const root = document.querySelector('#hermes-inline-draft-host').shadowRoot;
-      root.querySelector('.launcher').click();
-      root.querySelector('[data-action-id="improve"]').click();
-    })()`);
+    await startAssistImprove(fixture);
     const rejectedAssistState = await waitFor(async () => {
       const recent = mock.requests.slice(rejectedAssistRequestStart);
       const creates = recent.filter((request) => request.method === 'POST' && request.path === '/api/sessions');
       const cleanup = recent.find((request) => request.method === 'DELETE' && /^\/api\/sessions\/[^/]+$/.test(request.path));
       const chat = recent.find((request) => request.method === 'POST' && /\/chat$/.test(request.path));
-      const ui = await fixture.evaluate(`(() => {
-        const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+      const ui = await assistEvaluate(fixture, `(() => {
+        const root = __assistRoot;
         return {
           state: root?.querySelector('.context span:last-child')?.textContent || '',
           status: root?.querySelector('.status')?.textContent || '',
@@ -3143,25 +3184,19 @@ async function main() {
     assert.equal(Object.hasOwn(rejectedAssistState.chat.body, 'model'), false);
     assert.match(rejectedAssistState.ui.routing, /Model routing.*gateway default model instead/i);
     mock.setAssistCreateAcknowledgement('direct');
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.close').click()`);
+    await assistClick(fixture, '.close');
 
     mock.setAssistCreateAcknowledgement('missing');
     mock.setAssistCleanupStatus(503);
     const cleanupFailureRequestStart = mock.requests.length;
-    await fixture.evaluate(`(() => {
-      const field = document.querySelector('#draft');
-      field.focus();
-      const root = document.querySelector('#hermes-inline-draft-host').shadowRoot;
-      root.querySelector('.launcher').click();
-      root.querySelector('[data-action-id="improve"]').click();
-    })()`);
+    await startAssistImprove(fixture);
     const cleanupFailureState = await waitFor(async () => {
       const recent = mock.requests.slice(cleanupFailureRequestStart);
       const create = recent.find((request) => request.method === 'POST' && request.path === '/api/sessions');
       const cleanup = recent.find((request) => request.method === 'DELETE' && /^\/api\/sessions\/[^/]+$/.test(request.path));
       const chat = recent.find((request) => request.method === 'POST' && /\/chat$/.test(request.path));
-      const ui = await fixture.evaluate(`(() => {
-        const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+      const ui = await assistEvaluate(fixture, `(() => {
+        const root = __assistRoot;
         return {
           state: root?.querySelector('.context span:last-child')?.textContent || '',
           status: root?.querySelector('.status')?.textContent || '',
@@ -3173,25 +3208,17 @@ async function main() {
     assert.match(cleanupFailureState.ui.status, /Cleanup also failed.*503/i);
     mock.setAssistCleanupStatus(204);
     mock.setAssistCreateAcknowledgement('direct');
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.close').click()`);
+    await assistClick(fixture, '.close');
 
     mock.setAssistChatAcknowledgement('mismatch');
     const chatMismatchRequestStart = mock.requests.length;
-    await fixture.evaluate(`(() => {
-      const field = document.querySelector('#draft');
-      field.value = ${JSON.stringify('Keep this text when chat acknowledgement mismatches.')};
-      field.dispatchEvent(new Event('input', { bubbles: true }));
-      field.focus();
-      const root = document.querySelector('#hermes-inline-draft-host').shadowRoot;
-      root.querySelector('.launcher').click();
-      root.querySelector('[data-action-id="improve"]').click();
-    })()`);
+    await startAssistImprove(fixture, { text: 'Keep this text when chat acknowledgement mismatches.' });
     const chatMismatchState = await waitFor(async () => {
       const recent = mock.requests.slice(chatMismatchRequestStart);
       const create = recent.find((request) => request.method === 'POST' && request.path === '/api/sessions');
       const chat = recent.find((request) => request.method === 'POST' && /\/chat$/.test(request.path));
-      const ui = await fixture.evaluate(`(() => {
-        const root = document.querySelector('#hermes-inline-draft-host')?.shadowRoot;
+      const ui = await assistEvaluate(fixture, `(() => {
+        const root = __assistRoot;
         return {
           state: root?.querySelector('.context span:last-child')?.textContent || '',
           status: root?.querySelector('.status')?.textContent || '',
@@ -3204,26 +3231,18 @@ async function main() {
     assert.match(chatMismatchState.ui.routing, /Model routing.*without acknowledging the selected model.*gateway default model instead/i);
     assert.notEqual(chatMismatchState.ui.fieldValue, '');
     mock.setAssistChatAcknowledgement('direct');
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.close').click()`);
+    await assistClick(fixture, '.close');
 
     mock.setAssistSessionModelRouting(false);
     mock.setAssistCreateAcknowledgement('missing');
     mock.setAssistChatAcknowledgement('missing');
     const releasedGatewayRequestStart = mock.requests.length;
-    await fixture.evaluate(`(() => {
-      const field = document.querySelector('#draft');
-      field.value = 'Draft through an unmodified released Hermes gateway.';
-      field.dispatchEvent(new Event('input', { bubbles: true }));
-      field.focus();
-      const root = document.querySelector('#hermes-inline-draft-host').shadowRoot;
-      root.querySelector('.launcher').click();
-      root.querySelector('[data-action-id="improve"]').click();
-    })()`);
+    await startAssistImprove(fixture, { text: 'Draft through an unmodified released Hermes gateway.' });
     const releasedGatewayState = await waitFor(async () => {
       const recent = mock.requests.slice(releasedGatewayRequestStart);
       const create = recent.find((request) => request.method === 'POST' && request.path === '/api/sessions' && request.body?.source === 'hermes_browser');
       const chat = recent.find((request) => request.method === 'POST' && /\/chat$/.test(request.path));
-      const state = await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host')?.shadowRoot?.querySelector('.context span:last-child')?.textContent || ''`);
+      const state = await assistEvaluate(fixture, `__assistRoot?.querySelector('.context span:last-child')?.textContent || ''`);
       return create && chat && state === 'COMPLETE' ? { create, chat } : null;
     });
     for (const request of [releasedGatewayState.create.body, releasedGatewayState.chat.body]) {
@@ -3256,6 +3275,7 @@ async function main() {
     assert.equal(releasedGatewaySettingsState.disabled, false);
     assert.match(releasedGatewaySettingsState.title, /Falls back to the gateway default/i);
     assert.match(releasedGatewaySettingsState.hint, /choice stays saved.*gateway default.*labels every fallback/i);
+    await revealSettingsControl(panel, '#inlineAssistModelButton');
     await panel.evaluate(`document.querySelector('#inlineAssistModelButton').scrollIntoView({ block: 'center', inline: 'nearest' })`);
     await saveScreenshot(panel, ASSIST_RELEASED_GATEWAY_SCREENSHOT, { captureBeyondViewport: false });
     await panel.evaluate(`document.querySelector('#closeSettingsButton').click()`);
@@ -3263,12 +3283,15 @@ async function main() {
     mock.setAssistSessionModelRouting(true);
     mock.setAssistCreateAcknowledgement('direct');
     mock.setAssistChatAcknowledgement('direct');
-    await fixture.evaluate(`document.querySelector('#hermes-inline-draft-host').shadowRoot.querySelector('.close').click()`);
+    await assistClick(fixture, '.close');
     await panel.call('Page.reload', { ignoreCache: true });
     await waitFor(() => panel.evaluate(`document.readyState === 'complete' && Boolean(document.querySelector('#modelMenuButton'))`));
     await waitFor(() => panel.evaluate(`document.querySelector('#inlineAssistModelButton')?.disabled === false`));
     await waitFor(() => panel.evaluate(`document.querySelector('#modelMenuButton')?.disabled === false`));
 
+    // The startup cache omits the gateway default row and the live catalog re-renders the
+    // picker when it lands, so open the picker only after the live catalog is in.
+    await waitFor(() => panel.evaluate(`[...document.querySelectorAll('#modelProviderList .model-provider-option')].some((button) => button.textContent.includes('Hermes gateway'))`));
     await panel.evaluate(`document.querySelector('#modelMenuButton').click()`);
     const mainPickerState = await waitFor(() => panel.evaluate(`(() => {
       const picker = document.querySelector('#modelMenu');
@@ -3287,9 +3310,25 @@ async function main() {
           const style = getComputedStyle(button);
           return { label: button.textContent.trim(), height: rect.height, color: style.color, background: style.backgroundColor };
         }),
-        effortColumns: getComputedStyle(picker.querySelector('.model-effort-list')).gridTemplateColumns.split(' ').length,
+        // Effort is a slider by default; the button grid is the hidden alternative view.
+        effort: (() => {
+          const control = picker.querySelector('.effort-control');
+          const range = control?.querySelector('input.effort-control-range');
+          const rect = range?.getBoundingClientRect();
+          const buttons = picker.querySelector('.model-effort-list');
+          return {
+            presentation: control?.dataset.effortPresentation || '',
+            sliderShowing: Boolean(rect && rect.width > 0 && rect.height > 0),
+            steps: range ? Number(range.max) - Number(range.min) + 1 : 0,
+            buttonGridHidden: Boolean(buttons?.hidden),
+            buttonCount: buttons?.querySelectorAll('.model-effort-option').length || 0,
+          };
+        })(),
       };
-    })()`));
+    })()`)).catch(async (error) => {
+      const providers = await panel.evaluate(`[...document.querySelectorAll('#modelMenu .model-provider-option')].map((button) => button.textContent.trim())`);
+      throw new Error(`${error.message}; providers=${JSON.stringify(providers)}`);
+    });
     assert.ok(mainPickerState.providers.some((label) => label.includes('E2E Provider')));
     assert.ok(mainPickerState.providers.some((label) => label.includes('Alternate Provider')));
     assert.ok(mainPickerState.providers.some((label) => label.includes('Hermes gateway')));
@@ -3298,7 +3337,9 @@ async function main() {
     assert.ok(mainPickerState.providerStrip.height >= 58, JSON.stringify(mainPickerState.providerStrip));
     assert.ok(mainPickerState.providerStrip.scrollWidth > mainPickerState.providerStrip.clientWidth, JSON.stringify(mainPickerState.providerStrip));
     assert.ok(mainPickerState.providerButtons.every((button) => button.height >= 30 && button.color !== 'rgba(0, 0, 0, 0)'), JSON.stringify(mainPickerState.providerButtons));
-    assert.equal(mainPickerState.effortColumns, 4);
+    assert.deepEqual(mainPickerState.effort, {
+      presentation: 'slider', sliderShowing: true, steps: 7, buttonGridHidden: true, buttonCount: 7,
+    }, 'the picker offers the effort slider, with the seven-level button grid as the hidden alternative view');
     if (ASSIST_THEME === 'nous' && ASSIST_MODE === 'light') {
       const selectedProviderButton = mainPickerState.providerButtons.find((button) => button.label.includes('E2E Provider'));
       assert.equal(selectedProviderButton?.background, 'rgb(255, 255, 255)');
@@ -3428,9 +3469,9 @@ async function main() {
     const diagnostics = {};
     if (fixture) {
       try {
-        diagnostics.fixture = await fixture.evaluate(`(() => {
+        diagnostics.fixture = await assistEvaluate(fixture, `(() => {
           const host = document.querySelector('#hermes-inline-draft-host');
-          const root = host?.shadowRoot;
+          const root = __assistRoot;
           return {
             hostCount: document.querySelectorAll('#hermes-inline-draft-host').length,
             panelHidden: root?.querySelector('.panel')?.hidden,

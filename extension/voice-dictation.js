@@ -3,6 +3,7 @@ import {
   DEFAULT_SETTINGS,
   buildAudioTranscriptionBody,
   dashboardVoiceFailureMessage,
+  normalizeGatewayMode,
   normalizeGatewayUrl,
   prepareOnDeviceSpeechRecognition,
   shouldFallbackToWebSpeechForTranscription,
@@ -87,6 +88,7 @@ async function resolveVoicePageDashboardBaseUrl() {
     discover: async () => {
       const cached = await readCachedRosterUrl().catch(() => ({ url: '' }));
       return discoverLocalDashboardBaseUrl({
+        gatewayMode: normalizeGatewayMode(settings.gatewayMode),
         cachedUrl: cached?.url || '',
         cachedAt: Number(cached?.cachedAt || 0),
         gatewayUrl: normalizeGatewayUrl(settings.gatewayUrl),

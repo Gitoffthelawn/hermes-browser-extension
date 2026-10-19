@@ -51,6 +51,7 @@ import {
   CONTROLLER_RECONCILE_ALARM,
 } from './lib/controller-lifecycle.mjs';
 import { createControllerConnector } from './lib/controller-connector.mjs';
+import { FORBIDDEN_SENDER_RESPONSE, isExtensionPageSender } from './lib/message-sender.mjs';
 import {
   CONTROLLER_WORKER_MESSAGES,
   createControllerServiceWorker,
@@ -112,6 +113,7 @@ const controllerWorker = typeof browserApi.storage?.local?.set === 'function'
       approvalStore: browserControlRuntime.approvals,
       getControllerCapabilities: async (settings) => (await browserControlRuntime.status(settings)).capabilities,
       executeBrowserCommand: (frame, context) => browserControlRuntime.execute(frame, context, context.settings),
+      releaseTabDebugger: (tabId) => browserControlRuntime.releaseTab(tabId),
       getTab: (tabId) => browserApi.tabs.get(tabId),
     })
   : null;
@@ -128,9 +130,17 @@ function startControllerAlarms() {
   return true;
 }
 
+// A restarted or suspended service worker loses the idle-detach timers of the
+// debugger sessions it opened; this removes any attachment it no longer tracks.
+function sweepDebuggerOrphans() {
+  browserControlRuntime.sweepOrphanSessions().catch(() => {});
+}
+sweepDebuggerOrphans();
+
 browserApi.alarms?.onAlarm?.addListener?.((alarm) => {
   if (!alarm?.name) return;
   if (alarm.name === CONTROLLER_HEARTBEAT_ALARM || alarm.name === CONTROLLER_RECONCILE_ALARM) {
+    sweepDebuggerOrphans();
     controllerWorker?.reconcile({ reason: alarm.name })
       .catch((error) => console.warn('[Hermes Browser] Controller alarm reconcile failed:', error));
   }
@@ -967,11 +977,31 @@ browserApi.storage?.onChanged?.addListener?.((changes, areaName) => {
       .catch((error) => console.warn('[Hermes Browser] Could not apply changed panel residency setting:', error));
   }
 });
+const EXTENSION_PAGE_ONLY_MESSAGE_TYPES = new Set([
+  ...WAKE_BACKGROUND_MESSAGE_TYPES,
+  CONTEXT_MENU_CONFIG_GET,
+  CONTEXT_MENU_CONFIG_MUTATE,
+  CONTEXT_MENU_REQUEST_CLAIM,
+  'HERMES_OPEN_FULL_VIEW',
+  'HERMES_GET_YOUTUBE_TRANSCRIPT',
+  LOOPBACK_FETCH_MESSAGE,
+]);
+function isExtensionPageOnlyMessageType(type) {
+  return EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has(type) || themeMarketplaceController.handles(type);
+}
 browserApi.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // SECURITY BOUNDARY: Untrusted Input — `message` arrives from extension
   // pages, content scripts, or (via forwarded events) web page code. Never
   // trust its fields; validate types and treat string payloads as
   // attacker-controlled until they pass through the sanitizer at render time.
+  // Types below are sent only by this extension's own pages. Content scripts
+  // (page-reachable) never send them, so a tab sender is refused outright.
+  // Content-script types (inline Assist, controller document-ready) keep their
+  // own sender checks further down.
+  if (isExtensionPageOnlyMessageType(message?.type) && !isExtensionPageSender(sender, browserApi.runtime)) {
+    sendResponse({ ...FORBIDDEN_SENDER_RESPONSE });
+    return false;
+  }
   const action = CONTROLLER_WORKER_MESSAGE_TYPES.has(message?.type)
     ? controllerWorker
       ? controllerWorker.handleMessage(message, sender)

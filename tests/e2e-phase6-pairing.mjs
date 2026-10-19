@@ -19,6 +19,7 @@ import {
   DIST,
   ROOT,
   chromeExecutable,
+  ensureExtensionStartupPage,
   fetchJson,
   killChrome,
   unpackedExtensionId,
@@ -242,6 +243,7 @@ async function main() {
     await waitFor(() => existsSync(activePort));
     const [portLine] = (await readFile(activePort, 'utf8')).trim().split('\n');
     const devtoolsBase = `http://127.0.0.1:${Number(portLine)}`;
+    await ensureExtensionStartupPage(devtoolsBase, extensionId);
     const version = await fetchJson(`${devtoolsBase}/json/version`);
     browser = new (await import('./e2e-phase6-browser-control.mjs')).CdpClient(version.webSocketDebuggerUrl);
     await browser.connect();

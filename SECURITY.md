@@ -1,6 +1,6 @@
 # Security Notes
 
-Hermes Browser Extension v0.3.0 combines review-first browser context with opt-in live control for explicitly leased tabs. Browser-bound requests stay on the authenticated extension controller and never fall back to another browser backend.
+Hermes Browser Extension v0.3.0 combines review-first browser context with opt-in live control for tabs you explicitly attach. Browser-bound requests stay on the authenticated extension controller and never fall back to another browser backend.
 
 ## Current permission model
 
@@ -9,7 +9,7 @@ The extension requests:
 - `sidePanel` to render the Hermes side panel.
 - `tabs` and `activeTab` to identify and scope browser tabs after user interaction.
 - `scripting` to inject the bounded context and control runtime when needed.
-- `debugger` to inspect accessibility metadata and perform control actions only while Hermes Control is enabled for leased tabs.
+- `debugger` to inspect accessibility metadata and perform control actions only while Hermes Control is enabled for attached tabs.
 - `alarms` to maintain bounded service-worker lifecycle timers.
 - `contextMenus` for user-invoked Hermes actions.
 - `offscreen` for bounded extension-owned wake/listener support. It has no controller authority.
@@ -21,7 +21,7 @@ The extension does not request `nativeMessaging`, `webNavigation`, cookies, hist
 
 ## Controller authority
 
-Control is disabled by default. Enabling it registers one authenticated MV3 controller and acquires explicit leases for selected tabs. Every command is bound to the controller identity, browser profile, lease owner, tab, frame, and document generation.
+Control is disabled by default. Enabling it registers one authenticated MV3 controller and attaches the selected tabs. Every command is bound to the controller identity, browser profile, attachment owner, tab, frame, and document generation.
 
 - stale refs, stale documents, stale owners, borrowed tabs, and changed origins fail closed;
 - stop and detach are terminal latches;

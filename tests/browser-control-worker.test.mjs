@@ -307,7 +307,7 @@ test('successful exact-target commands renew the owned lease idle TTL and persis
   assert.deepEqual(worker.status().leasedTabIds, [76]);
 });
 
-test('Phase 6 worker keeps real actions disabled without explicit user control setting', async () => {
+test('Phase 6 worker never registers while control is off and connects the moment it is turned on', async () => {
   const storage = memoryStorage({ hermesBrowserSettings: settings({ browserControlEnabled: false }) });
   const transport = connector();
   let calls = 0;
@@ -317,17 +317,38 @@ test('Phase 6 worker keeps real actions disabled without explicit user control s
     product: PRODUCT,
     randomUUID: uuids(),
     extensionOrigin: 'chrome-extension://fixture',
-    executeBrowserCommand: async () => { calls += 1; return { ok: true }; },
+    executeBrowserCommand: async () => { calls += 1; return { ok: true, result: { status: 'scrolled' } }; },
   });
-  await worker.boot();
+  const booted = await worker.boot();
+  // No registration at the gateway while control is off: it would bind a noop lane.
+  assert.equal(transport.connections.length, 0);
+  assert.equal(booted.connected, false);
+  assert.equal(booted.dormant, true);
+  assert.equal(worker.status().controlEnabled, false);
+  assert.equal((await worker.reconcile({ reason: 'alarm' })).connected, false);
+  assert.equal(transport.connections.length, 0);
+
+  // Turning control on (settings refresh) connects immediately.
+  storage.state.hermesBrowserSettings = settings({ browserControlEnabled: true });
+  const refreshed = await worker.handleMessage({ type: CONTROLLER_WORKER_MESSAGES.settingsRefresh }, extensionSender());
+  assert.equal(refreshed.connected, true);
+  assert.equal(transport.connections.length, 1);
   const ready = await ownedReady(worker, 78);
   await transport.connections[0].emit({
     method: 'browser.controller.command',
-    params: { command_id: 'disabled-real', action: 'browser_scroll', arguments: { direction: 'down' }, tab_id: 78, document_generation: ready.documentGeneration },
+    params: { command_id: 'enabled-real', action: 'browser_scroll', arguments: { direction: 'down' }, tab_id: 78, document_generation: ready.documentGeneration },
   });
   await settle();
-  assert.equal(calls, 0);
-  assert.equal(transport.connections[0].sent.at(-1).params.error.code, 'action_disabled');
+  assert.equal(calls, 1);
+  assert.equal(transport.connections[0].sent.at(-1).params.ok, true);
+
+  // Turning it off again closes the socket and does not re-register a noop lane.
+  const detached = await worker.handleMessage({ type: CONTROLLER_WORKER_MESSAGES.detach }, extensionSender());
+  assert.equal(detached.ok, true);
+  assert.equal(worker.status().connected, false);
+  assert.equal(transport.connections.length, 1);
+  assert.equal((await worker.reconcile({ reason: 'alarm' })).connected, false);
+  assert.equal(transport.connections.length, 1);
 });
 
 test('Phase 6 worker revalidates lease and document immediately before queued side effects', async () => {
@@ -433,6 +454,144 @@ test('Phase 6 approval grants require a trusted extension sender and bind exact 
     ok: true,
     result: { status: 'pressed' },
   });
+});
+
+test('a tab switch waits for approval and is granted through the worker even though it names another tab', async () => {
+  const storage = memoryStorage({ hermesBrowserSettings: settings() });
+  const transport = connector();
+  const approvals = createBrowserControlApprovalStore();
+  const switched = [];
+  const executor = createBrowserControlExecutor({
+    adapter: {
+      contract: { enabled: true, actions: ['browser_tab_activate'] },
+      async execute(action, args) {
+        switched.push(Number(args.tab_id));
+        return { status: 'tab-activated' };
+      },
+    },
+    approvals,
+    refs: createBrowserControlRefStore(),
+  });
+  const worker = createControllerServiceWorker({
+    storageArea: storage.area,
+    connector: transport,
+    product: PRODUCT,
+    randomUUID: uuids(),
+    extensionOrigin: 'chrome-extension://fixture',
+    approvalStore: approvals,
+    executeBrowserCommand: (frame, context) => executor.execute(frame, context),
+  });
+  await worker.boot();
+  const ready = await ownedReady(worker, 81);
+  const leased = await worker.handleMessage({
+    type: CONTROLLER_WORKER_MESSAGES.leaseAcquire,
+    kind: TAB_LEASE_KINDS.THIS_TAB,
+    ownership: TAB_LEASE_OWNERSHIPS.OWNED,
+    ownerId: worker.status().controllerId,
+    tabIds: [82],
+  }, extensionSender());
+  assert.equal(leased.ok, true, JSON.stringify(leased));
+  await transport.connections[0].emit({
+    method: 'browser.controller.command',
+    params: {
+      command_id: 'switch-82',
+      action: 'browser_tab_activate',
+      arguments: { tab_id: 82 },
+      tab_id: 81,
+      document_generation: ready.documentGeneration,
+    },
+  });
+  await settle();
+  const pending = worker.status().pendingApproval;
+  assert.equal(pending?.action, 'browser_tab_activate', JSON.stringify(worker.status()));
+  assert.equal(pending.reason, 'Switch your view to this tab?');
+  // The request is bound to the tab the command ran on, which is the tab the worker's lease check covers,
+  // and to the tab it switches to, so the grant cannot be spent on another one.
+  assert.equal(pending.tabId, 81);
+  assert.equal(pending.binding, 'tab:82');
+  assert.deepEqual(switched, []);
+  assert.equal((await worker.handleMessage({
+    type: CONTROLLER_WORKER_MESSAGES.approvalGrant,
+    ...pending,
+  }, extensionSender())).ok, true);
+  await settle();
+  assert.deepEqual(switched, [82]);
+  assert.deepEqual(transport.connections[0].sent.at(-1).params, {
+    command_id: 'switch-82',
+    tab_id: 81,
+    ok: true,
+    result: { status: 'tab-activated' },
+  });
+});
+
+async function waitForPendingApproval(worker, attempts = 200) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const pending = worker.status().pendingApproval;
+    if (pending) return pending;
+    await settle();
+  }
+  assert.fail(`no approval was requested: ${JSON.stringify(worker.status())}`);
+  return null;
+}
+
+test('a batch click that needs approval after its own navigation is granted through the worker under the new document generation', async () => {
+  const storage = memoryStorage({ hermesBrowserSettings: settings() });
+  const transport = connector();
+  const approvals = createBrowserControlApprovalStore();
+  const clicked = [];
+  let workerRef = null;
+  const adapter = {
+    contract: { enabled: true, actions: ['browser_batch', 'browser_navigate', 'browser_click', 'browser_snapshot'] },
+    inspect: async () => ({ currentUrl: 'https://example.test/start', hasUnsavedContent: false }),
+    settle: async () => ({ navigated: true, url: 'https://example.test/next', title: 'Next', timedOut: false }),
+    async execute(action, args) {
+      if (action === 'browser_navigate') {
+        // Chrome reports the navigation, then the new document's content script announces itself.
+        await workerRef.handleTabUpdated(81, { status: 'loading' });
+        await workerRef.handleMessage({ type: CONTROLLER_WORKER_MESSAGES.documentReady }, extensionSender({ tabId: 81 }));
+        return { navigated: true, url: 'https://example.test/next', title: 'Next' };
+      }
+      if (action === 'browser_click') {
+        clicked.push({ x: args.x, y: args.y });
+        return { status: 'clicked' };
+      }
+      return { title: 'Next', url: 'https://example.test/next', text: '', nodes: [] };
+    },
+  };
+  const executor = createBrowserControlExecutor({ adapter, approvals, refs: createBrowserControlRefStore() });
+  const worker = createControllerServiceWorker({
+    storageArea: storage.area,
+    connector: transport,
+    product: PRODUCT,
+    randomUUID: uuids(),
+    extensionOrigin: 'chrome-extension://fixture',
+    approvalStore: approvals,
+    executeBrowserCommand: (frame, context) => executor.execute(frame, context),
+  });
+  workerRef = worker;
+  await worker.boot();
+  const ready = await ownedReady(worker, 81);
+  const connection = transport.connections[0];
+  await connection.emit({
+    method: 'browser.controller.command',
+    params: {
+      command_id: 'batch-nav-click',
+      action: 'browser_batch',
+      arguments: { actions: [{ action: 'navigate', url: 'https://example.test/next' }, { action: 'click', x: 10, y: 20 }] },
+    },
+  });
+  const pending = await waitForPendingApproval(worker);
+  assert.equal(pending.commandId, 'batch-nav-click');
+  assert.equal(pending.action, 'browser_click');
+  // The click runs on the document the navigation produced, so the request names that one.
+  assert.ok(pending.documentGeneration > ready.documentGeneration, JSON.stringify(pending));
+  const granted = await worker.handleMessage({ type: CONTROLLER_WORKER_MESSAGES.approvalGrant, ...pending }, extensionSender());
+  assert.equal(granted.ok, true, JSON.stringify(granted));
+  const terminal = await waitForTerminal(connection, 'batch-nav-click');
+  assert.equal(terminal.ok, true, JSON.stringify(terminal));
+  assert.equal(terminal.result.status, 'completed');
+  assert.equal(terminal.result.completed, 2);
+  assert.deepEqual(clicked, [{ x: 10, y: 20 }]);
 });
 
 test('recoverable reconnect preserves a paused approval without auto-approving it', async () => {
@@ -604,6 +763,46 @@ test('Phase 6 worker adopts created tabs and releases closed tabs under controll
   await settle();
   assert.deepEqual(worker.status().leasedTabIds, [911]);
   assert.deepEqual(calls[1].context.ownedTabIds, [911, 912]);
+});
+
+test('a tab Hermes opens becomes the Show tab target, is persisted, and survives a restart', async () => {
+  const storage = memoryStorage({ hermesBrowserSettings: settings() });
+  const createWorker = (transport) => createControllerServiceWorker({
+    storageArea: storage.area,
+    connector: transport,
+    product: PRODUCT,
+    randomUUID: uuids(),
+    extensionOrigin: 'chrome-extension://fixture',
+    executeBrowserCommand: async (frame) => ({
+      ok: true,
+      result: frame.action === 'browser_tab_create'
+        ? { tab: { id: 912, windowId: 2, active: false, url: 'https://example.test/new' } }
+        : { status: 'ok' },
+    }),
+  });
+  const transport = connector();
+  const worker = createWorker(transport);
+  await worker.boot();
+  const ready = await ownedReady(worker, 911, { windowId: 2 });
+  await transport.connections[0].emit({
+    method: 'browser.controller.command',
+    params: {
+      command_id: 'create-background',
+      action: 'browser_tab_create',
+      arguments: { url: 'https://example.test/new', active: true, lease_kind: TAB_LEASE_KINDS.TASK_SET, task_set_id: 'task-912' },
+      tab_id: 911,
+      document_generation: ready.documentGeneration,
+    },
+  });
+  await settle();
+  assert.equal(transport.connections[0].sent.at(-1).params.ok, true, JSON.stringify(transport.connections[0].sent.at(-1)));
+  assert.deepEqual(worker.status().leasedTabIds, [911, 912]);
+  assert.equal(worker.status().lastActionTabId, 912);
+  assert.equal(storage.state.hermesBrowserControllerWorker.lastActionTabId, 912);
+
+  const restarted = createWorker(connector());
+  await restarted.boot();
+  assert.equal(restarted.status().lastActionTabId, 912);
 });
 
 test('broker-v1 commands without target metadata resolve only one exact owned tab', async () => {
@@ -844,3 +1043,157 @@ test('worker drops a rejected pairing token so reconnect can mint a fresh ticket
   assert.equal(String(store.state.hermesBrowserSettings.tokenSource || ''), '');
   assert.equal(String(store.state.hermesBrowserSettings.apiKey || ''), '');
 });
+
+test('Phase 6 worker drops the tab debugger session when a lease is released, paused, or detached', async () => {
+  const storage = memoryStorage({ hermesBrowserSettings: settings() });
+  const released = [];
+  const worker = createControllerServiceWorker({
+    storageArea: storage.area,
+    connector: connector(),
+    product: PRODUCT,
+    randomUUID: uuids(),
+    extensionOrigin: 'chrome-extension://fixture',
+    executeBrowserCommand: async () => ({ ok: true, result: { status: 'scrolled' } }),
+    releaseTabDebugger: async (tabId) => {
+      released.push(tabId);
+      if (tabId === 913) throw new Error('detach failed');
+    },
+  });
+  await worker.boot();
+  const { boot } = await ownedReady(worker, 911, { windowId: 2 });
+  const sender = extensionSender();
+
+  const release = await worker.handleMessage({
+    type: CONTROLLER_WORKER_MESSAGES.leaseRelease, ownerId: boot.controllerId, tabIds: [911],
+  }, sender);
+  assert.equal(release.ok, true);
+  await settle();
+  assert.deepEqual(released, [911]);
+
+  await ownedReady(worker, 912, { windowId: 2 });
+  await worker.handleMessage({ type: CONTROLLER_WORKER_MESSAGES.pause }, sender);
+  await settle();
+  assert.deepEqual(released, [911, 912], 'pausing releases the leased tabs');
+  await worker.handleMessage({ type: CONTROLLER_WORKER_MESSAGES.resume }, sender);
+  await settle();
+  assert.deepEqual(released, [911, 912], 'resuming does not touch sessions; the next command re-attaches');
+
+  await ownedReady(worker, 913, { windowId: 2 });
+  const detached = await worker.handleMessage({ type: CONTROLLER_WORKER_MESSAGES.detach }, sender);
+  assert.equal(detached.ok, true, 'a failing release hook never fails the transition');
+  await settle();
+  assert.ok(released.includes(913));
+});
+
+test('Phase 6 worker works without a debugger release hook', async () => {
+  const storage = memoryStorage({ hermesBrowserSettings: settings() });
+  const worker = createControllerServiceWorker({
+    storageArea: storage.area,
+    connector: connector(),
+    product: PRODUCT,
+    randomUUID: uuids(),
+    extensionOrigin: 'chrome-extension://fixture',
+    executeBrowserCommand: async () => ({ ok: true, result: { status: 'scrolled' } }),
+  });
+  await worker.boot();
+  const { boot } = await ownedReady(worker, 911, { windowId: 2 });
+  const release = await worker.handleMessage({
+    type: CONTROLLER_WORKER_MESSAGES.leaseRelease, ownerId: boot.controllerId, tabIds: [911],
+  }, extensionSender());
+  assert.equal(release.ok, true);
+});
+
+async function waitForTerminal(connection, commandId, attempts = 100) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const terminal = connection.sent.find((frame) => frame.method === 'browser.controller.result' && frame.params.command_id === commandId);
+    if (terminal) return terminal.params;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.fail(`No terminal frame for ${commandId}`);
+  return null;
+}
+
+// A worker wired to the real executor with an adapter whose first click
+// navigates the way Chrome does: tabs.onUpdated bumps the document generation
+// and the new document's content script announces another one.
+async function navigatingClickWorker({ announceDuring }) {
+  const storage = memoryStorage({ hermesBrowserSettings: settings() });
+  const transport = connector();
+  const clicks = [];
+  let workerRef = null;
+  let onDetailPage = false;
+  const announce = async () => {
+    await workerRef.handleTabUpdated(91, { status: 'loading' });
+    await workerRef.handleMessage({ type: CONTROLLER_WORKER_MESSAGES.documentReady }, extensionSender({ tabId: 91 }));
+  };
+  const adapter = {
+    contract: { enabled: true, actions: ['browser_click', 'browser_snapshot'] },
+    inspect: async () => ({ currentUrl: 'https://example.test/list', hasUnsavedContent: false }),
+    settle: async () => ({ navigated: clicks.length === 1, url: 'https://example.test/detail', title: 'Detail', timedOut: false }),
+    async execute(action, args, context) {
+      if (action === 'browser_snapshot') {
+        if (onDetailPage && announceDuring === 'snapshot' && clicks.length === 1) await announce();
+        return onDetailPage
+          ? { title: 'Detail', url: 'https://example.test/detail', text: 'Detail page body', nodes: [{ role: 'button', name: 'Add to cart', backendDOMNodeId: 501 }] }
+          : { title: 'List', url: 'https://example.test/list', text: 'List', nodes: [{ role: 'link', name: 'Open detail', backendDOMNodeId: 101 }] };
+      }
+      clicks.push({ ref: args.ref, backendDOMNodeId: context.target?.backendDOMNodeId });
+      if (clicks.length === 1) {
+        onDetailPage = true;
+        if (announceDuring === 'click') await announce();
+        else await workerRef.handleTabUpdated(91, { status: 'loading' });
+      }
+      return { status: 'clicked' };
+    },
+  };
+  const executor = createBrowserControlExecutor({
+    adapter,
+    approvals: createBrowserControlApprovalStore(),
+    refs: createBrowserControlRefStore(),
+  });
+  const worker = createControllerServiceWorker({
+    storageArea: storage.area,
+    connector: transport,
+    product: PRODUCT,
+    randomUUID: uuids(),
+    extensionOrigin: 'chrome-extension://fixture',
+    executeBrowserCommand: (frame, context) => executor.execute(frame, context),
+  });
+  workerRef = worker;
+  await worker.boot();
+  await ownedReady(worker, 91);
+  return { transport, clicks };
+}
+
+for (const announceDuring of ['click', 'snapshot']) {
+  test(`Phase 2 refs minted after a navigating click work for the next command (document ready during ${announceDuring})`, async () => {
+    const { transport, clicks } = await navigatingClickWorker({ announceDuring });
+    const connection = transport.connections[0];
+    // Broker-v1 style: no tab or generation, the worker binds the authoritative ones.
+    const send = (commandId, action, args) => connection.emit({
+      method: 'browser.controller.command',
+      params: { command_id: commandId, action, arguments: args },
+    });
+
+    await send('nav-snapshot', 'browser_snapshot', {});
+    const first = await waitForTerminal(connection, 'nav-snapshot');
+    assert.equal(first.ok, true);
+    assert.equal(first.result.refs[0].ref, '@e1');
+
+    await send('nav-click-1', 'browser_click', { ref: '@e1' });
+    const clicked = await waitForTerminal(connection, 'nav-click-1');
+    assert.equal(clicked.ok, true, JSON.stringify(clicked));
+    assert.equal(clicked.result.status, 'clicked');
+    assert.equal(clicked.result.navigated, true);
+    assert.equal(clicked.result.url, 'https://example.test/detail');
+    assert.deepEqual(clicked.result.snapshot.refs.map((item) => item.name), ['Add to cart']);
+    const nextRef = clicked.result.snapshot.refs[0].ref;
+
+    // The refs in that result must be valid for the very next command.
+    await send('nav-click-2', 'browser_click', { ref: nextRef });
+    const followUp = await waitForTerminal(connection, 'nav-click-2');
+    assert.equal(followUp.ok, true, JSON.stringify(followUp));
+    assert.equal(followUp.result.status, 'clicked');
+    assert.deepEqual(clicks.map((click) => click.backendDOMNodeId), [101, 501]);
+  });
+}

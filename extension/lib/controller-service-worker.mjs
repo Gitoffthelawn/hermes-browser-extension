@@ -27,7 +27,12 @@ import {
   createTabLeaseStore,
 } from './tab-leases.mjs';
 import { CONTROLLER_METHODS } from './controller-protocol.mjs';
-import { createBrowserControlApprovalStore, validateBrowserControlUrl } from './browser-control-safety.mjs';
+import {
+  BROWSER_CONTROL_RISKS,
+  classifyBrowserControlAction,
+  createBrowserControlApprovalStore,
+  validateBrowserControlUrl,
+} from './browser-control-safety.mjs';
 import { isGatewayAuthRejection, transportUsesDashboardTicket } from './connection-modes.mjs';
 
 export const CONTROLLER_WORKER_VERSION = 1;
@@ -51,12 +56,21 @@ export const CONTROLLER_WORKER_MESSAGES = Object.freeze({
   detach: 'HERMES_CONTROLLER_DETACH',
   settingsRefresh: 'HERMES_CONTROLLER_SETTINGS_REFRESH',
   targetResolve: 'HERMES_CONTROLLER_TARGET_RESOLVE',
+  prepareTurn: 'HERMES_CONTROLLER_PREPARE_TURN',
 });
 
 const KNOWN_LEASE_KINDS = new Set(Object.values(TAB_LEASE_KINDS));
 const KNOWN_OWNERSHIPS = new Set(Object.values(TAB_LEASE_OWNERSHIPS));
 const CONTROL_PLANE_TAB_ID = 2_147_483_647;
 const STATUS_RECONNECT_COOLDOWN_MS = 5_000;
+// The page view prepared for a turn must never hold the turn up for long.
+const PREPARE_TURN_SNAPSHOT_MS = 1_500;
+const PREPARE_TURN_BACKSTOP_MS = 1_750;
+// Commands that carry their own arguments.tab_id meaning (act on / group that
+// tab) never use it to pick the command's target tab.
+const TAB_ARGUMENT_OWNED_ACTIONS = new Set([
+  'browser_tab_activate', 'browser_tab_close', 'browser_tab_group', 'browser_tab_ungroup',
+]);
 
 function cleanIdentity(raw = {}) {
   const controllerId = String(raw?.controllerId || '').trim();
@@ -238,6 +252,7 @@ export function createControllerServiceWorker({
   approvalStore = undefined,
   getControllerCapabilities = undefined,
   getTab = undefined,
+  releaseTabDebugger = undefined,
 } = {}) {
   if (!storageArea?.get || !storageArea?.set) throw new TypeError('Controller storage area is required.');
   if (!connector?.connect) throw new TypeError('Controller connector is required.');
@@ -250,6 +265,12 @@ export function createControllerServiceWorker({
   let generation = 1;
   let documentGenerations = {};
   let pausedLeases = {};
+  // The tab the latest turn was prepared for; the default target when several
+  // tabs are attached and a command names none.
+  let lastTurnTabId = 0;
+  // The tab of the most recent action Hermes ran. Show tab points at it between
+  // actions, so the button does not flicker with each action.
+  let lastActionTabId = 0;
   let terminalOutbox = [];
   let recoveredPending = [];
   let registry = createControllerRegistry({ now });
@@ -260,6 +281,38 @@ export function createControllerServiceWorker({
   let activeAction = null;
   let scopeChanging = false;
   const browserExecutor = typeof executeBrowserCommand === 'function' ? executeBrowserCommand : null;
+
+  function executorContext(base = {}, { lease, tabId, frameId, authoritative }) {
+    const ownedLeases = ownedControllerLeases();
+    return {
+      ...base,
+      approvals,
+      settings: { ...settings },
+      leasedTabIds: ownedLeases.map((ownedLease) => ownedLease.tabId),
+      ownedTabIds: ownedLeases.map((ownedLease) => ownedLease.tabId),
+      currentWindowId: lease.windowId,
+      // A batch asks this between steps: Pause, a debugger detach or turning
+      // control off while it runs must end it, not let the rest of the steps
+      // re-attach and carry on.
+      controlHalted: () => settings?.browserControlEnabled !== true
+        || settings?.browserControlPaused === true
+        || Boolean(pausedLeases[String(tabId)]),
+      // The executor mints post-action refs under the generation the next
+      // command will carry, which a navigation advances while it runs.
+      currentDocumentGeneration: (hookTabId, hookFrameId = 0) => Number(
+        documentGenerations[frameKey(Number(hookTabId), Math.max(0, Number(hookFrameId) || 0))] || 0,
+      ),
+      scope: {
+        controllerId,
+        leaseOwnerId: lease.ownerId,
+        leaseId: lease.leaseId,
+        leaseGeneration: lease.generation,
+        tabId,
+        frameId,
+        documentGeneration: authoritative,
+      },
+    };
+  }
 
   async function executeWorkerCommand(frame = {}, context = {}) {
     if (scopeChanging) return terminalError('controller_busy', 'Control scope is being updated.');
@@ -315,25 +368,9 @@ export function createControllerServiceWorker({
       tabId,
       startedAt: Number(now()),
     };
+    lastActionTabId = tabId;
     try {
-      const ownedLeases = ownedControllerLeases();
-      const result = await browserExecutor(frame, {
-        ...context,
-        approvals,
-        settings: { ...settings },
-        leasedTabIds: ownedLeases.map((ownedLease) => ownedLease.tabId),
-        ownedTabIds: ownedLeases.map((ownedLease) => ownedLease.tabId),
-        currentWindowId: lease.windowId,
-        scope: {
-          controllerId,
-          leaseOwnerId: lease.ownerId,
-          leaseId: lease.leaseId,
-          leaseGeneration: lease.generation,
-          tabId,
-          frameId,
-          documentGeneration: authoritative,
-        },
-      });
+      const result = await browserExecutor(frame, executorContext(context, { lease, tabId, frameId, authoritative }));
       if (!result?.ok) return result;
 
       if (action === 'browser_tab_create') {
@@ -356,6 +393,8 @@ export function createControllerServiceWorker({
           taskSetId,
         });
         if (!acquired.ok) return terminalError('lease_acquire_failed', 'The created tab could not be adopted by this controller.');
+        // The tab Hermes just opened is the one Show tab offers, though it opens in the background.
+        lastActionTabId = createdTabId;
         await persist();
       }
 
@@ -417,6 +456,8 @@ export function createControllerServiceWorker({
       routeKey: controllerRouteKey(settings),
       documentGenerations: cleanDocumentGenerations(documentGenerations),
       pausedLeases: cleanPausedLeases(pausedLeases),
+      lastTurnTabId,
+      lastActionTabId,
       terminalOutbox: normalizeTerminalOutbox(terminalOutbox, { at: Number(now()) }),
       updatedAt: Number(now()),
     };
@@ -453,6 +494,7 @@ export function createControllerServiceWorker({
       pendingApprovals: approvals.count(),
       pendingApproval: approvals.pending?.()[0] || null,
       activeAction: activeAction ? { ...activeAction } : null,
+      lastActionTabId: lastActionTabId > 0 ? lastActionTabId : null,
       settingsRevision,
       lastConnectFailure: lastConnectFailure ? { ...lastConnectFailure } : null,
     };
@@ -619,7 +661,30 @@ export function createControllerServiceWorker({
     if (String(params.action || '') === 'controller.noop') return { ok: true, params };
 
     const owned = ownedControllerLeases();
-    if (owned.length !== 1) {
+    const ownedTabIds = new Set(owned.map((lease) => lease.tabId));
+    // The model may name an attached tab in the command arguments; it must be
+    // one this controller owns. Actions that use arguments.tab_id for their own
+    // purpose keep the default target.
+    const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {};
+    const argTabId = Number(args.tab_id);
+    const namesTab = args.tab_id !== undefined && args.tab_id !== null && args.tab_id !== ''
+      && !TAB_ARGUMENT_OWNED_ACTIONS.has(String(params.action || ''));
+    let tabId = 0;
+    if (namesTab) {
+      if (!Number.isInteger(argTabId) || !ownedTabIds.has(argTabId)) {
+        return {
+          ok: false,
+          code: 'lease_not_owned',
+          message: 'tab_id is not a browser tab attached to Hermes Control.',
+        };
+      }
+      tabId = argTabId;
+    } else if (owned.length === 1) {
+      tabId = owned[0].tabId;
+    } else if (owned.length > 1 && ownedTabIds.has(lastTurnTabId)) {
+      tabId = lastTurnTabId;
+    }
+    if (!tabId) {
       return {
         ok: false,
         code: owned.length === 0 ? 'target_unavailable' : 'ambiguous_target',
@@ -628,14 +693,13 @@ export function createControllerServiceWorker({
           : 'The controller owns more than one browser tab; an exact target is required.',
       };
     }
-    const tabId = owned[0].tabId;
     const frameId = 0;
     const documentGeneration = Number(documentGenerations[frameKey(tabId, frameId)] || 0);
     if (!documentGeneration) {
       return {
         ok: false,
         code: 'stale_document',
-        message: 'The only owned browser tab has no current document generation.',
+        message: 'The target browser tab has no current document generation.',
       };
     }
     return {
@@ -729,6 +793,12 @@ export function createControllerServiceWorker({
   async function connect() {
     if (connected && activeConnection) return status();
     if (connecting) return connecting;
+    if (settings?.browserControlEnabled !== true) {
+      // A controller registered while control is off would still bind the lane
+      // at the gateway (noop only) and keep the legacy browser from answering.
+      lastConnectFailure = null;
+      return { ...status(), connected: false, dormant: true, reason: 'control_off' };
+    }
     const sessionId = durableSessionId(settings);
     if (!sessionId) {
       lastConnectFailure = { reason: 'missing_session', detail: 'No Hermes session is active.' };
@@ -843,6 +913,14 @@ export function createControllerServiceWorker({
         const routeKey = controllerRouteKey(settings);
         const previousRouteKey = String(previousWorker?.routeKey || '').trim();
         const sameDurableRoute = Boolean(identity && routeKey && previousRouteKey === routeKey);
+        const previousTurnTab = Number(previousWorker?.lastTurnTabId);
+        lastTurnTabId = sameDurableRoute && Number.isInteger(previousTurnTab) && previousTurnTab > 0
+          ? previousTurnTab
+          : 0;
+        const previousActionTab = Number(previousWorker?.lastActionTabId);
+        lastActionTabId = sameDurableRoute && Number.isInteger(previousActionTab) && previousActionTab > 0
+          ? previousActionTab
+          : 0;
         terminalOutbox = Number(previousWorker?.version) === CONTROLLER_WORKER_VERSION
           ? normalizeTerminalOutbox(previousWorker.terminalOutbox, { at: Number(now()) })
             .filter((entry) => entry.routeKey === routeKey)
@@ -924,6 +1002,8 @@ export function createControllerServiceWorker({
     const previousRouteKey = controllerRouteKey(settings);
     settings = normalized;
     pausedLeases = {};
+    lastTurnTabId = 0;
+    lastActionTabId = 0;
     closeConnection();
     terminalRouteOverride = previousRouteKey;
     lifecycle.restart();
@@ -1076,6 +1156,13 @@ export function createControllerServiceWorker({
     }
   }
 
+  // Lease ended or paused: let the adapter detach its debugger session now
+  // instead of waiting for the idle timeout. Best effort, never blocks.
+  function releaseDebuggerSession(tabId) {
+    if (typeof releaseTabDebugger !== 'function') return;
+    Promise.resolve().then(() => releaseTabDebugger(tabId)).catch(() => undefined);
+  }
+
   async function releaseLeases(message = {}) {
     const ownerId = String(message.ownerId || '').trim();
     const tabIds = [...new Set((Array.isArray(message.tabIds) ? message.tabIds : [])
@@ -1087,6 +1174,7 @@ export function createControllerServiceWorker({
       const result = leases.release({ tabId, ownerId });
       if (result.ok) {
         released.push(result.lease);
+        releaseDebuggerSession(tabId);
         const nextPaused = { ...pausedLeases };
         delete nextPaused[String(tabId)];
         pausedLeases = nextPaused;
@@ -1100,6 +1188,9 @@ export function createControllerServiceWorker({
     settings = { ...settings, browserControlPaused: paused === true };
     await storageArea.set({ hermesBrowserSettings: { ...settings } });
     await persist();
+    if (paused === true) {
+      for (const tabId of leases.leasedTabIds()) releaseDebuggerSession(tabId);
+    }
     return { ...status(), paused: settings.browserControlPaused };
   }
 
@@ -1115,7 +1206,10 @@ export function createControllerServiceWorker({
     for (const tabId of leases.leasedTabIds()) {
       const lease = leases.leaseForTab(tabId);
       if (lease?.ownership !== TAB_LEASE_OWNERSHIPS.OWNED || lease.ownerId !== controllerId) continue;
-      if (leases.release({ tabId, ownerId: controllerId }).ok) releasedTabIds.push(tabId);
+      if (leases.release({ tabId, ownerId: controllerId }).ok) {
+        releasedTabIds.push(tabId);
+        releaseDebuggerSession(tabId);
+      }
     }
     approvals.clear?.();
     const nextSettings = { ...settings, browserControlEnabled: false, browserControlPaused: false };
@@ -1239,6 +1333,104 @@ export function createControllerServiceWorker({
     };
   }
 
+  // Page view for the turn's first action. The refs in it are minted by the
+  // same snapshot path browser_snapshot uses, under the tab's current document
+  // generation, so the model's first browser_click can use them directly.
+  // Every failure only omits the view; the turn goes on without it.
+  async function collectTurnSnapshot(target) {
+    if (!browserExecutor) return { reason: 'executor_unavailable' };
+    // Firefox has no debugger session; only Chromium reads the page this way.
+    if (normalizedProduct.engine !== 'chromium') return { reason: 'unsupported_browser' };
+    if (scopeChanging || activeAction || lifecycle.pendingCount() || approvals.count()) {
+      return { reason: 'controller_busy' };
+    }
+    const allowLocalDocuments = settings?.allowLocalDocuments === true;
+    if (classifyBrowserControlAction({
+      action: 'browser_snapshot', currentUrl: target.url, allowLocalDocuments,
+    }).risk === BROWSER_CONTROL_RISKS.BLOCKED) {
+      return { reason: 'restricted_page' };
+    }
+    const lease = leases.leaseForTab(target.tabId);
+    if (!lease) return { reason: 'lease_required' };
+    const frame = {
+      command_id: `prepare-turn-${Number(now())}`,
+      action: 'browser_snapshot',
+      tab_id: target.tabId,
+      frame_id: target.frameId,
+      document_generation: target.documentGeneration,
+      arguments: { full: false },
+      deadline_at: Number(now()) + PREPARE_TURN_SNAPSHOT_MS,
+    };
+    const abort = new AbortController();
+    let backstop = null;
+    try {
+      const outcome = await Promise.race([
+        Promise.resolve(browserExecutor(frame, executorContext({
+          signal: abort.signal,
+          snapshotBudget: 'turn',
+        }, {
+          lease,
+          tabId: target.tabId,
+          frameId: target.frameId,
+          authoritative: target.documentGeneration,
+        }))),
+        new Promise((resolve) => {
+          backstop = setTimeout(() => resolve({ ok: false, error: { code: 'snapshot_timeout' } }), PREPARE_TURN_BACKSTOP_MS);
+        }),
+      ]);
+      if (!outcome?.ok) return { reason: String(outcome?.error?.code || 'snapshot_failed').slice(0, 80) };
+      const view = outcome.result || {};
+      const text = String(view.text || '');
+      if (!text) return { reason: 'snapshot_empty' };
+      return {
+        snapshot: {
+          title: String(view.title || ''),
+          text,
+          truncated: view.truncated === true,
+          elementCount: Math.max(0, Number(view.element_count) || 0),
+        },
+      };
+    } catch {
+      return { reason: 'snapshot_failed' };
+    } finally {
+      clearTimeout(backstop);
+      abort.abort();
+    }
+  }
+
+  const PREPARE_TURN_MESSAGES = Object.freeze({
+    controller_unavailable: 'Hermes Control is not connected right now. Ask the user to check Hermes Control in the Hermes panel, then try again.',
+    lease_required: 'This tab is not attached to Hermes Control. Ask the user to press Attach this tab in the Hermes panel.',
+    lease_not_owned: 'This tab is not attached to Hermes Control. Ask the user to press Attach this tab in the Hermes panel.',
+  });
+
+  // Resolves the turn's exact target and, when control is attached and ready,
+  // the page view the model can act on straight away. Also records the tab as
+  // the default target for commands that name none.
+  async function prepareTurn(message = {}) {
+    const resolved = await resolveControlTarget(message);
+    if (!resolved.ok) {
+      const hint = PREPARE_TURN_MESSAGES[resolved.reason];
+      return hint ? { ...resolved, message: hint } : resolved;
+    }
+    if (settings?.browserControlPaused === true) {
+      return unavailableControlTarget('controller_paused', 'Browser control is paused. Ask the user to resume it in the Hermes panel.');
+    }
+    if (pausedLeases[String(resolved.tabId)]) {
+      return unavailableControlTarget('debugger_detached', 'Browser control stopped on this tab because the debugger was detached. Ask the user to attach the tab again in the Hermes panel.');
+    }
+    if (lastTurnTabId !== resolved.tabId) {
+      lastTurnTabId = resolved.tabId;
+      await persist();
+    }
+    const view = await collectTurnSnapshot(resolved);
+    return {
+      ...resolved,
+      state: 'ready',
+      ...(view.snapshot ? { controlSnapshot: view.snapshot } : { controlSnapshotOmitted: view.reason }),
+    };
+  }
+
   async function handleTabUpdated(tabId, changeInfo = {}) {
     await boot();
     const normalizedTabId = Number(tabId);
@@ -1270,7 +1462,11 @@ export function createControllerServiceWorker({
       pausedLeases = nextPaused;
     }
     const leaseRemoved = leases.removeTab(normalizedTabId).ok;
-    if (documentChanged || leaseRemoved || pauseRemoved) await persist();
+    const turnTabRemoved = lastTurnTabId === normalizedTabId;
+    if (turnTabRemoved) lastTurnTabId = 0;
+    const actionTabRemoved = lastActionTabId === normalizedTabId;
+    if (actionTabRemoved) lastActionTabId = 0;
+    if (documentChanged || leaseRemoved || pauseRemoved || turnTabRemoved || actionTabRemoved) await persist();
     return { ok: true, documentChanged, leaseRemoved, pauseRemoved };
   }
 
@@ -1342,6 +1538,7 @@ export function createControllerServiceWorker({
     if (type === CONTROLLER_WORKER_MESSAGES.leaseAcquire) return acquireLeases(message);
     if (type === CONTROLLER_WORKER_MESSAGES.leaseRelease) return releaseLeases(message);
     if (type === CONTROLLER_WORKER_MESSAGES.targetResolve) return resolveControlTarget(message);
+    if (type === CONTROLLER_WORKER_MESSAGES.prepareTurn) return prepareTurn(message);
     if (type === CONTROLLER_WORKER_MESSAGES.approvalGrant) return grantApproval(message);
     if (type === CONTROLLER_WORKER_MESSAGES.approvalReject) return rejectApproval(message);
     if (type === CONTROLLER_WORKER_MESSAGES.pause) return setPaused(true);

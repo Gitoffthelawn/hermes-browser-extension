@@ -1,8 +1,19 @@
 import { validateBrowserControlUrl } from './browser-control-safety.mjs';
 
+const SCOPE_HELP_KEYS = Object.freeze({
+  'this-tab': 'browser_control.help_scope_this_tab',
+  'selected-tabs': 'browser_control.help_scope_selected_tabs',
+  'task-set': 'browser_control.help_scope_task_set',
+});
+
+// The visible helper under the scope select names exactly what the chosen scope covers.
+export function browserControlScopeHelpKey(scope) {
+  return SCOPE_HELP_KEYS[scope] || SCOPE_HELP_KEYS['this-tab'];
+}
+
 // Presentation and explicit scope intent only; the worker owns the transaction.
 export function createBrowserControlDialog({ dialog, launcher, closeButton, focusFallback, label, refresh,
-  scopeInput, tabsField, tabsList, applyButton, scopeHint, loadTabs, getScope, getSelectedTabIds,
+  scopeInput, scopeHelp, tabsField, tabsList, applyButton, scopeHint, loadTabs, getScope, getSelectedTabIds,
   applyScope, translate = (key) => key,
 }) {
   let enabled = false;
@@ -21,14 +32,17 @@ export function createBrowserControlDialog({ dialog, launcher, closeButton, focu
     dialog.classList.add('is-energized');
     flairPending = false;
   };
+  const tabIsEligible = (tab) => validateBrowserControlUrl(tab.url, { allowLocalFiles: true }).ok;
   const syncScopeDraft = () => {
     if (!scopeInput) return;
     const multiTab = scopeInput.value !== 'this-tab';
     scopeInput.disabled = !canChangeScope || applying || loadingTabs;
     scopeInput.brandedSelect?.sync();
+    if (scopeHelp) scopeHelp.textContent = translate(browserControlScopeHelpKey(scopeInput.value));
     tabsField.hidden = !multiTab;
     for (const box of tabsList.querySelectorAll('input')) {
-      box.disabled = scopeInput.disabled || (!box.checked && draftTabIds.size >= 32);
+      // Restricted tabs stay visible as disabled rows; they can never join the draft.
+      box.disabled = box.dataset.restricted === 'true' || scopeInput.disabled || (!box.checked && draftTabIds.size >= 32);
     }
     applyButton.disabled = scopeInput.disabled || (multiTab && draftTabIds.size === 0);
     applyButton.setAttribute('aria-busy', String(applying));
@@ -45,25 +59,37 @@ export function createBrowserControlDialog({ dialog, launcher, closeButton, focu
     tabsList.replaceChildren();
     syncScopeDraft();
     try {
-      const tabs = (await loadTabs()).filter((tab) => validateBrowserControlUrl(tab.url, { allowLocalFiles: true }).ok);
+      const tabs = await loadTabs();
       if (generation !== loadGeneration || !dialog.open) return;
-      const offered = new Set(tabs.map((tab) => tab.id));
-      draftTabIds = new Set([...draftTabIds].filter((id) => offered.has(id)));
+      const selectable = new Set(tabs.filter(tabIsEligible).map((tab) => tab.id));
+      draftTabIds = new Set([...draftTabIds].filter((id) => selectable.has(id)));
       for (const tab of tabs) {
+        const restricted = !tabIsEligible(tab);
         const option = dialog.ownerDocument.createElement('label');
         option.className = 'browser-control-tab-option';
+        if (restricted) option.classList.add('is-restricted');
         const checkbox = dialog.ownerDocument.createElement('input');
         checkbox.type = 'checkbox';
-        checkbox.checked = draftTabIds.has(tab.id);
+        checkbox.checked = !restricted && draftTabIds.has(tab.id);
+        if (restricted) checkbox.dataset.restricted = 'true';
         checkbox.addEventListener('change', () => {
           if (checkbox.checked) draftTabIds.add(tab.id); else draftTabIds.delete(tab.id);
           feedbackKey = '';
           syncScopeDraft();
         });
+        const text = dialog.ownerDocument.createElement('span');
+        text.className = 'browser-control-tab-text';
         const title = dialog.ownerDocument.createElement('span');
         title.textContent = tab.title || tab.url;
         title.title = title.textContent;
-        option.append(checkbox, title);
+        text.append(title);
+        if (restricted) {
+          // Say why the row is unavailable instead of hiding it.
+          const reason = dialog.ownerDocument.createElement('small');
+          reason.textContent = translate('browser_control.tab_restricted');
+          text.append(reason);
+        }
+        option.append(checkbox, text);
         tabsList.append(option);
       }
       if (!tabs.length) {
@@ -101,6 +127,7 @@ export function createBrowserControlDialog({ dialog, launcher, closeButton, focu
     const target = launcher.hidden ? focusFallback : launcher;
     target?.focus({ preventScroll: true });
   };
+  // Hover and focus help is for the icon-style buttons only; scope choices read their helper text on screen.
   const tooltip = dialog.querySelector('#browserControlTooltip');
   let helpTarget = null;
   const hideHelp = () => {
@@ -114,10 +141,7 @@ export function createBrowserControlDialog({ dialog, launcher, closeButton, focu
     tooltip.textContent = button.dataset.help;
     if (!tooltip.matches(':popover-open')) tooltip.showPopover();
     button.setAttribute('aria-describedby', tooltip.id);
-    // Anchor option help to the picker, so a lower option's explanation cannot
-    // cover the choices above it while the user moves through the menu.
-    const picker = button.getAttribute('role') === 'option' ? button.closest('.branded-select') : null;
-    const target = (picker || button).getBoundingClientRect();
+    const target = button.getBoundingClientRect();
     const rect = tooltip.getBoundingClientRect();
     const edge = 16;
     const left = Math.max(edge, Math.min(target.left + target.width / 2 - rect.width / 2, window.innerWidth - rect.width - edge));
@@ -192,8 +216,7 @@ export function createBrowserControlDialog({ dialog, launcher, closeButton, focu
       dialog.dataset.state = view.state;
       dialog.dataset.tone = view.tone;
       for (const button of dialog.querySelectorAll('[data-control-help]')) {
-        const key = button.dataset.controlHelp;
-        const text = help[key] || (key.startsWith('scope_') ? translate(`browser_control.help_${key}`) : '');
+        const text = help[button.dataset.controlHelp] || '';
         if (text !== button.dataset.help) {
           button.dataset.help = text;
           button.setAttribute('aria-description', text);

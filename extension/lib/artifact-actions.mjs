@@ -145,6 +145,36 @@ export function artifactKindFamily(kind = '') {
 /** Kind used for anything without a mapped extension. */
 export const UNKNOWN_ARTIFACT_KIND = 'binary';
 
+// Extensions the OS would launch or run rather than display. Hermes names the
+// file, so these are never handed to the OS handler from "Open on computer";
+// Save stays available so the person can inspect the file first.
+export const EXECUTABLE_ARTIFACT_EXTENSIONS = Object.freeze(new Set([
+  'exe', 'msi', 'dll', 'bat', 'cmd', 'com', 'scr', 'ps1', 'psm1', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'hta',
+  'lnk', 'url', 'jar', 'reg', 'cpl', 'msc', 'app', 'pkg', 'dmg', 'iso', 'sh', 'bash', 'zsh', 'command', 'run',
+  'bin', 'apk', 'deb', 'rpm', 'appimage', 'desktop', 'workflow', 'scpt', 'action', 'py', 'pl', 'rb',
+  // Further launchers: legacy Windows script and shortcut hosts, package and
+  // installer formats, help files and shell or interpreter scripts that the
+  // desktop runs or installs when opened.
+  'pif', 'ws', 'wsc', 'vb', 'vbscript', 'sct', 'jnlp', 'msp', 'mst', 'msix', 'appx', 'appxbundle', 'msixbundle',
+  'application', 'xbap', 'gadget', 'inf', 'ins', 'chm', 'shs', 'shb', 'scf', 'cab', 'job', 'xll', 'ade', 'adp',
+  'mde', 'ps1xml', 'psc1', 'psd1', 'ps2', 'pyw', 'pyz', 'pyc', 'mjs', 'cjs', 'ksh', 'csh', 'fish', 'tool',
+  'terminal', 'webloc', 'inetloc', 'fileloc', 'xpi', 'crx', 'air', 'elf', 'out', 'so', 'dylib', 'ipa',
+]));
+
+/**
+ * How "Open on computer" may treat a returned file. `blocked` files are never
+ * handed to the OS; every other file needs an explicit in-extension
+ * confirmation first, because the file name and contents come from the model.
+ *
+ * @param {string} pathRef
+ * @returns {{ blocked: boolean, name: string, extension: string }}
+ */
+export function artifactOpenOnComputerPolicy(pathRef) {
+  const name = artifactFileName(pathRef);
+  const extension = artifactExtension(pathRef);
+  return { blocked: !extension || EXECUTABLE_ARTIFACT_EXTENSIONS.has(extension), name, extension };
+}
+
 export const ARTIFACT_ACTION_IDS = Object.freeze(['open', 'open-on-computer', 'save']);
 
 const ARTIFACT_ACTION_LABELS = Object.freeze({

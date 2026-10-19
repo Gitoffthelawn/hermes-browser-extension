@@ -96,3 +96,10 @@ test('background loopback fallback forces credential-free error-on-redirect fetc
   });
   assert.equal(response.ok, true);
 });
+
+test('the background routes the loopback proxy to extension pages only', async () => {
+  const { readFileSync } = await import('node:fs');
+  const background = readFileSync(new URL('../extension/background.js', import.meta.url), 'utf8');
+  const guarded = background.match(/const EXTENSION_PAGE_ONLY_MESSAGE_TYPES = new Set\(\[([\s\S]*?)\]\);/)?.[1] || '';
+  assert.match(guarded, /LOOPBACK_FETCH_MESSAGE/);
+});

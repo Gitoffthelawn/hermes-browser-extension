@@ -94,3 +94,17 @@ export function pasteArtifactExcerpt(text = '', {
 export function isPasteArtifact(attachment) {
   return Boolean(attachment && attachment.kind === 'text' && attachment.source === 'paste');
 }
+
+// What the composer must say before a paste artifact is sent: the turn carries
+// only the head and tail of the paste, so the omitted middle is named. Returns
+// null when the whole paste fits in the excerpt (nothing is shortened).
+export function pasteArtifactShortening(attachment, {
+  head = PASTE_ARTIFACT_EXCERPT_HEAD_CHARS,
+  tail = PASTE_ARTIFACT_EXCERPT_TAIL_CHARS,
+} = {}) {
+  if (!isPasteArtifact(attachment)) return null;
+  const total = String(attachment.text || '').length;
+  const omitted = total - head - tail;
+  if (omitted <= 0) return null;
+  return Object.freeze({ head, tail, total, omitted });
+}

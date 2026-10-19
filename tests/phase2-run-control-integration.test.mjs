@@ -25,7 +25,7 @@ test('Stop transport is split and local stream abort happens only after terminal
     const stopStart = source.indexOf(source === panel ? 'async function stopCurrentTurn' : 'async function stopActiveRun');
     const stopEnd = source.indexOf('\nfunction ', stopStart + 1);
     const stop = source.slice(stopStart, stopEnd);
-    assert.match(stop, /WS_METHODS\.sessionInterrupt/);
+    assert.match(stop, /interruptGatewaySession\(/);
     assert.match(stop, /\/v1\/runs\/\$\{encodeURIComponent\(stopRunId\)\}\/stop/);
     assert.match(source, /\/v1\/runs\/\$\{encodeURIComponent\(activeRunId\)\}/);
     assert.ok(source.indexOf('activeRunControl = markRunTerminal(activeRunControl, result.status)') < source.indexOf('activeAbortController?.abort()'));
@@ -88,7 +88,7 @@ test('Stop response and failure settlement are generation-guarded before mutatin
     const responseIndex = stop.indexOf('const response = await runControlRequestWithTimeout');
     const staleIndex = stop.indexOf('const staleTerminal = runStopFailureTerminalStatus');
     const failureIndex = stop.indexOf('activeRunControl = markStopRequestFailed');
-    assert.match(stop, /const stopRunId = String\(activeRunId \|\| ''\)/);
+    assert.match(stop, /let stopRunId = String\(activeRunId \|\| ''\)/);
     assert.ok(responseIndex >= 0 && staleIndex > responseIndex);
     assert.ok(stop.lastIndexOf('if (!runControlGenerationMatches(stopGeneration, runControlGeneration)) return false;', staleIndex) > responseIndex);
     assert.ok(stop.lastIndexOf('if (!runControlGenerationMatches(stopGeneration, runControlGeneration)) return false;', failureIndex) > staleIndex);
@@ -177,13 +177,20 @@ test('Side Panel terminal reconciliation never creates a successor session to in
   assert.match(reconcile, /active Dashboard session is unavailable for terminal reconciliation/i);
 });
 
-test('Stop falls back to local cancellation only while REST has no server run identity', () => {
+test('Stop without a server run identity is held as unconfirmed instead of claiming success', () => {
   for (const [source, functionName] of [[panel, 'stopCurrentTurn'], [web, 'stopActiveRun']]) {
     const start = source.indexOf(`async function ${functionName}`);
     const end = source.indexOf('\nfunction ', start + 1);
     const stop = source.slice(start, end);
-    assert.match(stop, /if \(!stopRunId\) \{[\s\S]*?activeAbortController\?\.abort\(\);[\s\S]*?markRunTerminal\(activeRunControl, 'cancelled'\);[\s\S]*?return true;/);
-    assert.ok(stop.indexOf('if (!stopRunId) {') < stop.indexOf('/v1/runs/${encodeURIComponent(stopRunId)}/stop'));
+    const restStopIndex = stop.lastIndexOf('/v1/runs/${encodeURIComponent(stopRunId)}/stop');
+    const block = stop.slice(stop.indexOf('if (!stopRunId) {'), restStopIndex);
+    assert.match(block, /activeAbortController\?\.abort\(\);/);
+    assert.match(block, /resolveActiveRunIdFromSession\(\)/);
+    assert.match(block, /markRunUnconfirmed\(activeRunControl, RUN_UNCONFIRMED_REASONS\.RUN_ID_UNKNOWN/);
+    assert.match(block, /return false;/);
+    assert.doesNotMatch(block, /markRunTerminal\(activeRunControl, 'cancelled'\)/);
+    assert.doesNotMatch(block, /return true;/);
+    assert.ok(stop.indexOf('if (!stopRunId) {') < restStopIndex);
   }
 });
 

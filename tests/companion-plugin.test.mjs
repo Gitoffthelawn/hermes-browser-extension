@@ -398,6 +398,32 @@ assert store.control_status_for_owner(owner(turn="turn-missing"))["control"]["av
 malformed = store.put_bcp_v2(envelope({"availability": "available", "tab_id": "41", "controller_id": FORBIDDEN}), owner(turn="turn-malformed"))
 assert store.control_status_for_owner(owner(turn="turn-malformed"))["control"]["availability"] == "unknown"
 
+# Control that was off for the turn is recorded as "not_requested", not "unknown", and carries no authority fields.
+off_control = {
+    "route": "extension-controller",
+    "availability": "not_requested",
+    "isolated_fallback": "forbidden",
+    "reason": "control_off",
+    "message": "Hermes Control is off for this turn.",
+    "controller_id": FORBIDDEN,
+    "tab_id": 41,
+}
+store.put_bcp_v2(envelope(off_control), owner(turn="turn-off"))
+off_status = store.control_status_for_owner(owner(turn="turn-off"))["control"]
+assert off_status == {
+    "availability": "not_requested",
+    "lease_owned": False,
+    "controller_id": "",
+    "browser_profile_id": "",
+    "tab_id": 0,
+    "frame_id": 0,
+    "document_generation": 0,
+}
+assert FORBIDDEN not in json.dumps(off_status)
+# The same availability without the controller route stays fail-closed unknown.
+store.put_bcp_v2(envelope({"availability": "not_requested", "route": "other", "isolated_fallback": "forbidden"}), owner(turn="turn-off-badroute"))
+assert store.control_status_for_owner(owner(turn="turn-off-badroute"))["control"]["availability"] == "unknown"
+
 # The tool is owner-authorized and explicitly historical-only.
 hooks.set_store(store)
 tools.set_store(store)
@@ -803,6 +829,32 @@ with tempfile.TemporaryDirectory() as tmp:
     blocked = hooks.pre_tool_call(tool_name="browser_get_context", args={"context_id": journal_id}, **hook_kwargs)
     assert blocked == {"action": "block", "message": "Browser context unavailable."}
     assert json.loads(tools.browser_get_context({"context_id": journal_id}))["available"] is False
+`;
+  runPluginPython(script);
+});
+
+test('durable journal file is created owner-only, not narrowed afterwards', () => {
+  const script = `${pluginImportHarness}
+import os
+import stat
+import tempfile
+
+from companion_plugin import journal as journal_module
+from companion_plugin.journal import BrowserContextJournal, JOURNAL_FILE_MODE
+
+if os.name != "nt":
+    # A permissive umask and a chmod that does nothing: the only thing left to
+    # keep the payload private is the mode the file is created with.
+    os.umask(0)
+    journal_module.os.chmod = lambda *args, **kwargs: None
+    with tempfile.TemporaryDirectory() as tmp:
+        durable = BrowserContextJournal(max_rows=10, data_dir=tmp)
+        owner = type("Owner", (), {"principal_id": "session:s", "session_id": "s", "turn_id": "t", "task_id": "k"})()
+        durable.record(owner, {"ts": 1.0, "context_id": "c1", "payload_hash": "h", "scope": "follow-active",
+                               "controller_id": "c", "browser_profile_id": "p", "tab_id": 1, "lease_owned": False, "delivery": "full"})
+        path = os.path.join(tmp, "journal.jsonl")
+        assert os.path.exists(path)
+        assert stat.S_IMODE(os.stat(path).st_mode) == JOURNAL_FILE_MODE, oct(os.stat(path).st_mode)
 `;
   runPluginPython(script);
 });

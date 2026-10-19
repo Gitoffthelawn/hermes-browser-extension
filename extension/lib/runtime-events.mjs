@@ -9,8 +9,13 @@ export const BROWSER_RUNTIME_EVENT_NAMES = Object.freeze({
   toolStarted: 'tool.started',
   toolProgress: 'tool.progress',
   toolFinished: 'tool.finished',
-  approvalRequested: 'approval.requested',
-  approvalResolved: 'approval.resolved',
+  // Names the Hermes gateway actually emits (gateway/platforms/api_server.py).
+  approvalRequested: 'approval.request',
+  approvalResponded: 'approval.responded',
+  approvalSettled: 'approval.settled',
+  approvalCancelled: 'approval.cancelled',
+  clarifyRequested: 'clarify.request',
+  clarifySettled: 'clarify.settled',
   steerAccepted: 'steer.accepted',
   steerQueued: 'steer.queued',
   sessionReset: 'session.reset',
@@ -24,6 +29,10 @@ export const TOOL_EVENT_NAME_ALIASES = Object.freeze({
   'tool.call.completed': 'tool.finished',
   'tool.call.finished': 'tool.finished',
   'tool.call.error': 'tool.finished',
+  // Upstream REST stream (gateway/platforms/api_server.py) emits these two
+  // names for the end of a tool call; failures arrive as tool.failed.
+  'tool.completed': 'tool.finished',
+  'tool.failed': 'tool.finished',
 });
 
 const EVENT_NAME_SET = new Set(Object.values(BROWSER_RUNTIME_EVENT_NAMES));
@@ -106,9 +115,10 @@ function redactEventPreview(value = '') {
     .slice(0, PREVIEW_LIMIT);
 }
 
-function toolStatusForEvent(name = '', data = {}) {
+function toolStatusForEvent(name = '', data = {}, rawType = '') {
   const explicit = String(data.status || data.state || '').trim().toLowerCase();
   if (explicit) return explicit;
+  if (rawType === 'tool.failed') return 'failed';
   if (name === BROWSER_RUNTIME_EVENT_NAMES.toolStarted) return 'started';
   if (name === BROWSER_RUNTIME_EVENT_NAMES.toolFinished) return 'completed';
   return 'progress';
@@ -131,12 +141,13 @@ export function normalizeBrowserRuntimeEvent(event = {}) {
     return {
       name: 'runtime.unknown',
       rawName: rawType,
+      status: String(data.status || data.state || '').trim().toLowerCase(),
       data,
       preview: redactEventPreview(data.preview || data.message || ''),
     };
   }
 
-  const status = toolStatusForEvent(baseName, data);
+  const status = toolStatusForEvent(baseName, data, rawType);
   const name = normalizeToolEventName(baseName, status);
   const toolName = String(data.tool_name || data.toolName || data.name || data.rawName || '').trim();
   return {

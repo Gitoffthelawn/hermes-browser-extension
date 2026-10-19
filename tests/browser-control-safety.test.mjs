@@ -27,6 +27,14 @@ test('Phase 6 classifies ordinary reads and writes without trusting caller-suppl
   assert.equal(classifyBrowserControlAction({ action: 'browser_tab_group', arguments: { tab_ids: [7, 8] } }).risk, BROWSER_CONTROL_RISKS.SAFE);
   assert.equal(classifyBrowserControlAction({ action: 'browser_tab_ungroup', arguments: { tab_ids: [7, 8] } }).risk, BROWSER_CONTROL_RISKS.SAFE);
   assert.equal(classifyBrowserControlAction({ action: 'browser_tab_close', arguments: { tab_id: 7 } }).risk, BROWSER_CONTROL_RISKS.APPROVAL);
+  // Switching the tab the person is looking at needs their approval, wherever the current page is.
+  const activate = classifyBrowserControlAction({ action: 'browser_tab_activate', arguments: { tab_id: 7 } });
+  assert.deepEqual(activate, { risk: BROWSER_CONTROL_RISKS.APPROVAL, reason: 'tab-activate' });
+  assert.deepEqual(classifyBrowserControlAction({
+    action: 'browser_tab_activate',
+    arguments: { tab_id: 7 },
+    currentUrl: 'chrome://settings/',
+  }), { risk: BROWSER_CONTROL_RISKS.APPROVAL, reason: 'tab-activate' });
 
   const spoofed = classifyBrowserControlAction({
     action: 'browser_press',
@@ -35,6 +43,24 @@ test('Phase 6 classifies ordinary reads and writes without trusting caller-suppl
   });
   assert.equal(spoofed.risk, BROWSER_CONTROL_RISKS.APPROVAL);
   assert.equal(spoofed.reason, 'submission-key');
+
+  for (const key of ['Control+Enter', 'Shift+Return', 'Meta+Enter', 'enter']) {
+    assert.equal(
+      classifyBrowserControlAction({ action: 'browser_press', arguments: { key } }).reason,
+      'submission-key',
+      `${key} submits, so it needs approval like Enter`,
+    );
+  }
+  for (const args of [{ key: 'Control+v' }, { key: 'Meta+V' }, { key: 'Control+Shift+v' }, { key: 'Shift+Insert' }, { key: 'v', modifiers: ['Meta'] }, { key: 'Insert', modifiers: ['Shift'] }]) {
+    assert.equal(
+      classifyBrowserControlAction({ action: 'browser_press', arguments: args }).reason,
+      'clipboard-paste',
+      `${JSON.stringify(args)} pastes the user's clipboard, so it needs approval`,
+    );
+  }
+  for (const key of ['Control+a', 'Shift+Tab', 'ArrowDown', 'Escape', 'v', 'Control+c']) {
+    assert.equal(classifyBrowserControlAction({ action: 'browser_press', arguments: { key } }).risk, BROWSER_CONTROL_RISKS.SAFE, key);
+  }
 });
 
 test('Phase 6 pauses destructive actions and hard-blocks payment, credential, MFA, and secret handling', async () => {

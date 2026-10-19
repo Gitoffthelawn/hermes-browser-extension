@@ -271,6 +271,10 @@
     "message": "ไม่มีไฟล์ต้นฉบับ โปรดแนบไฟล์อีกครั้งเพื่อเรียกคืนการเข้าถึง",
     "description": "Runtime interface message attachments.file_unavailable"
   },
+  "runtime_attachments_paste_excerpt_notice": {
+    "message": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
+    "description": "Runtime interface message attachments.paste_excerpt_notice"
+  },
   "runtime_attachments_preview_limited": {
     "message": "แสดงตัวอย่างได้บางส่วน ดาวน์โหลดไฟล์ฉบับเต็ม",
     "description": "Runtime interface message attachments.preview_limited"
@@ -839,6 +843,10 @@
     "message": "อนุมัติครั้งเดียว",
     "description": "Runtime interface message browser_control.approve_once"
   },
+  "runtime_browser_control_attach_not_ready": {
+    "message": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
+    "description": "Runtime interface message browser_control.attach_not_ready"
+  },
   "runtime_browser_control_authorize": {
     "message": "อนุญาตการควบคุม",
     "description": "Runtime interface message browser_control.authorize"
@@ -852,7 +860,7 @@
     "description": "Runtime interface message browser_control.detach"
   },
   "runtime_browser_control_detached_detail": {
-    "message": "การดำเนินการของเบราว์เซอร์หยุดลงและปล่อยแท็บที่ถูกควบคุมทั้งหมดแล้ว",
+    "message": "หยุดการดำเนินการของเบราว์เซอร์แล้ว Hermes ไม่สามารถใช้แท็บที่เชื่อมต่อใดๆ ได้อีก",
     "description": "Runtime interface message browser_control.detached_detail"
   },
   "runtime_browser_control_detached_toast": {
@@ -864,16 +872,64 @@
     "description": "Runtime interface message browser_control.enable"
   },
   "runtime_browser_control_enabled_detail": {
-    "message": "เฉพาะแท็บที่เช่าที่เลือกเท่านั้นที่สามารถรับการดำเนินการของเบราว์เซอร์ได้",
+    "message": "มีเพียงแท็บที่เชื่อมต่อเท่านั้นที่รับการดำเนินการของเบราว์เซอร์ได้",
     "description": "Runtime interface message browser_control.enabled_detail"
   },
   "runtime_browser_control_enabled_toast": {
     "message": "เปิดใช้การควบคุม Hermes แล้ว",
     "description": "Runtime interface message browser_control.enabled_toast"
   },
-  "runtime_browser_control_follow": {
-    "message": "ตาม Hermes",
-    "description": "Runtime interface message browser_control.follow"
+  "runtime_browser_control_error_active_tab": {
+    "message": "ทำให้หน้าเว็บปกติเป็นแท็บที่ใช้งานอยู่ก่อน",
+    "description": "Runtime interface message browser_control.error_active_tab"
+  },
+  "runtime_browser_control_error_approval_failed": {
+    "message": "Hermes Control ไม่ได้รับการตัดสินใจนี้",
+    "description": "Runtime interface message browser_control.error_approval_failed"
+  },
+  "runtime_browser_control_error_attach_busy": {
+    "message": "รอให้การดำเนินการของเบราว์เซอร์ปัจจุบันเสร็จก่อน แล้วจึงเชื่อมต่อแท็บอื่น",
+    "description": "Runtime interface message browser_control.error_attach_busy"
+  },
+  "runtime_browser_control_error_attach_failed": {
+    "message": "ไม่สามารถเชื่อมต่อแท็บนี้ได้",
+    "description": "Runtime interface message browser_control.error_attach_failed"
+  },
+  "runtime_browser_control_error_attach_reconnecting": {
+    "message": "Hermes Control กำลังเชื่อมต่อใหม่อยู่ ลองเชื่อมต่อแท็บนี้อีกครั้งในอีกสักครู่",
+    "description": "Runtime interface message browser_control.error_attach_reconnecting"
+  },
+  "runtime_browser_control_error_attach_restricted": {
+    "message": "เปิดหน้า HTTP หรือ HTTPS ปกติก่อนเชื่อมต่อ Hermes Control",
+    "description": "Runtime interface message browser_control.error_attach_restricted"
+  },
+  "runtime_browser_control_error_attach_unavailable": {
+    "message": "ไม่สามารถเชื่อมต่อแท็บนี้ได้ในขณะนี้",
+    "description": "Runtime interface message browser_control.error_attach_unavailable"
+  },
+  "runtime_browser_control_error_enable_failed": {
+    "message": "ไม่สามารถเชื่อมต่อแท็บที่เลือกได้",
+    "description": "Runtime interface message browser_control.error_enable_failed"
+  },
+  "runtime_browser_control_error_refresh_failed": {
+    "message": "Hermes Control ไม่สามารถรีเฟรชการตั้งค่าการเชื่อมต่อได้",
+    "description": "Runtime interface message browser_control.error_refresh_failed"
+  },
+  "runtime_browser_control_error_release_failed": {
+    "message": "ไม่สามารถปล่อยแท็บที่เชื่อมต่อไว้ก่อนหน้าได้",
+    "description": "Runtime interface message browser_control.error_release_failed"
+  },
+  "runtime_browser_control_error_select_tabs": {
+    "message": "เลือกแท็บอย่างน้อยหนึ่งแท็บในรายการก่อนเปิดขอบเขตนี้",
+    "description": "Runtime interface message browser_control.error_select_tabs"
+  },
+  "runtime_browser_control_error_session_attach": {
+    "message": "เริ่มหรือเลือกเซสชัน Hermes แล้วจึงเชื่อมต่อแท็บนี้",
+    "description": "Runtime interface message browser_control.error_session_attach"
+  },
+  "runtime_browser_control_error_session_enable": {
+    "message": "เริ่มหรือเลือกเซสชัน Hermes ก่อนเปิด Hermes Control",
+    "description": "Runtime interface message browser_control.error_session_enable"
   },
   "runtime_browser_control_help_attach": {
     "message": "อนุญาตให้ Hermes ควบคุมแท็บนี้แทนแท็บที่เชื่อมต่อไว้ก่อนหน้า",
@@ -883,20 +939,16 @@
     "message": "ปิดแผงนี้โดยไม่หยุดชั่วคราวหรือปิดการควบคุม",
     "description": "Runtime interface message browser_control.help_close"
   },
-  "runtime_browser_control_help_follow": {
-    "message": "แสดงแท็บที่เชื่อมต่อและ Hermes กำลังใช้งาน โดยไม่ดึงหน้าต่างเบราว์เซอร์ขึ้นมาด้านหน้า",
-    "description": "Runtime interface message browser_control.help_follow"
-  },
   "runtime_browser_control_help_off": {
-    "message": "ปิดการควบคุมเบราว์เซอร์และปิดแผงนี้ เปิดใช้งานอีกครั้งได้ในการตั้งค่า",
+    "message": "ปิด Hermes Control และปิดแผงนี้ เปิดใหม่ได้ในการตั้งค่า",
     "description": "Runtime interface message browser_control.help_off"
   },
   "runtime_browser_control_help_pause": {
-    "message": "หยุดการควบคุมเบราว์เซอร์ชั่วคราวโดยไม่ปิดใช้งาน แท็บที่เชื่อมต่อจะยังคงอยู่",
+    "message": "หยุด Hermes Control ชั่วคราวโดยไม่ปิด แท็บที่เชื่อมต่อยังคงอยู่",
     "description": "Runtime interface message browser_control.help_pause"
   },
   "runtime_browser_control_help_resume": {
-    "message": "ดำเนินการควบคุมเบราว์เซอร์ต่อบนแท็บที่ยังเชื่อมต่ออยู่",
+    "message": "กลับมาใช้ Hermes Control บนแท็บที่ยังเชื่อมต่ออยู่",
     "description": "Runtime interface message browser_control.help_resume"
   },
   "runtime_browser_control_help_scope_selected_tabs": {
@@ -904,16 +956,16 @@
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
   },
   "runtime_browser_control_help_scope_task_set": {
-    "message": "ควบคุมเฉพาะแท็บที่คุณเลือกด้านล่างเป็นงานเบราว์เซอร์ร่วมกันหนึ่งงาน ต่างจากแท็บที่เลือก แท็บเหล่านี้ใช้รหัสงานร่วมกัน ไม่ได้รวมทุกแท็บที่เปิดอยู่",
+    "message": "ควบคุมเฉพาะแท็บที่คุณเลือกด้านล่าง ในฐานะงานที่ใช้ร่วมกันหนึ่งงาน Hermes สามารถจัดกลุ่มแท็บเหล่านี้ในเบราว์เซอร์ได้ แท็บอื่นที่เปิดอยู่จะไม่รวมอยู่ด้วย",
     "description": "Runtime interface message browser_control.help_scope_task_set"
   },
   "runtime_browser_control_help_scope_this_tab": {
     "message": "ควบคุมเฉพาะแท็บปัจจุบัน ไม่รวมแท็บอื่น",
     "description": "Runtime interface message browser_control.help_scope_this_tab"
   },
-  "runtime_browser_control_help_stay": {
-    "message": "อยู่บนแท็บของคุณต่อไปขณะที่ Hermes ทำงานบนแท็บที่เชื่อมต่ออยู่ในเบื้องหลัง",
-    "description": "Runtime interface message browser_control.help_stay"
+  "runtime_browser_control_help_show_tab": {
+    "message": "สลับไปยังแท็บที่ Hermes กำลังใช้งาน Hermes จะไม่เปลี่ยนแท็บของคุณเองเด็ดขาด",
+    "description": "Runtime interface message browser_control.help_show_tab"
   },
   "runtime_browser_control_help_stop": {
     "message": "หยุดการทำงานปัจจุบันและงานที่อยู่ในคิวของเบราว์เซอร์โดยไม่ปิดการควบคุม",
@@ -923,8 +975,12 @@
     "message": "HERMES CONTROL",
     "description": "Runtime interface message browser_control.kicker"
   },
+  "runtime_browser_control_local_document_detail": {
+    "message": "อนุมัติการเข้าถึงเอกสารในเครื่องเพื่อตรวจสอบไฟล์นี้ ดึงสไลด์หรือข้อความ และให้ Hermes Control ใช้แท็บของไฟล์นี้",
+    "description": "Runtime interface message browser_control.local_document_detail"
+  },
   "runtime_browser_control_note": {
-    "message": "สิทธิ์เข้าถึงตัวควบคุม Chromium ถูกอนุญาตเมื่อติดตั้งส่วนขยายหรืออัปเดตนี้ Hermes จะเชื่อมต่อเฉพาะระหว่างการดำเนินการที่เช่าซึ่งได้รับอนุญาตเท่านั้น ไม่เคยเปิดหน้าต่างเบราว์เซอร์ขึ้นมา และบล็อกข้อมูลรับรอง MFA ช่องชำระเงิน และข้อความลับ",
+    "message": "Chromium ให้สิทธิ์การเข้าถึงดีบักเกอร์แก่ส่วนขยายนี้เมื่อติดตั้งหรืออัปเดต Hermes ใช้ดีบักเกอร์เฉพาะกับแท็บที่คุณเชื่อมต่อเท่านั้น จะไม่นำหน้าต่างเบราว์เซอร์ขึ้นมาข้างหน้า และบล็อกข้อมูลรับรองตัวตน MFA ช่องชำระเงิน และข้อความลับ",
     "description": "Runtime interface message browser_control.note"
   },
   "runtime_browser_control_pause": {
@@ -951,6 +1007,10 @@
     "message": "ยืนยันขอบเขตนี้ไม่ได้ ตรวจสอบแท็บแล้วลองอีกครั้ง",
     "description": "Runtime interface message browser_control.scope_failed"
   },
+  "runtime_browser_control_scope_help_locked": {
+    "message": "ปิด Hermes Control เพื่อเปลี่ยนแท็บที่สามารถใช้งานได้",
+    "description": "Runtime interface message browser_control.scope_help_locked"
+  },
   "runtime_browser_control_scope_locked": {
     "message": "เลือกขอบเขตที่นี่แล้วกดใช้ หากต้องการหลายแท็บ ต้องเลือกแท็บด้วยตนเอง",
     "description": "Runtime interface message browser_control.scope_locked"
@@ -971,6 +1031,14 @@
     "message": "แท็บที่เลือก",
     "description": "Runtime interface message browser_control.selected_tabs"
   },
+  "runtime_browser_control_show_tab": {
+    "message": "แสดงแท็บ",
+    "description": "Runtime interface message browser_control.show_tab"
+  },
+  "runtime_browser_control_show_tab_aria": {
+    "message": "แสดงแท็บที่ Hermes กำลังใช้งาน",
+    "description": "Runtime interface message browser_control.show_tab_aria"
+  },
   "runtime_browser_control_state_active": {
     "message": "ทำงานอยู่",
     "description": "Runtime interface message browser_control.state_active"
@@ -987,13 +1055,13 @@
     "message": "พร้อม",
     "description": "Runtime interface message browser_control.state_ready"
   },
-  "runtime_browser_control_stay": {
-    "message": "อยู่บนแท็บของฉัน",
-    "description": "Runtime interface message browser_control.stay"
-  },
   "runtime_browser_control_stop": {
     "message": "หยุด",
     "description": "Runtime interface message browser_control.stop"
+  },
+  "runtime_browser_control_tab_restricted": {
+    "message": "ไม่พร้อมใช้งาน หน้าของเบราว์เซอร์และหน้าที่ละเอียดอ่อน เช่น หน้าธนาคารหรือหน้ารหัสผ่าน ไม่สามารถควบคุมได้",
+    "description": "Runtime interface message browser_control.tab_restricted"
   },
   "runtime_browser_control_task_set": {
     "message": "ชุดงาน",
@@ -1004,8 +1072,52 @@
     "description": "Runtime interface message browser_control.this_tab"
   },
   "runtime_browser_control_title": {
-    "message": "ควบคุมแท็บที่เช่า",
+    "message": "Hermes Control",
     "description": "Runtime interface message browser_control.title"
+  },
+  "runtime_browser_control_toast_approval_failed": {
+    "message": "ไม่ได้รับการอนุมัติ",
+    "description": "Runtime interface message browser_control.toast_approval_failed"
+  },
+  "runtime_browser_control_toast_attach_failed": {
+    "message": "ยังไม่ได้เชื่อมต่อแท็บนี้",
+    "description": "Runtime interface message browser_control.toast_attach_failed"
+  },
+  "runtime_browser_control_toast_attached": {
+    "message": "แท็บนี้เชื่อมต่อแล้ว",
+    "description": "Runtime interface message browser_control.toast_attached"
+  },
+  "runtime_browser_control_toast_attached_detail": {
+    "message": "Hermes Control พร้อมสำหรับการดำเนินการแรกของเบราว์เซอร์แล้ว",
+    "description": "Runtime interface message browser_control.toast_attached_detail"
+  },
+  "runtime_browser_control_toast_authorize_failed": {
+    "message": "Hermes Control ไม่ได้รับอนุญาต",
+    "description": "Runtime interface message browser_control.toast_authorize_failed"
+  },
+  "runtime_browser_control_toast_enable_failed": {
+    "message": "Hermes Control ยังไม่เปิดใช้งาน",
+    "description": "Runtime interface message browser_control.toast_enable_failed"
+  },
+  "runtime_browser_control_toast_rejection_failed": {
+    "message": "ไม่ได้รับการปฏิเสธ",
+    "description": "Runtime interface message browser_control.toast_rejection_failed"
+  },
+  "runtime_browser_control_toast_scope_unchanged": {
+    "message": "แท็บที่ควบคุมไม่มีการเปลี่ยนแปลง",
+    "description": "Runtime interface message browser_control.toast_scope_unchanged"
+  },
+  "runtime_browser_control_toast_show_tab_failed": {
+    "message": "ไม่สามารถแสดงแท็บนั้นได้",
+    "description": "Runtime interface message browser_control.toast_show_tab_failed"
+  },
+  "runtime_browser_control_toast_state_unchanged": {
+    "message": "สถานะ Hermes Control ไม่มีการเปลี่ยนแปลง",
+    "description": "Runtime interface message browser_control.toast_state_unchanged"
+  },
+  "runtime_browser_control_toast_stop_failed": {
+    "message": "ไม่สามารถหยุดการดำเนินการของเบราว์เซอร์ได้",
+    "description": "Runtime interface message browser_control.toast_stop_failed"
   },
   "runtime_browser_control_turn_off": {
     "message": "ปิดการควบคุม",
@@ -1015,9 +1127,45 @@
     "message": "กำลังรอ Hermes",
     "description": "Runtime interface message browser_control.waiting"
   },
-  "runtime_browser_control_while_working": {
-    "message": "ขณะที่ Hermes ทำงาน",
-    "description": "Runtime interface message browser_control.while_working"
+  "runtime_clarify_expired": {
+    "message": "This question was already answered or expired.",
+    "description": "Runtime interface message clarify.expired"
+  },
+  "runtime_clarify_kicker": {
+    "message": "QUESTION FROM HERMES",
+    "description": "Runtime interface message clarify.kicker"
+  },
+  "runtime_clarify_multi_hint": {
+    "message": "Select every option that applies.",
+    "description": "Runtime interface message clarify.multi_hint"
+  },
+  "runtime_clarify_placeholder": {
+    "message": "Type your answer",
+    "description": "Runtime interface message clarify.placeholder"
+  },
+  "runtime_clarify_send": {
+    "message": "Send answer",
+    "description": "Runtime interface message clarify.send"
+  },
+  "runtime_clarify_send_failed": {
+    "message": "Could not send your answer: {error}",
+    "description": "Runtime interface message clarify.send_failed"
+  },
+  "runtime_clarify_sent": {
+    "message": "Answer sent",
+    "description": "Runtime interface message clarify.sent"
+  },
+  "runtime_clarify_title": {
+    "message": "Hermes needs an answer",
+    "description": "Runtime interface message clarify.title"
+  },
+  "runtime_clarify_waiting": {
+    "message": "Waiting for your answer",
+    "description": "Runtime interface message clarify.waiting"
+  },
+  "runtime_clarify_waiting_detail": {
+    "message": "Hermes paused this turn until you answer the question card.",
+    "description": "Runtime interface message clarify.waiting_detail"
   },
   "runtime_commands_click_or_enter": {
     "message": "คลิกหรือกด Enter เพื่อเรียกใช้",
@@ -1411,6 +1559,78 @@
     "message": "พื้นผิว",
     "description": "Runtime interface message diagnostics.surface"
   },
+  "runtime_exec_approval_cancelled": {
+    "message": "Hermes withdrew this request.",
+    "description": "Runtime interface message exec_approval.cancelled"
+  },
+  "runtime_exec_approval_choice_help": {
+    "message": "Approve once runs this command a single time. Session allows matching commands until this session ends. Always saves a permanent rule for matching commands.",
+    "description": "Runtime interface message exec_approval.choice_help"
+  },
+  "runtime_exec_approval_command_truncated": {
+    "message": "Only the first part of this command is shown. Deny it unless you trust the rest.",
+    "description": "Runtime interface message exec_approval.command_truncated"
+  },
+  "runtime_exec_approval_countdown": {
+    "message": "{time} left to answer",
+    "description": "Runtime interface message exec_approval.countdown"
+  },
+  "runtime_exec_approval_edit_title": {
+    "message": "Proposed file change",
+    "description": "Runtime interface message exec_approval.edit_title"
+  },
+  "runtime_exec_approval_edit_truncated": {
+    "message": "Showing the first part of the change.",
+    "description": "Runtime interface message exec_approval.edit_truncated"
+  },
+  "runtime_exec_approval_expired": {
+    "message": "คำขออนุมัตินี้ถูกตอบแล้วหรือหมดอายุแล้ว",
+    "description": "Runtime interface message exec_approval.expired"
+  },
+  "runtime_exec_approval_hint": {
+    "message": "ตอบที่นี่เพื่อให้คำสั่งทำงาน หากคำขอหมดอายุโดยไม่มีคำตอบ คำสั่งจะไม่ทำงาน",
+    "description": "Runtime interface message exec_approval.hint"
+  },
+  "runtime_exec_approval_info_only": {
+    "message": "This gateway does not accept answers from the browser. Answer in Hermes, or the request will expire and the command will not run.",
+    "description": "Runtime interface message exec_approval.info_only"
+  },
+  "runtime_exec_approval_kicker": {
+    "message": "การอนุมัติคำสั่ง",
+    "description": "Runtime interface message exec_approval.kicker"
+  },
+  "runtime_exec_approval_other_session": {
+    "message": "A request in another session is waiting for your answer. Switch to that session to respond.",
+    "description": "Runtime interface message exec_approval.other_session"
+  },
+  "runtime_exec_approval_queue_more": {
+    "message": "{count} more waiting",
+    "description": "Runtime interface message exec_approval.queue_more"
+  },
+  "runtime_exec_approval_send_failed": {
+    "message": "ส่งการตัดสินใจของคุณไม่สำเร็จ: {error}",
+    "description": "Runtime interface message exec_approval.send_failed"
+  },
+  "runtime_exec_approval_sent": {
+    "message": "Decision sent",
+    "description": "Runtime interface message exec_approval.sent"
+  },
+  "runtime_exec_approval_sent_detail": {
+    "message": "Hermes received your decision and is continuing.",
+    "description": "Runtime interface message exec_approval.sent_detail"
+  },
+  "runtime_exec_approval_title": {
+    "message": "Hermes ต้องการเรียกใช้คำสั่ง",
+    "description": "Runtime interface message exec_approval.title"
+  },
+  "runtime_exec_approval_waiting": {
+    "message": "Waiting for your approval",
+    "description": "Runtime interface message exec_approval.waiting"
+  },
+  "runtime_exec_approval_waiting_detail": {
+    "message": "Hermes paused this turn until you answer the approval card. If it expires unanswered, the command will not run.",
+    "description": "Runtime interface message exec_approval.waiting_detail"
+  },
   "runtime_fulltab_handoff_opened_from": {
     "message": "เปิดจาก {source}",
     "description": "Runtime interface message fulltab.handoff.opened_from"
@@ -1619,6 +1839,10 @@
     "message": "โปรไฟล์ที่พร้อมใช้งาน",
     "description": "Runtime interface message profile.available_suffix"
   },
+  "runtime_profile_companion_not_configured": {
+    "message": "Dashboard companion not configured. Remote API mode does not search this computer for a Hermes Dashboard, so profile switching and Bot Mode need a dashboard companion.",
+    "description": "Runtime interface message profile.companion_not_configured"
+  },
   "runtime_profile_default": {
     "message": "โปรไฟล์เริ่มต้น",
     "description": "Runtime interface message profile.default"
@@ -1635,9 +1859,37 @@
     "message": "กำลังใช้ {name}{model}{skills}",
     "description": "Runtime interface message profile.using"
   },
+  "runtime_run_release": {
+    "message": "Release",
+    "description": "Runtime interface message run.release"
+  },
+  "runtime_run_release_detail": {
+    "message": "Browser released the composer without Hermes confirming the stop. Check the session before sending another message.",
+    "description": "Runtime interface message run.release_detail"
+  },
   "runtime_run_stop": {
     "message": "■ หยุด",
     "description": "Runtime interface message run.stop"
+  },
+  "runtime_run_stop_cancelled_commands": {
+    "message": "ยกเลิกคำสั่ง Hermes Control ที่รอดำเนินการ {count} รายการแล้ว",
+    "description": "Runtime interface message run.stop_cancelled_commands"
+  },
+  "runtime_run_stop_controller_toast": {
+    "message": "Hermes Control",
+    "description": "Runtime interface message run.stop_controller_toast"
+  },
+  "runtime_run_stop_controller_unreachable": {
+    "message": "Browser could not reach Hermes Control to cancel pending browser actions.",
+    "description": "Runtime interface message run.stop_controller_unreachable"
+  },
+  "runtime_run_stop_unconfirmed_no_run_id": {
+    "message": "Hermes has not reported a run id for this turn, so Browser cannot confirm the run stopped. The session writer and queued messages stay held until Hermes confirms a terminal state.",
+    "description": "Runtime interface message run.stop_unconfirmed_no_run_id"
+  },
+  "runtime_run_stop_unconfirmed_title": {
+    "message": "Stop not confirmed",
+    "description": "Runtime interface message run.stop_unconfirmed_title"
   },
   "runtime_runtime_fast_mode_toggle": {
     "message": "โหมดเร็ว {state}",
@@ -1671,6 +1923,10 @@
     "message": "คัดลอก ID เซสชันสำหรับ {title}",
     "description": "Runtime interface message session.copy_id_for"
   },
+  "runtime_session_long_shared_notice": {
+    "message": "This session has {count} messages. Long shared sessions can fall out of sync with other Hermes clients, such as the desktop app, the CLI, or Hermes Web, that write to the same session, so replies can arrive late or out of order. Start a new chat when you can.",
+    "description": "Runtime interface message session.long_shared_notice"
+  },
   "runtime_session_new_extension_session": {
     "message": "＋ เซสชัน Hermes Browser Extension ใหม่",
     "description": "Runtime interface message session.new_extension_session"
@@ -1678,6 +1934,14 @@
   "runtime_session_opening": {
     "message": "กำลังเปิด {title}",
     "description": "Runtime interface message session.opening"
+  },
+  "runtime_session_origin_refused": {
+    "message": "Hermes refused this browser origin, {origin}, on a session request (HTTP 403 with no JSON error body). Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
+    "description": "Runtime interface message session.origin_refused"
+  },
+  "runtime_session_origin_refused_title": {
+    "message": "Hermes refused this browser origin",
+    "description": "Runtime interface message session.origin_refused_title"
   },
   "runtime_session_rail_save_failed": {
     "message": "การบันทึกรางเซสชันล้มเหลว: {error}",
@@ -1760,7 +2024,7 @@
     "description": "Runtime interface message settings.categories.models.title"
   },
   "runtime_settings_categories_permissions_summary": {
-    "message": "การควบคุมเบราว์เซอร์ ขอบเขตแท็บ และการอนุมัติการแชร์หน้า",
+    "message": "Hermes Control, ขอบเขตแท็บ และการอนุมัติการแชร์หน้า",
     "description": "Runtime interface message settings.categories.permissions.summary"
   },
   "runtime_settings_categories_permissions_title": {
@@ -2150,6 +2414,14 @@
   "runtime_ui_approve_document_access": {
     "message": "Approve document access",
     "description": "Runtime interface message ui.approve_document_access"
+  },
+  "runtime_ui_artifact_open_on_computer_blocked": {
+    "message": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
+    "description": "Runtime interface message ui.artifact.open_on_computer.blocked"
+  },
+  "runtime_ui_artifact_open_on_computer_confirm": {
+    "message": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+    "description": "Runtime interface message ui.artifact.open_on_computer.confirm"
   },
   "runtime_ui_artifacts": {
     "message": "อาร์ติแฟกต์",
@@ -2686,6 +2958,46 @@
   "runtime_ui_component": {
     "message": "ส่วนประกอบ",
     "description": "Runtime interface message ui.component"
+  },
+  "runtime_ui_composer_ask": {
+    "message": "ถาม",
+    "description": "Runtime interface message ui.composer.ask"
+  },
+  "runtime_ui_composer_ask_bot": {
+    "message": "ถาม {name}",
+    "description": "Runtime interface message ui.composer.ask_bot"
+  },
+  "runtime_ui_composer_ask_bot_label": {
+    "message": "ถาม {name}",
+    "description": "Runtime interface message ui.composer.ask_bot_label"
+  },
+  "runtime_ui_composer_ask_hermes": {
+    "message": "ถาม Hermes",
+    "description": "Runtime interface message ui.composer.ask_hermes"
+  },
+  "runtime_ui_composer_ask_hermes_label": {
+    "message": "ถาม HERMES",
+    "description": "Runtime interface message ui.composer.ask_hermes_label"
+  },
+  "runtime_ui_composer_bot_running": {
+    "message": "{name} กำลังทำงาน",
+    "description": "Runtime interface message ui.composer.bot_running"
+  },
+  "runtime_ui_composer_group_chat": {
+    "message": "แชทกลุ่ม",
+    "description": "Runtime interface message ui.composer.group_chat"
+  },
+  "runtime_ui_composer_hermes_running": {
+    "message": "Hermes กำลังทำงาน",
+    "description": "Runtime interface message ui.composer.hermes_running"
+  },
+  "runtime_ui_composer_new_thread": {
+    "message": "เธรดใหม่",
+    "description": "Runtime interface message ui.composer.new_thread"
+  },
+  "runtime_ui_composer_send": {
+    "message": "ส่ง",
+    "description": "Runtime interface message ui.composer.send"
   },
   "runtime_ui_config": {
     "message": "การกำหนดค่า",
@@ -6230,6 +6542,10 @@
   "runtime_voice_transcription_failed": {
     "message": "การถอดเสียงเป็นคำล้มเหลว\n\n{error}",
     "description": "Runtime interface message voice.transcription_failed"
+  },
+  "runtime_wake_native_local_only": {
+    "message": "Native wake needs the local Hermes gateway on this computer. Remote connections can use browser wake instead.",
+    "description": "Runtime interface message wake.native_local_only"
   },
   "runtime_wake_turn_off": {
     "message": "ปิดคำปลุก",

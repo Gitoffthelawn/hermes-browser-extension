@@ -1,5 +1,5 @@
 /* Generated from extension/lib/content-extraction-core.mjs, extension/lib/appearance-themes.mjs, extension/lib/site-adapters.mjs, extension/lib/inline-draft-policy.mjs, extension/lib/page-annotation-content.mjs. Do not edit directly. */
-/* extension/lib/content-extraction-core.mjs · SHA-256 d4533fe293cb7c8f */
+/* extension/lib/content-extraction-core.mjs · SHA-256 8b63a45056491eb4 */
 (function hermesContentExtractorRuntime(hermesGlobal) {
   'use strict';
 
@@ -91,7 +91,37 @@ const SENSITIVE_ASSIGNMENT_KEYS = new Set([
   'passwd',
   'privatekey',
 ]);
-const POTENTIAL_ASSIGNMENT_RE = /\b([A-Za-z][A-Za-z0-9_%+.-]{1,79})["'`]?\s*([:=])\s*["'`]?([^\s'"`;&,]+)/gi;
+// Names are matched on their normalized form (lowercase, letters and digits
+// only), so `stripe_secret_key`, `MY_API_TOKEN` and `db-password` all end in a
+// credential word. A bare trailing `key` is deliberately not on this list:
+// `sort_key` and `cache_key` are ordinary names.
+const SENSITIVE_ASSIGNMENT_KEY_SUFFIXES = [
+  'password',
+  'passwd',
+  'passphrase',
+  'pwd',
+  'secret',
+  'token',
+  'apikey',
+  'accesskey',
+  'secretkey',
+  'privatekey',
+  'signingkey',
+  'encryptionkey',
+  'authkey',
+  'masterkey',
+  'credential',
+  'credentials',
+];
+// key, optional closing quote of a JSON-style key, separator, then either a
+// fully quoted value (spaces allowed) or a bare token.
+const POTENTIAL_ASSIGNMENT_RE = /\b([A-Za-z][A-Za-z0-9_%+.-]{1,79})(["'`]?)(\s*)([:=])(\s*)(?:(["'`])((?:(?!\6)[^\r\n]){1,500})\6|(["'`]?)([^\s'"`;&,]+))/gi;
+// The same shape inside a JSON string that was itself stored as a string
+// (`{\"password\":\"hunter2\"}`), which is how JSON turns up in logs and API
+// consoles. The value runs to the next escaped quote.
+const ESCAPED_JSON_ASSIGNMENT_RE = /\b([A-Za-z][A-Za-z0-9_%+.-]{1,79})(\\+["'])(\s*:\s*)(\\+["'])((?:(?!\\+["'])[^\r\n]){1,500})(\\+["'])/gi;
+// Closing brackets after a bare value belong to the surrounding JSON or code.
+const BARE_VALUE_TRAILING_BRACKETS_RE = /[}\]]+$/;
 
 const SECRET_PATTERNS = [
   { pattern: /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/g, replacement: '[REDACTED_PRIVATE_KEY]' },
@@ -105,6 +135,17 @@ const SECRET_PATTERNS = [
   { pattern: /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, replacement: '[REDACTED_JWT]' },
   { pattern: /\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9_-]{8,}\b/gi, replacement: '[REDACTED_SECRET]' },
   { pattern: /\bgh[pousr]_[A-Za-z0-9_]{16,}\b/gi, replacement: '[REDACTED_SECRET]' },
+  { pattern: /\bnpm_[A-Za-z0-9]{30,}\b/g, replacement: '[REDACTED_SECRET]' },
+  { pattern: /\bhf_[A-Za-z0-9]{30,}\b/g, replacement: '[REDACTED_SECRET]' },
+  { pattern: /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/g, replacement: '[REDACTED_SECRET]' },
+  { pattern: /\bya29\.[A-Za-z0-9_-]{20,}/g, replacement: '[REDACTED_SECRET]' },
+  { pattern: /\bGOCSPX-[A-Za-z0-9_-]{20,}/g, replacement: '[REDACTED_SECRET]' },
+  { pattern: /\bglpat-[A-Za-z0-9_-]{20,}/g, replacement: '[REDACTED_SECRET]' },
+  { pattern: /\bdop_v1_[a-f0-9]{64}\b/g, replacement: '[REDACTED_SECRET]' },
+  { pattern: /\bshp(?:at|ca|pa|ss)_[a-f0-9]{32}\b/g, replacement: '[REDACTED_SECRET]' },
+  { pattern: /\bwhsec_[A-Za-z0-9]{16,}\b/g, replacement: '[REDACTED_SECRET]' },
+  { pattern: /\b(?:Authorization|Proxy-Authorization)(["'`]?\s*[:=]\s*["'`]?)(?:Basic|Digest|Negotiate|NTLM|Token)\s+[^\s'"`;&,]+/gi, replacement: 'Authorization$1[REDACTED_SECRET]' },
+  { pattern: /\b([a-z][a-z0-9+.-]{1,20}:\/\/[^\s:/@'"`]+:)[^\s@/'"`]+@/gi, replacement: '$1[REDACTED_SECRET]@' },
 ];
 
 function boundedInteger(value, fallback, minimum = 1, maximum = Number.MAX_SAFE_INTEGER) {
@@ -160,18 +201,34 @@ function decodedTextLayers(value = '', maxLayers = 3) {
 function isSensitiveAssignmentKey(value = '') {
   return decodedTextLayers(value).some((layer) => {
     const normalized = layer.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-    return SENSITIVE_ASSIGNMENT_KEYS.has(normalized);
+    return SENSITIVE_ASSIGNMENT_KEYS.has(normalized)
+      || SENSITIVE_ASSIGNMENT_KEY_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
   });
 }
 
 function redactSensitiveAssignments(value = '') {
   let count = 0;
-  const text = String(value || '').replace(POTENTIAL_ASSIGNMENT_RE, (match, key, separator) => {
+  const escaped = String(value || '').replace(ESCAPED_JSON_ASSIGNMENT_RE, (match, key, keyQuote, separator, openQuote, _secret, closeQuote) => {
     if (!isSensitiveAssignmentKey(key)) return match;
     count += 1;
-    const quotedObjectKey = /^["'`]\s*:/.test(match.slice(key.length));
-    const delimiter = separator === ':' && !quotedObjectKey ? ': ' : '=';
-    return `${key}${delimiter}[REDACTED_SECRET]`;
+    return `${key}${keyQuote}${separator}${openQuote}[REDACTED_SECRET]${closeQuote}`;
+  });
+  const text = escaped.replace(POTENTIAL_ASSIGNMENT_RE, (match, key, keyQuote, beforeSeparator, separator, afterSeparator, quote, _quoted, _bareQuote, bare) => {
+    if (!isSensitiveAssignmentKey(key)) return match;
+    count += 1;
+    if (quote) {
+      // Quoted value: keep the key, separator spacing and quotes so JSON and
+      // config-file shapes survive, and drop only the value itself.
+      return `${key}${keyQuote}${beforeSeparator}${separator}${afterSeparator}${quote}[REDACTED_SECRET]${quote}`;
+    }
+    // A bare value must not swallow the `}` or `]` that closes its object.
+    const closers = BARE_VALUE_TRAILING_BRACKETS_RE.exec(bare || '')?.[0] || '';
+    if (keyQuote) {
+      // JSON-style key followed by an unquoted value (number, boolean, bare word).
+      return `${key}${keyQuote}${separator} [REDACTED_SECRET]${closers}`;
+    }
+    const delimiter = separator === ':' ? ': ' : '=';
+    return `${key}${delimiter}[REDACTED_SECRET]${closers}`;
   });
   return { text, count };
 }
@@ -181,9 +238,9 @@ function redactSensitiveTextWithCount(value = '') {
   let text = assignments.text;
   let count = assignments.count;
   for (const { pattern, replacement } of SECRET_PATTERNS) {
-    text = text.replace(pattern, () => {
+    text = text.replace(pattern, (...args) => {
       count += 1;
-      return replacement;
+      return replacement.replace(/\$(\d)/g, (_token, index) => (typeof args[Number(index)] === 'string' ? args[Number(index)] : ''));
     });
   }
   return { text, count };

@@ -16,6 +16,14 @@ export const RUN_TERMINAL_STATUSES = Object.freeze({
   CANCELLED: 'cancelled',
 });
 
+export const RUN_UNCONFIRMED_REASONS = Object.freeze({
+  RUN_ID_UNKNOWN: 'run-id-unknown',
+});
+
+const RUN_UNCONFIRMED_DETAIL = Object.freeze({
+  [RUN_UNCONFIRMED_REASONS.RUN_ID_UNKNOWN]: 'Hermes has not reported a run id for this turn, so Browser cannot confirm the run stopped. The session writer and queued messages stay held until Hermes confirms a terminal state.',
+});
+
 const TERMINAL = new Set(Object.values(RUN_TERMINAL_STATUSES));
 
 function freeze(state) {
@@ -71,6 +79,37 @@ export function markStopRequestFailed(state, detail = '') {
     controlStatus: 'failed',
     detail: String(detail || 'stop request was not acknowledged'),
   });
+}
+
+/**
+ * Stop was requested but Hermes cannot say what happened to the run, for
+ * example because no run id was ever published. The writer stays held and the
+ * state is never reported as stopped; only a terminal confirmation releases it.
+ */
+export function markRunUnconfirmed(state, reason = '', detail = '') {
+  if (!state || state.phase === RUN_CONTROL_PHASES.TERMINAL) return state;
+  return freeze({
+    ...state,
+    phase: RUN_CONTROL_PHASES.UNCONFIRMED,
+    controlStatus: 'unconfirmed',
+    writerLease: 'held',
+    unconfirmedReason: String(reason || ''),
+    detail: String(detail || RUN_UNCONFIRMED_DETAIL[reason] || 'Hermes has not confirmed the stop.'),
+  });
+}
+
+/**
+ * A Stop that never learned a run id cannot be confirmed by polling: there is
+ * no run to ask about. Retrying status can never succeed, so this is the one
+ * held state the person may release by hand, after checking Hermes themselves.
+ */
+export function canReleaseUnconfirmedRun(state = null) {
+  return Boolean(
+    state
+    && state.phase === RUN_CONTROL_PHASES.UNCONFIRMED
+    && state.unconfirmedReason === RUN_UNCONFIRMED_REASONS.RUN_ID_UNKNOWN
+    && !state.runId,
+  );
 }
 
 export function markRunStreamClosed(state) {
@@ -145,7 +184,10 @@ function statusValue(payload = {}) {
 
 export function restTerminalStatus(payload = {}) {
   const status = statusValue(payload);
-  return TERMINAL.has(status) ? status : '';
+  if (TERMINAL.has(status)) return status;
+  // The gateway reports a run it interrupted itself (a restart, a shutdown) as
+  // `interrupted`; nothing is running any more, and it was not completed.
+  return status === 'interrupted' ? RUN_TERMINAL_STATUSES.CANCELLED : '';
 }
 
 export function runStopFailureTerminalStatus({ httpStatus = 0, payload = null } = {}) {
@@ -160,18 +202,50 @@ export function runStopFailureTerminalStatus({ httpStatus = 0, payload = null } 
     : '';
 }
 
+/** Run id a session payload reports for its in-flight run, or an empty string. */
+export function activeRunIdFromSessionPayload(payload = {}) {
+  const candidates = [
+    payload?.active_run_id,
+    payload?.session?.active_run_id,
+    payload?.data?.active_run_id,
+    payload?.run?.id,
+    payload?.session?.run_id,
+  ];
+  for (const candidate of candidates) {
+    const value = String(candidate ?? '').trim();
+    if (value && /^[A-Za-z0-9._:-]{1,200}$/.test(value)) return value;
+  }
+  return '';
+}
+
+/** What a controller Stop reported: how many pending Hermes Control commands it cancelled. */
+export function controllerStopSummary(result = null) {
+  if (!result || typeof result !== 'object' || result.ok === false) return { ok: false, cancelled: 0 };
+  const cancelled = Number(result.cancelled);
+  return { ok: true, cancelled: Number.isInteger(cancelled) && cancelled > 0 ? cancelled : 0 };
+}
+
 export function runControlGenerationMatches(expectedGeneration, currentGeneration) {
   return Number.isInteger(expectedGeneration)
     && Number.isInteger(currentGeneration)
     && expectedGeneration === currentGeneration;
 }
 
+// `session.status` answers with rendered text, not fields: a line reading
+// "Agent Running: Yes" or "Agent Running: No".
+function agentRunningFromStatusText(payload = {}) {
+  const match = /^Agent Running:\s*(Yes|No)\s*$/mi.exec(String(payload?.output ?? ''));
+  if (!match) return undefined;
+  return match[1].toLowerCase() === 'yes';
+}
+
 export function dashboardTerminalStatus(payload = {}, { stopRequested = false } = {}) {
   const status = statusValue(payload);
   if (TERMINAL.has(status)) return status;
-  if (status === 'stopped') return RUN_TERMINAL_STATUSES.CANCELLED;
-  if (['running', 'busy', 'working', 'stopping'].includes(status)) return '';
-  const running = payload?.running ?? payload?.is_running ?? payload?.busy ?? payload?.session?.running ?? payload?.session?.busy;
+  if (status === 'stopped' || status === 'interrupted') return RUN_TERMINAL_STATUSES.CANCELLED;
+  if (['running', 'busy', 'working', 'stopping', 'waiting', 'starting'].includes(status)) return '';
+  const running = payload?.running ?? payload?.is_running ?? payload?.busy ?? payload?.session?.running ?? payload?.session?.busy
+    ?? agentRunningFromStatusText(payload);
   if (running === true) return '';
   if (running === false || ['idle', 'ready'].includes(status)) {
     return stopRequested ? RUN_TERMINAL_STATUSES.CANCELLED : RUN_TERMINAL_STATUSES.COMPLETED;

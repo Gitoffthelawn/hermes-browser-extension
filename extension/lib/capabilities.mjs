@@ -38,6 +38,10 @@ export const DEFAULT_GATEWAY_CAPABILITIES = Object.freeze({
   runEvents: false,
   runStop: false,
   runSteer: false,
+  // POST /v1/runs/{id}/approval and /clarify: the browser can answer a prompt
+  // the run raised. Without them an approval card is informational only.
+  runApproval: false,
+  runClarify: false,
   sessionModelLock: false,
   sessionContext: false,
   sessionCompress: false,
@@ -61,7 +65,15 @@ export const DEFAULT_GATEWAY_CAPABILITIES = Object.freeze({
   warnings: Object.freeze([]),
 });
 
-export function dashboardWsGatewayCapabilities({ health = false, source = 'dashboard-ws' } = {}) {
+// The dashboard WebSocket serves `session.compress` from its legacy session
+// handlers. An authority-attached gateway (gateway.ready carries
+// `session_authority`) does not route that verb and answers -32601, so it is
+// only advertised when the connection proves it is not authority-attached.
+export function dashboardWsSupportsCompress(readyPayload = null) {
+  return Boolean(readyPayload && typeof readyPayload === 'object' && readyPayload.session_authority !== true);
+}
+
+export function dashboardWsGatewayCapabilities({ health = false, source = 'dashboard-ws', readyPayload = null } = {}) {
   return {
     ...DEFAULT_GATEWAY_CAPABILITIES,
     source,
@@ -74,6 +86,7 @@ export function dashboardWsGatewayCapabilities({ health = false, source = 'dashb
     skills: true,
     profiles: true,
     runSteer: true,
+    sessionCompress: dashboardWsSupportsCompress(readyPayload),
     dashboardWs: true,
     warnings: Object.freeze([
       'Dashboard WebSocket transport is active; REST-only API routes are not required.',
@@ -184,6 +197,8 @@ export function normalizeGatewayCapabilities(payload = null, { healthOk = false,
         runEvents: advertisedFeature(features, endpoints, ['run_events_sse', 'run_events'], ['run_events']),
         runStop: advertisedFeature(features, endpoints, ['run_stop'], ['run_stop']),
         runSteer: advertisedFeature(features, endpoints, ['run_steer'], ['run_steer']),
+        runApproval: advertisedFeature(features, endpoints, ['run_approval_response'], ['run_approval']),
+        runClarify: advertisedFeature(features, endpoints, ['run_clarify_response'], ['run_clarify']),
         sessionModelLock: inferredFeature(features, endpoints, ['session_model_lock', 'sessionModelLock'], ['session_model_lock', 'session_model']),
         sessionContext: inferredFeature(features, endpoints, ['session_context', 'context_status', 'contextStatus'], ['session_context', 'session_context_get', 'context_status']),
         sessionCompress: hasEndpoint(endpoints, ['session_compress', 'session_compress_post', 'context_compress']),

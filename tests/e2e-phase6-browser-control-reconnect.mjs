@@ -12,6 +12,7 @@ import {
   TEST_ACCESS_VALUE,
   TEST_SESSION_ID,
   chromeExecutable,
+  ensureExtensionStartupPage,
   fetchJson,
   killChrome,
   startControllerFixture,
@@ -61,6 +62,7 @@ async function main() {
     await waitFor(() => existsSync(activePort));
     const [portLine] = (await readFile(activePort, 'utf8')).trim().split('\n');
     const devtoolsBase = `http://127.0.0.1:${Number(portLine)}`;
+    await ensureExtensionStartupPage(devtoolsBase, extensionId);
     const version = await fetchJson(`${devtoolsBase}/json/version`);
     browser = new CdpClient(version.webSocketDebuggerUrl);
     await browser.connect();
@@ -90,7 +92,6 @@ async function main() {
           browserControlEnabled: true,
           browserControlPaused: false,
           browserControlScope: 'this-tab',
-          browserControlViewBehavior: 'stay'
         },
         hermesBrowserIntroSeen: true
       });
@@ -313,7 +314,27 @@ async function main() {
     const listed = await sendCommand('reconnect-tabs', 'browser_tabs');
     assert.equal(listed.params.ok, true, JSON.stringify(listed.params));
     assert.ok(listed.params.result.tabs.some((item) => item.id === secondTabId));
-    assert.equal((await sendCommand('reconnect-activate', 'browser_tab_activate', { tab_id: secondTabId })).params.ok, true);
+    // Switching the person's tab asks them first, so the switch is granted the way the panel's Approve button grants it.
+    const activation = sendCommand('reconnect-activate', 'browser_tab_activate', { tab_id: secondTabId });
+    const activationApproval = await waitFor(() => extension.evaluate(`chrome.runtime.sendMessage({ type: 'HERMES_CONTROLLER_STATUS' })`).then((value) => (
+      value?.pendingApproval?.commandId === 'reconnect-activate' ? value.pendingApproval : null
+    )));
+    const activationGranted = await extension.evaluate(`chrome.runtime.sendMessage({
+      type: 'HERMES_CONTROLLER_APPROVAL_GRANT',
+      approvalId: ${JSON.stringify(activationApproval.approvalId)},
+      approvalNonce: ${JSON.stringify(activationApproval.approvalNonce)},
+      commandId: ${JSON.stringify(activationApproval.commandId)},
+      controllerId: ${JSON.stringify(activationApproval.controllerId)},
+      leaseId: ${JSON.stringify(activationApproval.leaseId)},
+      leaseGeneration: ${Number(activationApproval.leaseGeneration)},
+      action: ${JSON.stringify(activationApproval.action)},
+      tabId: ${Number(activationApproval.tabId)},
+      documentGeneration: ${Number(activationApproval.documentGeneration)},
+      paused: true
+    })`);
+    assert.equal(activationGranted?.ok, true, JSON.stringify(activationGranted));
+    const activated = await activation;
+    assert.equal(activated.params.ok, true, JSON.stringify(activated.params));
     assert.equal((await sendCommand('reconnect-scroll-to-result', 'browser_scroll_to', { ref: buttonRef.ref })).params.ok, true);
 
     const screenshotPage = await controlled.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });

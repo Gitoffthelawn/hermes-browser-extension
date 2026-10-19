@@ -595,14 +595,15 @@ test('redactSensitiveText masks provider token shapes and quoted secret values',
   const quotedSecret = ['abc', '123', 'def', '456'].join('');
   const jsonOutput = redactSensitiveText(`{"api_key": "${quotedSecret}"}`);
   assert.doesNotMatch(jsonOutput, new RegExp(quotedSecret));
-  assert.match(jsonOutput, /api_key=\[REDACTED_SECRET\]/);
+  assert.equal(jsonOutput, '{"api_key": "[REDACTED_SECRET]"}');
 
   const compoundOutput = redactSensitiveText(`{"client_secret":"${quotedSecret}","aws_secret_access_key":"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY","refresh_token":"refresh-${quotedSecret}"}`);
   assert.doesNotMatch(compoundOutput, /wJalrXUtnFEMI/);
   assert.doesNotMatch(compoundOutput, /refresh-abc123/);
-  assert.match(compoundOutput, /client_secret=\[REDACTED_SECRET\]/);
-  assert.match(compoundOutput, /aws_secret_access_key=\[REDACTED_SECRET\]/);
-  assert.match(compoundOutput, /refresh_token=\[REDACTED_SECRET\]/);
+  assert.match(compoundOutput, /"client_secret":"\[REDACTED_SECRET\]"/);
+  assert.match(compoundOutput, /"aws_secret_access_key":"\[REDACTED_SECRET\]"/);
+  assert.match(compoundOutput, /"refresh_token":"\[REDACTED_SECRET\]"/);
+  assert.doesNotThrow(() => JSON.parse(compoundOutput), 'quoted JSON must keep its shape');
 
   assert.equal(redactSensitiveText('The quick brown fox jumps over the lazy dog.'), 'The quick brown fox jumps over the lazy dog.');
 });
@@ -1064,10 +1065,15 @@ test('remote session route 403s classify as API authorization failures', () => {
 test('sidepanel routes session creation failures through remote setup diagnostics', () => {
   const source = readFileSync(new URL('../extension/sidepanel.js', import.meta.url), 'utf8');
 
+  // The GET/POST sequence lives in session-materialization.mjs; the side panel
+  // passes createSessionRouteError as its failure handler.
+  const materialization = readFileSync(new URL('../extension/lib/session-materialization.mjs', import.meta.url), 'utf8');
+
   assert.match(source, /function createSessionRouteError\(/);
   assert.match(source, /classifyRemoteGatewaySetup\(\{[\s\S]*?healthOk:\s*true[\s\S]*?status[\s\S]*?body/s);
-  assert.match(source, /throw createSessionRouteError\(\{[\s\S]*?Inspect Hermes Browser Extension session[\s\S]*?response:\s*getResponse/s);
-  assert.match(source, /throw createSessionRouteError\(\{[\s\S]*?Create Hermes Browser Extension session[\s\S]*?response:\s*createResponse/s);
+  assert.match(source, /materializeSessionRoute\(\{[\s\S]*?failure:\s*createSessionRouteError/s);
+  assert.match(materialization, /throw failure\(failureDetails\(\{[\s\S]*?Inspect Hermes Browser Extension session[\s\S]*?response:\s*lookup/s);
+  assert.match(materialization, /throw failure\(failureDetails\(\{[\s\S]*?Create Hermes Browser Extension session[\s\S]*?response:\s*created/s);
   assert.doesNotMatch(source, /Could not create Hermes Browser Extension session \(\$\{createResponse\.status\}\):/);
 });
 
@@ -1740,7 +1746,7 @@ test('assistant thinking placeholder renders animated indicator markup and reduc
   assert.match(source, /<span class="thinking-dots" aria-hidden="true"><i><\/i><i><\/i><i><\/i><\/span>/);
   assert.match(source, /<span class="thinking-words" aria-hidden="true">\$\{phrases\}<\/span>/);
   assert.match(source, /streamPacer\.push\(liveText\.slice\(pushedLive\)\);/);
-  assert.match(source, /streamView\.updateText\(text \|\| \(meta\.done \? '' : THINKING_PLACEHOLDER\)\);/);
+  assert.match(source, /const paint = pacerFramePaint\(text, meta, THINKING_PLACEHOLDER\);/);
   assert.match(css, /\.thinking-indicator[\s\S]*overflow: hidden/);
   assert.match(css, /\.thinking-words[\s\S]*overflow: hidden/);
   assert.match(css, /\.thinking-words[\s\S]*height: 1\.46em/);

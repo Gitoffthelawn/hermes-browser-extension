@@ -42,7 +42,6 @@ test('Phase 6 screenshot suspends every extension overlay during capture and res
     tabsApi: {
       async sendMessage(_tabId, message) { phases.push(message.phase); },
     },
-    minimumVisibleMs: 0,
   });
   await adapter.execute('browser_screenshot', {}, { scope: { tabId: 36 } });
   assert.deepEqual(phases, ['start', 'suspend', 'capture', 'resume', 'finish']);
@@ -67,10 +66,9 @@ test('Phase 6 adapter indicator finishes after failure and never replaces the re
   assert.deepEqual(phases, ['start', 'finish']);
 });
 
-test('Phase 6 indicator remains perceptible for fast successful actions without delaying the mutation itself', async () => {
-  let now = 1_000;
+test('Phase 6 indicator never delays a finished action: the presentation hold moved to the page', async () => {
+  const now = 1_000;
   let actionFinishedAt = 0;
-  const waits = [];
   const phases = [];
   const { withBrowserControlIndicator } = await indicatorsModule();
   const adapter = withBrowserControlIndicator({
@@ -84,18 +82,56 @@ test('Phase 6 indicator remains perceptible for fast successful actions without 
     tabsApi: {
       async sendMessage(_tabId, message) { phases.push({ phase: message.phase, at: now }); },
     },
-    now: () => now,
-    wait: async (ms) => { waits.push(ms); now += ms; },
-    minimumVisibleMs: 180,
   });
   const result = await adapter.execute('browser_click', {}, { scope: { tabId: 35 } });
   assert.equal(result.clicked, true);
-  assert.equal(actionFinishedAt, 1_000, 'the browser mutation itself must not wait for presentation timing');
-  assert.deepEqual(waits, [180]);
+  assert.equal(actionFinishedAt, 1_000);
   assert.deepEqual(phases, [
     { phase: 'start', at: 1_000 },
-    { phase: 'finish', at: 1_180 },
+    { phase: 'finish', at: 1_000 },
+  ], 'finish is sent right away, with no minimum-display wait');
+});
+
+test('Phase 6 indicator result does not wait for a slow or hung finish message', async () => {
+  const { withBrowserControlIndicator } = await indicatorsModule();
+  const phases = [];
+  const adapter = withBrowserControlIndicator({
+    adapter: {
+      contract: { enabled: true, actions: ['browser_click'] },
+      async execute() { return { clicked: true }; },
+    },
+    tabsApi: {
+      sendMessage(_tabId, message) {
+        phases.push(message.phase);
+        return message.phase === 'finish' ? new Promise(() => {}) : Promise.resolve();
+      },
+    },
+  });
+  const result = await Promise.race([
+    adapter.execute('browser_click', {}, { scope: { tabId: 37 } }),
+    new Promise((resolve) => setTimeout(() => resolve('hung'), 200)),
   ]);
+  assert.deepEqual(result, { clicked: true });
+  assert.deepEqual(phases, ['start', 'finish']);
+});
+
+test('Phase 6 indicator wrapper passes the adapter lifecycle methods through', async () => {
+  const { withBrowserControlIndicator } = await indicatorsModule();
+  const calls = [];
+  const adapter = withBrowserControlIndicator({
+    adapter: {
+      contract: { enabled: true, actions: [] },
+      async execute() { return {}; },
+      async settle(options) { calls.push(['settle', options.mode]); return { navigated: false, timedOut: false }; },
+      async releaseTab(tabId) { calls.push(['releaseTab', tabId]); return true; },
+      dispose() { calls.push(['dispose']); },
+    },
+    tabsApi: { async sendMessage() {} },
+  });
+  assert.deepEqual(await adapter.settle({ mode: 'dom' }), { navigated: false, timedOut: false });
+  assert.equal(await adapter.releaseTab(7), true);
+  adapter.dispose();
+  assert.deepEqual(calls, [['settle', 'dom'], ['releaseTab', 7], ['dispose']]);
 });
 
 test('Phase 6 content script owns a transient theme-aware indicator and receives only known action names', async () => {
@@ -105,6 +141,8 @@ test('Phase 6 content script owns a transient theme-aware indicator and receives
   assert.match(source, /browser-control-indicator/);
   assert.match(source, /browser_click:\s*'Clicking'/);
   assert.match(source, /message\.phase === 'finish'/);
+  assert.match(source, /BROWSER_CONTROL_INDICATOR_MIN_VISIBLE_MS = 180/);
+  assert.match(source, /finishBrowserControlIndicator/);
   assert.match(source, /message\.phase === 'suspend'/);
   assert.match(source, /message\.phase === 'resume'/);
   assert.match(source, /targetRect/);

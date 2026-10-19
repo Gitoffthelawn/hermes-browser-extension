@@ -135,6 +135,9 @@ export function connectionSettingsAfterTokenClear(input = {}) {
   const cleared = migrateConnectionSettings({
     ...input,
     apiKey: '',
+    // Older builds stored the credential as `agentToken`, and the background
+    // client still falls back to it, so clearing the token must drop it too.
+    agentToken: '',
     tokenSource: '',
     lastConnectionTestedAt: 0,
   });

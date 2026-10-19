@@ -18,6 +18,8 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
+import { ensureExtensionStartupPage, killProcessTree, resolveChromeExecutable } from './e2e-chrome-env.mjs';
+
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DIST = path.join(ROOT, 'dist');
 const PROFILE = path.join(ROOT, 'tmp', `qa-gateway-failure-${process.pid}`);
@@ -43,14 +45,10 @@ const INIT_FAILURE_BODY = [
 ].join('\n');
 
 function chromeExecutable() {
-  const candidates = [
-    process.env.CHROME_PATH,
+  return resolveChromeExecutable([
     'C:\\Program Files\\Google\\Chrome for Testing\\chrome.exe',
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  ].filter(Boolean);
-  const found = candidates.find((candidate) => existsSync(candidate));
-  if (!found) throw new Error('Chrome not found. Set CHROME_PATH.');
-  return found;
+  ]);
 }
 
 function unpackedExtensionId(extensionPath) {
@@ -313,10 +311,7 @@ async function saveScreenshot(client, filePath) {
 }
 
 function killChrome(child) {
-  if (!child?.pid) return;
-  try {
-    spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
-  } catch { /* best-effort */ }
+  killProcessTree(child);
 }
 
 const paneldState = `(() => {
@@ -337,9 +332,17 @@ const paneldState = `(() => {
   };
 })()`;
 
+// The active-tab status card and its recovery action live in the Permissions &
+// Control pane, so open that pane rather than the category home.
 async function openSettings(panel) {
   await panel.evaluate(`document.querySelector('#settingsButton').click(); true`);
   await waitFor(() => panel.evaluate("document.querySelector('#settingsDialog')?.hidden === false"));
+  await waitFor(() => panel.evaluate(`(() => {
+    const card = document.querySelector('#statusCard');
+    if (card && card.offsetParent !== null) return true;
+    document.querySelector('[data-settings-category="permissions"]')?.click();
+    return false;
+  })()`));
 }
 
 async function submitPrompt(panel, text) {
@@ -384,6 +387,7 @@ async function main() {
     await waitFor(() => existsSync(activePort));
     const [portLine] = (await readFile(activePort, 'utf8')).trim().split('\n');
     const devtoolsBase = `http://127.0.0.1:${Number(portLine)}`;
+    await ensureExtensionStartupPage(devtoolsBase, extensionId);
 
     // The MV3 service worker is lazy: it does not exist as a debug target until
     // an extension page wakes it. Open the loaded page, message the background,
@@ -460,6 +464,11 @@ async function main() {
     await panel.call('Runtime.enable');
     await panel.call('Log.enable');
     await panel.call('Page.enable');
+    // The panel runs in an ordinary tab here, and Chrome stops animation frames
+    // for a tab that is not showing. Streaming text is painted on a frame, so a
+    // hidden panel would show the thinking indicator instead of the reply.
+    await panel.call('Page.bringToFront');
+    await waitFor(() => panel.evaluate(`document.visibilityState === 'visible'`));
     try {
       await waitFor(() => panel.evaluate(`(() => {
         const startup = document.querySelector('#startupScreen');

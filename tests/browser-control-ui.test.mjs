@@ -46,13 +46,41 @@ test('Phase 6 control scope never expands an implicit all-tabs selection', async
   });
 });
 
-test('Phase 6 Stay never changes the active tab while Follow targets only a different leased action tab', async () => {
-  const { followTargetTabId } = await uiModule();
-  const status = { leasedTabIds: [10, 12], activeAction: { tabId: 12 } };
-  assert.equal(followTargetTabId({ viewBehavior: 'stay', status, activeTabId: 10 }), null);
-  assert.equal(followTargetTabId({ viewBehavior: 'follow', status, activeTabId: 10 }), 12);
-  assert.equal(followTargetTabId({ viewBehavior: 'follow', status, activeTabId: 12 }), null);
-  assert.equal(followTargetTabId({ viewBehavior: 'follow', status: { ...status, leasedTabIds: [10] }, activeTabId: 10 }), null);
+test('Show tab targets the attached tab Hermes is using, by approval, then action, then last action, then the only attached tab', async () => {
+  const { showTabTargetId } = await uiModule();
+  const attached = { connected: true, controlEnabled: true, leasedTabIds: [10, 12] };
+  assert.equal(showTabTargetId({
+    status: { ...attached, pendingApproval: { tabId: 12 }, activeAction: { tabId: 10 }, lastActionTabId: 10 },
+    activeTabId: 10,
+  }), 12, 'an approval waiting on another tab wins');
+  assert.equal(showTabTargetId({ status: { ...attached, activeAction: { tabId: 12 }, lastActionTabId: 10 }, activeTabId: 10 }), 12);
+  assert.equal(showTabTargetId({ status: { ...attached, lastActionTabId: 12 }, activeTabId: 10 }), 12);
+  assert.equal(showTabTargetId({ status: { ...attached, leasedTabIds: [12] }, activeTabId: 10 }), 12, 'the only attached tab');
+  assert.equal(showTabTargetId({ status: { ...attached, lastActionTabId: 10 }, activeTabId: 12 }), 10);
+});
+
+test('Show tab stays hidden when its target is already the panel window active tab', async () => {
+  const { showTabTargetId } = await uiModule();
+  const attached = { connected: true, controlEnabled: true, leasedTabIds: [10, 12] };
+  assert.equal(showTabTargetId({ status: { ...attached, lastActionTabId: 12 }, activeTabId: 12 }), null);
+  assert.equal(showTabTargetId({ status: { ...attached, activeAction: { tabId: 12 } }, activeTabId: 12 }), null);
+  // An approval on the tab the user is looking at is shown there, not on another tab.
+  assert.equal(showTabTargetId({
+    status: { ...attached, pendingApproval: { tabId: 10 }, activeAction: { tabId: 12 } },
+    activeTabId: 10,
+  }), null);
+});
+
+test('Show tab only targets attached tabs and only while Hermes Control is connected and on', async () => {
+  const { showTabTargetId } = await uiModule();
+  const attached = { connected: true, controlEnabled: true, leasedTabIds: [10, 12] };
+  assert.equal(showTabTargetId({ status: { ...attached, pendingApproval: { tabId: 99 }, lastActionTabId: 77 }, activeTabId: 10 }), null);
+  assert.equal(showTabTargetId({ status: { ...attached, lastActionTabId: 77 }, activeTabId: 10 }), null);
+  assert.equal(showTabTargetId({ status: { ...attached, leasedTabIds: [] }, activeTabId: 10 }), null);
+  assert.equal(showTabTargetId({ status: { ...attached, controlEnabled: false, lastActionTabId: 12 }, activeTabId: 10 }), null);
+  assert.equal(showTabTargetId({ status: { ...attached, connected: false, lastActionTabId: 12 }, activeTabId: 10 }), null);
+  assert.equal(showTabTargetId({ status: null, activeTabId: 10 }), null);
+  assert.equal(showTabTargetId({ status: undefined, activeTabId: null }), null);
 });
 
 test('Phase 6 visible state is derived from worker authority and exposes no arguments or page content', async () => {

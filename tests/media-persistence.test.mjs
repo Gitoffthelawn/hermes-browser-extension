@@ -136,7 +136,8 @@ test('sidepanel hydrates history media through the discovered dashboard /api/med
   const source = read('extension/sidepanel.js');
   assert.match(source, /hydrateSessionMedia/);
   assert.match(source, /fetchDashboardMediaDataUrl/);
-  assert.match(source, /dashboardFileStreamUrl/);
+  assert.match(source, /fetchDashboardFileStreamObjectUrl/);
+  assert.doesNotMatch(source, /dashboardFileStreamUrl\([^)]*token/);
 });
 
 test('Hermes Web hydrates session media with the same dashboard endpoints', () => {

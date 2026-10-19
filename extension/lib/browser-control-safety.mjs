@@ -18,14 +18,26 @@ const SAFE_ACTIONS = new Set([
   'browser_fill',
   'browser_select',
   'browser_screenshot',
-  'browser_tab_activate',
   'browser_tab_create',
   'browser_tab_group',
   'browser_tab_ungroup',
   'browser_tabs',
 ]);
 
-const SUBMISSION_KEY_RE = /^(?:enter|return)$/i;
+// Matches combos too ("Control+Enter"), since the adapter accepts "Mod+Key".
+const SUBMISSION_KEY_RE = /(?:^|\+)(?:enter|return)$/i;
+// Paste shortcuts insert the user's own clipboard into the page, so they need approval.
+const PASTE_KEY_RE = /^(?:(?:control|ctrl|meta|cmd|command)\+(?:shift\+)?v|shift\+insert)$/i;
+const PASTE_MODIFIER_RE = /^(?:control|ctrl|meta|cmd|command)$/i;
+
+function isPasteShortcut(args = {}) {
+  const key = compact(args?.key);
+  if (PASTE_KEY_RE.test(key)) return true;
+  const modifiers = Array.isArray(args?.modifiers) ? args.modifiers : [];
+  if (/^v$/i.test(key)) return modifiers.some((value) => PASTE_MODIFIER_RE.test(compact(value)));
+  if (/^insert$/i.test(key)) return modifiers.some((value) => /^shift$/i.test(compact(value)));
+  return false;
+}
 const APPROVAL_LABEL_RE = /\b(?:submit|send|post|publish|delete|remove|revoke|reset|buy|pay|checkout|transfer|subscribe|invite|approve|merge|deploy|download|upload|overwrite)\b/i;
 const PAYMENT_RE = /\b(?:credit.?card|card.?number|cvv|cvc|expiry|payment|billing|bank|banking|crypto|wallet|checkout)\b/i;
 const CREDENTIAL_RE = /\b(?:password|passwd|passcode|api.?(?:key|token)|access.?token|auth.?token|session.?token|private.?key|seed.?phrase|recovery.?phrase|secret)\b/i;
@@ -96,6 +108,10 @@ export function classifyBrowserControlAction({
   const normalizedAction = compact(action);
   if (normalizedAction === 'browser_drag') {
     return decision(BROWSER_CONTROL_RISKS.APPROVAL, 'drag-action');
+  }
+  // Switching the tab the person is looking at is their call, so Hermes asks first.
+  if (normalizedAction === 'browser_tab_activate') {
+    return decision(BROWSER_CONTROL_RISKS.APPROVAL, 'tab-activate');
   }
   if (normalizedAction === 'browser_tab_close') {
     return decision(BROWSER_CONTROL_RISKS.APPROVAL, 'tab-close');
@@ -186,10 +202,28 @@ export function classifyBrowserControlAction({
   if (normalizedAction === 'browser_press' && SUBMISSION_KEY_RE.test(compact(args?.key))) {
     return decision(BROWSER_CONTROL_RISKS.APPROVAL, 'submission-key');
   }
+  if (normalizedAction === 'browser_press' && isPasteShortcut(args)) {
+    return decision(BROWSER_CONTROL_RISKS.APPROVAL, 'clipboard-paste');
+  }
   if ((normalizedAction === 'browser_click' || normalizedAction === 'browser_press') && APPROVAL_LABEL_RE.test(descriptor)) {
     return decision(BROWSER_CONTROL_RISKS.APPROVAL, 'consequential-action');
   }
   return decision(BROWSER_CONTROL_RISKS.SAFE);
+}
+
+// Identity of what the person is approving. Each field is bounded the same
+// way when a request is stored and when it is consumed, so a long label can
+// never make a legitimate approval miss its own key.
+const APPROVAL_FIELD_LIMITS = Object.freeze({
+  binding: 200,
+  targetRole: 80,
+  targetName: 200,
+  destination: 280,
+  valueHash: 64,
+});
+
+function approvalField(value, name) {
+  return compact(value).slice(0, APPROVAL_FIELD_LIMITS[name]);
 }
 
 function approvalKey(value = {}) {
@@ -204,7 +238,11 @@ function approvalKey(value = {}) {
     Number(value.documentGeneration),
     compact(value.action),
     compact(value.state),
-    compact(value.binding),
+    approvalField(value.binding, 'binding'),
+    approvalField(value.targetRole, 'targetRole'),
+    approvalField(value.targetName, 'targetName'),
+    approvalField(value.destination, 'destination'),
+    approvalField(value.valueHash, 'valueHash'),
   ].join('\u0000');
 }
 
@@ -228,7 +266,11 @@ export function createBrowserControlApprovalStore({
     const leaseGeneration = Number(value.leaseGeneration);
     const action = compact(value.action);
     const state = compact(value.state);
-    const binding = compact(value.binding).slice(0, 200);
+    const binding = approvalField(value.binding, 'binding');
+    const targetRole = approvalField(value.targetRole, 'targetRole');
+    const targetName = approvalField(value.targetName, 'targetName');
+    const destination = approvalField(value.destination, 'destination');
+    const valueHash = approvalField(value.valueHash, 'valueHash');
     const tabId = Number(value.tabId);
     const documentGeneration = Number(value.documentGeneration);
     if (!approvalId || !commandId || !action || !Number.isInteger(tabId) || tabId <= 0
@@ -245,9 +287,14 @@ export function createBrowserControlApprovalStore({
       documentGeneration,
       state,
       ...(binding ? { binding } : {}),
+      ...(targetRole ? { targetRole } : {}),
+      ...(targetName ? { targetName } : {}),
+      ...(destination ? { destination } : {}),
+      ...(valueHash ? { valueHash } : {}),
       key: approvalKey({
         approvalId, approvalNonce, commandId, controllerId, leaseId,
         leaseGeneration, action, tabId, documentGeneration, state, binding,
+        targetRole, targetName, destination, valueHash,
       }),
     };
   }
@@ -327,6 +374,7 @@ export function createBrowserControlApprovalStore({
     return [...requests.values()].map(({
       approvalId, approvalNonce, commandId, controllerId, leaseId, leaseGeneration,
       tabId, documentGeneration, action, state, reason, binding, detail,
+      targetRole, targetName, destination, valueHash,
     }) => ({
       approvalId,
       ...(approvalNonce ? { approvalNonce } : {}),
@@ -340,6 +388,10 @@ export function createBrowserControlApprovalStore({
       ...(state ? { state } : {}),
       reason,
       ...(binding ? { binding } : {}),
+      ...(targetRole ? { targetRole } : {}),
+      ...(targetName ? { targetName } : {}),
+      ...(destination ? { destination } : {}),
+      ...(valueHash ? { valueHash } : {}),
       ...(detail ? { detail } : {}),
     }));
   }

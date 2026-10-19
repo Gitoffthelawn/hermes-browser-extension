@@ -695,9 +695,11 @@ test('background worker opens only the extension-owned Hermes Web URL', async ()
   const previousChrome = globalThis.chrome;
   let messageListener = null;
   let createdUrl = '';
+  const extensionPageSender = { id: 'hermes-test', url: 'chrome-extension://hermes-test/sidepanel.html' };
   const event = (capture) => ({ addListener(listener) { capture?.(listener); } });
   globalThis.chrome = {
     runtime: {
+      id: 'hermes-test',
       getURL: (assetPath) => `chrome-extension://hermes-test/${assetPath}`,
       getManifest: () => ({ side_panel: { default_path: 'sidepanel.html' } }),
       onInstalled: event(),
@@ -721,17 +723,27 @@ test('background worker opens only the extension-owned Hermes Web URL', async ()
       const asyncResponse = messageListener({
         type: 'HERMES_OPEN_FULL_VIEW',
         url: 'chrome-extension://hermes-test/app.html?sessionId=session-1',
-      }, {}, resolve);
+      }, extensionPageSender, resolve);
       assert.equal(asyncResponse, true);
     });
     assert.deepEqual(response, { ok: true });
     assert.equal(createdUrl, 'chrome-extension://hermes-test/app.html?sessionId=session-1');
 
     const rejected = await new Promise((resolve) => {
-      messageListener({ type: 'HERMES_OPEN_FULL_VIEW', url: 'https://example.com/app.html' }, {}, resolve);
+      messageListener({ type: 'HERMES_OPEN_FULL_VIEW', url: 'https://example.com/app.html' }, extensionPageSender, resolve);
     });
     assert.equal(rejected.ok, false);
     assert.match(rejected.reason, /Refused to open/);
+
+    // A content script (tab sender on a web page) can never reach this path.
+    const fromPage = await new Promise((resolve) => {
+      assert.equal(messageListener({
+        type: 'HERMES_OPEN_FULL_VIEW',
+        url: 'chrome-extension://hermes-test/app.html?sessionId=session-2',
+      }, { id: 'hermes-test', tab: { id: 3 }, frameId: 0, url: 'https://page.example/' }, resolve), false);
+    });
+    assert.deepEqual(fromPage, { ok: false, reason: 'forbidden_sender' });
+    assert.equal(createdUrl, 'chrome-extension://hermes-test/app.html?sessionId=session-1');
   } finally {
     globalThis.chrome = previousChrome;
   }

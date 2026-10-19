@@ -18,12 +18,12 @@ Browser-native side panel for [Hermes Agent](https://hermes-agent.nousresearch.c
 
 ## What it is
 
-Hermes Browser Extension is not a browser chatbot. It is a Chrome/Edge/Chromium side panel for the real Hermes Agent runtime. Choose a local gateway, attach to a signed-in Hermes Cloud agent tab, or connect to a self-hosted remote API/dashboard. Local and remote API connections can use the models, tools, skills, sessions, memory, and MCP servers already configured in Hermes; Cloud and dashboard-ticket connections are intentionally Chat-only.
+Hermes Browser Extension is not a browser chatbot. It is a Chromium side panel or Firefox sidebar for the real Hermes Agent runtime; tab control is Chromium-only. Choose a local gateway, attach to a signed-in Hermes Cloud agent tab, or connect to a self-hosted remote API/dashboard. Local and remote API connections can use the models, tools, skills, sessions, memory, and MCP servers already configured in Hermes; Cloud and dashboard-ticket connections are intentionally Chat-only.
 
 - **Bot Mode** brings your Hermes agent roster into the panel: switch agents, edit profiles, and run group chats where several agents reply in one room. **Current group-chat limitation:** page-context delivery is not yet reliable; do not assume group bots can see the active page. Hermes Control is not shown in group chats. Individual bot chats retain their existing page-context and control behavior. Chat-only and remote group turns do not capture page context.
 - **File attachments** show one card per file per message. Open previews the file, Open on computer reveals the original file's containing folder through local Hermes, and Save downloads a copy.
 - **Tab screenshot** stages the visible, approved page as an image attachment when you choose it from the attachment menu. Screenshots are never captured automatically.
-- **Browser Control** changes which tabs a turn reads from the composer: This tab, Selected tabs, or a Task set of tabs you pick explicitly.
+- **Hermes Control** sets which tabs Hermes may operate: This tab, Selected tabs, or a Task set of tabs you pick explicitly.
 - **Live sessions**: running chats are highlighted in Sessions. On gateways that expose live sessions, reopen a working chat to follow its reply and tool activity. Supported live sessions offer Steer, Queue, and Stop instead of idle send controls, and steers sent from another client appear in the followed transcript.
 - **Tool activity**: a compact expandable list keeps calls out of the reply. Inspect individual calls, close the list without hiding thinking, and keep your place while activity updates.
 - **Message tools**: Copy, Edit, and Restore checkpoint on supported turns, with day dividers, message times, and theme-aware bubbles.
@@ -44,20 +44,29 @@ Screenshots use the Mono theme in Dark mode.
 | --- | --- | --- |
 | <img src="./assets/readme/hermes-browser-sidepanel.png" alt="Hermes Browser side panel in Mono Dark, answering a question about the attached page" width="300" /> | <img src="./assets/readme/hermes-browser-bot-chats.png" alt="Bot Mode group chat with four demo agents replying in one room" width="300" /> | <img src="./assets/readme/hermes-browser-bot-profile.png" alt="Bot Mode profile editor with avatar, display title, and description" width="300" /> |
 | Theme settings | Local agents | Hermes Control |
-| <img src="./assets/readme/hermes-browser-theme-settings.png" alt="Appearance settings with color mode, text zoom, and built-in theme previews" width="300" /> | <img src="./assets/readme/hermes-browser-local-agents.png" alt="Agent Profile settings listing the verified agents from the connected gateway" width="300" /> | <img src="./assets/readme/hermes-browser-control.png" alt="Hermes Control dialog with scope, stay or follow, and turn off controls" width="300" /> |
+| <img src="./assets/readme/hermes-browser-theme-settings.png" alt="Appearance settings with color mode, text zoom, and built-in theme previews" width="300" /> | <img src="./assets/readme/hermes-browser-local-agents.png" alt="Agent Profile settings listing the verified agents from the connected gateway" width="300" /> | <img src="./assets/readme/hermes-browser-control.png" alt="Hermes Control dialog with an on/off light, scope, and the Show tab, Turn off and Pause controls" width="300" /> |
 
 ## Requirements
 
 - Hermes Agent installed and working.
 - For Local or Remote API mode: Hermes Gateway/API server enabled locally or on a reachable remote machine. Hermes Cloud instead requires a signed-in HTTPS agent tab.
 - Node.js 20+.
-- Chrome, Edge, Brave, Comet, or another Chromium browser with Side Panel API support (Chrome 116+ baseline). Firefox 142+ is supported via [AMO](https://addons.mozilla.org/en-US/firefox/addon/hermes-browser-extension/), the Mozilla Add-ons listing. `npm run build:firefox` is for local/dev Firefox builds only.
+- Chrome, Edge, Brave, Comet, or another Chromium browser with Side Panel API support (Chrome 116+ baseline). Firefox 142+ is supported via [AMO](https://addons.mozilla.org/firefox/addon/hermes-browser-extension/), the Mozilla Add-ons listing. `npm run build:firefox` is for local/dev Firefox builds only.
 
 ## Firefox scope
 
 Hermes Browser Extension on Firefox is a chat-and-context client: pairing, the side panel, streaming replies, attachments, and page-context capture all work, but real-tab attach ("Hermes Control") is Chromium-only. Firefox WebExtensions have no equivalent to Chromium's `debugger` API, so the Firefox package omits that permission and the panel reports Control unavailable with an explanation instead of failing silently.
 
 If you need Hermes to click, type, scroll, or operate tabs on your behalf, load the extension in Chrome, Edge, Brave, or another Chromium browser. The full compatibility matrix is in [guides/connection-guide.md](./guides/connection-guide.md).
+
+## Hermes Control
+
+Hermes Control lets Hermes operate a tab you attach. It is opt-in, off until you turn it on, and Chromium-only.
+
+- **The attached tab is announced to the model.** Each turn tells Hermes the tab is ready and lists its interactive elements with refs, so the first click works without a separate snapshot or navigate step.
+- **Every action returns the updated page.** Click, type, scroll, and navigate give back a compact, redacted view of the page with fresh refs, so Hermes can chain steps.
+- **One debugger session per attached tab.** Chrome shows its debugging banner while a tab is attached. The session detaches when you detach the tab, pause or turn off control, or after 60 seconds without a command.
+- **Approvals still gate risky actions.** Consequential or privileged actions wait for your approval, and restricted pages and sensitive fields stay blocked.
 
 ## Quick start
 
@@ -88,7 +97,7 @@ After code updates, run `npm run build` again and click **Reload** on the Hermes
 
 ### 3. Install in Firefox
 
-1. Open [AMO](https://addons.mozilla.org/en-US/firefox/addon/hermes-browser-extension/) in Firefox.
+1. Open [AMO](https://addons.mozilla.org/firefox/addon/hermes-browser-extension/) in Firefox.
 2. Click **Add to Firefox** and confirm the permission prompt.
 3. The extension opens in the Firefox sidebar (Ctrl+Shift+H).
 
@@ -119,6 +128,8 @@ API_SERVER_PORT=8642
 API_SERVER_KEY=<your-api-server-key>
 API_SERVER_CORS_ORIGINS=chrome-extension://<your-extension-id>
 ```
+
+On Firefox the extension origin is `moz-extension://<extension-uuid>`, not `chrome-extension://<id>`. Use that form in `API_SERVER_CORS_ORIGINS` instead. Copy the exact value from Settings → Support diagnostics (**Extension origin**). Firefox assigns the UUID when the extension is installed, so copy it again after a reinstall.
 
 Start or restart the gateway:
 
@@ -163,8 +174,8 @@ Hermes Browser Extension is intentionally conservative in v0.3.0:
 - Strong bearer/API key required for API access.
 - Page content is wrapped as untrusted context before it reaches Hermes.
 - Credential-bearing URLs are omitted from active, selected, open-tab, pinned-scope, prompt, receipt, and payload-hash surfaces.
-- Read-only browser context capture and no autonomous page control. Hermes Assist may insert a reviewed draft into a supported focused composer only after an explicit user action; it never clicks Send/Post/Submit, navigates, checks out, or performs browser-control workflows.
-- No `debugger`, `nativeMessaging`, `cookies`, `history`, or `bookmarks` permissions. `downloads` is limited to explicit user-requested generated-image/artifact saves.
+- Page context capture is read-only. Page control exists only through opt-in Hermes Control on Chromium, which acts on tabs you attach and pauses risky actions for approval. Hermes Assist may insert a reviewed draft into a supported focused composer only after an explicit user action; it never clicks Send/Post/Submit, navigates, checks out, or performs browser-control workflows.
+- Chromium builds request `debugger` for opt-in Hermes Control; Firefox builds omit it. No `nativeMessaging`, `cookies`, `history`, or `bookmarks` permissions. `downloads` is limited to explicit user-requested generated-image/artifact saves.
 - Restricted pages include browser internals, extension pages, and obvious banking/crypto/password/payment/health/government-tax categories.
 
 See [`SECURITY.md`](SECURITY.md), [`PERMISSIONS.md`](PERMISSIONS.md), [`DATA-FLOW.md`](DATA-FLOW.md), and [`PRIVACY.md`](PRIVACY.md) for details.
@@ -215,7 +226,7 @@ curl http://127.0.0.1:8642/health
 curl http://<trusted-remote-host>:8642/health
 ```
 
-If `/v1/models` fails, check `API_SERVER_KEY`, the extension's stored API key/browser token, and `API_SERVER_CORS_ORIGINS`. For remote mode, the browser extension origin (`chrome-extension://<id>`) must be allowlisted on the Hermes machine.
+If `/v1/models` fails, check `API_SERVER_KEY`, the extension's stored API key/browser token, and `API_SERVER_CORS_ORIGINS`. For remote mode, the browser extension origin (`chrome-extension://<id>`, or `moz-extension://<extension-uuid>` on Firefox) must be allowlisted on the Hermes machine. A session request that fails with HTTP 403 and no error body is the same CORS gate. The side panel then names the exact origin and the `API_SERVER_CORS_ORIGINS=` line to add to the Hermes `.env`, and your draft stays in the composer.
 
 If the browser only reports a failed fetch, it cannot prove whether the gateway refused the connection, blocked the request, or received a turn before the response was lost. The side panel keeps the draft and offers **Check connection**. It never resends automatically. Check the session history before manually sending again, since a dropped response can leave delivery unconfirmed and a second send could duplicate the turn. An answered `/health` probe confirms reachability at probe time, not that the earlier turn failed because of CORS.
 

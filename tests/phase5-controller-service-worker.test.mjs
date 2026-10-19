@@ -53,6 +53,9 @@ function controllerSettings(overrides = {}) {
     apiKey: accessValue,
     activeProfile: 'default',
     sessionId: 'stored-session-1',
+    // The controller only registers while control is on; tests that exercise
+    // the dormant (control off) worker override this explicitly.
+    browserControlEnabled: true,
     ...overrides,
   };
 }

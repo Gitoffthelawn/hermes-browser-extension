@@ -12,6 +12,7 @@ import {
   TEST_ACCESS_VALUE,
   TEST_SESSION_ID,
   chromeExecutable,
+  ensureExtensionStartupPage,
   fetchJson,
   killChrome,
   startControllerFixture,
@@ -61,6 +62,7 @@ async function main() {
     await waitFor(() => existsSync(activePort));
     const [portLine] = (await readFile(activePort, 'utf8')).trim().split('\n');
     const devtoolsBase = `http://127.0.0.1:${Number(portLine)}`;
+    await ensureExtensionStartupPage(devtoolsBase, extensionId);
     const version = await fetchJson(`${devtoolsBase}/json/version`);
     browser = new CdpClient(version.webSocketDebuggerUrl);
     await browser.connect();
@@ -90,7 +92,6 @@ async function main() {
           browserControlEnabled: true,
           browserControlPaused: false,
           browserControlScope: 'this-tab',
-          browserControlViewBehavior: 'stay'
         },
         hermesBrowserIntroSeen: true
       });
@@ -108,7 +109,10 @@ async function main() {
     assert.ok(Number.isInteger(tabId) && tabId > 0);
     await waitFor(() => extension.evaluate(`chrome.tabs.get(${tabId})`).then((value) => (
       value?.status === 'complete' && String(value?.url || '').startsWith('https://www.youtube.com/watch') ? value : null
-    )), 90_000, 250);
+    )), 90_000, 250).catch(async (error) => {
+      const seen = await extension.evaluate(`chrome.tabs.get(${tabId}).then((value) => ({ status: value.status, url: value.url, title: value.title }))`).catch(() => null);
+      throw new Error(`${error.message}: the YouTube tab never reached the watch page (this check needs live access to youtube.com); tab=${JSON.stringify(seen)}`);
+    });
 
     const targetPage = await waitFor(async () => {
       const targets = await fetchJson(`${devtoolsBase}/json/list`);

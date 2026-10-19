@@ -271,6 +271,10 @@
     "message": "Originalfilen er ikke tilgængelig. Vedhæft den igen.",
     "description": "Runtime interface message attachments.file_unavailable"
   },
+  "runtime_attachments_paste_excerpt_notice": {
+    "message": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
+    "description": "Runtime interface message attachments.paste_excerpt_notice"
+  },
   "runtime_attachments_preview_limited": {
     "message": "Begrænset forhåndsvisning. Download hele filen.",
     "description": "Runtime interface message attachments.preview_limited"
@@ -839,6 +843,10 @@
     "message": "Godkend én gang",
     "description": "Runtime interface message browser_control.approve_once"
   },
+  "runtime_browser_control_attach_not_ready": {
+    "message": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
+    "description": "Runtime interface message browser_control.attach_not_ready"
+  },
   "runtime_browser_control_authorize": {
     "message": "Tillad kontrol",
     "description": "Runtime interface message browser_control.authorize"
@@ -852,7 +860,7 @@
     "description": "Runtime interface message browser_control.detach"
   },
   "runtime_browser_control_detached_detail": {
-    "message": "Browserhandlinger stoppet, og alle leases på styrede faner blev frigivet.",
+    "message": "Browserhandlinger blev stoppet. Hermes kan ikke længere bruge nogen tilknyttet fane.",
     "description": "Runtime interface message browser_control.detached_detail"
   },
   "runtime_browser_control_detached_toast": {
@@ -864,16 +872,64 @@
     "description": "Runtime interface message browser_control.enable"
   },
   "runtime_browser_control_enabled_detail": {
-    "message": "Kun de valgte leasede faner kan modtage browserhandlinger.",
+    "message": "Kun tilknyttede faner kan modtage browserhandlinger.",
     "description": "Runtime interface message browser_control.enabled_detail"
   },
   "runtime_browser_control_enabled_toast": {
     "message": "Hermes-styring aktiveret",
     "description": "Runtime interface message browser_control.enabled_toast"
   },
-  "runtime_browser_control_follow": {
-    "message": "Følg Hermes",
-    "description": "Runtime interface message browser_control.follow"
+  "runtime_browser_control_error_active_tab": {
+    "message": "Gør en almindelig webside til aktiv fane først.",
+    "description": "Runtime interface message browser_control.error_active_tab"
+  },
+  "runtime_browser_control_error_approval_failed": {
+    "message": "Hermes-styring accepterede ikke denne beslutning.",
+    "description": "Runtime interface message browser_control.error_approval_failed"
+  },
+  "runtime_browser_control_error_attach_busy": {
+    "message": "Vent, til den aktuelle browserhandling er færdig, før du tilknytter en anden fane.",
+    "description": "Runtime interface message browser_control.error_attach_busy"
+  },
+  "runtime_browser_control_error_attach_failed": {
+    "message": "Denne fane kunne ikke tilknyttes.",
+    "description": "Runtime interface message browser_control.error_attach_failed"
+  },
+  "runtime_browser_control_error_attach_reconnecting": {
+    "message": "Hermes-styring forbinder stadig igen. Prøv at tilknytte denne fane igen om et øjeblik.",
+    "description": "Runtime interface message browser_control.error_attach_reconnecting"
+  },
+  "runtime_browser_control_error_attach_restricted": {
+    "message": "Åbn en almindelig HTTP- eller HTTPS-side, før du tilknytter Hermes-styring.",
+    "description": "Runtime interface message browser_control.error_attach_restricted"
+  },
+  "runtime_browser_control_error_attach_unavailable": {
+    "message": "Denne fane kan ikke tilknyttes lige nu.",
+    "description": "Runtime interface message browser_control.error_attach_unavailable"
+  },
+  "runtime_browser_control_error_enable_failed": {
+    "message": "De valgte faner kunne ikke tilknyttes.",
+    "description": "Runtime interface message browser_control.error_enable_failed"
+  },
+  "runtime_browser_control_error_refresh_failed": {
+    "message": "Hermes-styring kunne ikke opdatere sine forbindelsesindstillinger.",
+    "description": "Runtime interface message browser_control.error_refresh_failed"
+  },
+  "runtime_browser_control_error_release_failed": {
+    "message": "Den tidligere tilknyttede fane kunne ikke frigives.",
+    "description": "Runtime interface message browser_control.error_release_failed"
+  },
+  "runtime_browser_control_error_select_tabs": {
+    "message": "Vælg mindst én fane på listen, før du slår dette omfang til.",
+    "description": "Runtime interface message browser_control.error_select_tabs"
+  },
+  "runtime_browser_control_error_session_attach": {
+    "message": "Start eller vælg en Hermes-session, og tilknyt derefter denne fane.",
+    "description": "Runtime interface message browser_control.error_session_attach"
+  },
+  "runtime_browser_control_error_session_enable": {
+    "message": "Start eller vælg en Hermes-session, før du slår Hermes-styring til.",
+    "description": "Runtime interface message browser_control.error_session_enable"
   },
   "runtime_browser_control_help_attach": {
     "message": "Lad Hermes styre denne fane i stedet for den tidligere tilknyttede fane.",
@@ -883,20 +939,16 @@
     "message": "Luk panelet uden at sætte styringen på pause eller slå den fra.",
     "description": "Runtime interface message browser_control.help_close"
   },
-  "runtime_browser_control_help_follow": {
-    "message": "Vis den tilknyttede fane, Hermes bruger, uden at bringe browservinduet forrest.",
-    "description": "Runtime interface message browser_control.help_follow"
-  },
   "runtime_browser_control_help_off": {
-    "message": "Slå browserstyring fra, og luk panelet. Slå den til igen i Indstillinger.",
+    "message": "Slå Hermes-styring fra og luk dette panel. Slå den til igen i Indstillinger.",
     "description": "Runtime interface message browser_control.help_off"
   },
   "runtime_browser_control_help_pause": {
-    "message": "Sæt browserstyring på pause uden at slå den fra. Tilknyttede faner beholdes.",
+    "message": "Sæt Hermes-styring på pause uden at slå den fra. Tilknyttede faner beholdes.",
     "description": "Runtime interface message browser_control.help_pause"
   },
   "runtime_browser_control_help_resume": {
-    "message": "Genoptag browserstyring på de faner, der stadig er tilknyttet.",
+    "message": "Genoptag Hermes-styring på de faner, der stadig er tilknyttet.",
     "description": "Runtime interface message browser_control.help_resume"
   },
   "runtime_browser_control_help_scope_selected_tabs": {
@@ -904,16 +956,16 @@
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
   },
   "runtime_browser_control_help_scope_task_set": {
-    "message": "Styr kun de faner, du vælger nedenfor, som én fælles browseropgave. I modsætning til Valgte faner deler disse faner en opgaveidentitet; det omfatter ikke alle åbne faner.",
+    "message": "Styr kun de faner, du vælger nedenfor, som én fælles opgave. Hermes kan gruppere dem i browseren. Andre åbne faner er ikke med.",
     "description": "Runtime interface message browser_control.help_scope_task_set"
   },
   "runtime_browser_control_help_scope_this_tab": {
     "message": "Styr kun den aktuelle fane. Andre faner er ikke inkluderet.",
     "description": "Runtime interface message browser_control.help_scope_this_tab"
   },
-  "runtime_browser_control_help_stay": {
-    "message": "Bliv på din fane, mens Hermes arbejder på tilknyttede faner i baggrunden.",
-    "description": "Runtime interface message browser_control.help_stay"
+  "runtime_browser_control_help_show_tab": {
+    "message": "Skift til den fane, Hermes bruger. Hermes skifter aldrig din fane af sig selv.",
+    "description": "Runtime interface message browser_control.help_show_tab"
   },
   "runtime_browser_control_help_stop": {
     "message": "Stop igangværende og ventende browserhandlinger uden at slå styringen fra.",
@@ -923,8 +975,12 @@
     "message": "HERMES-STYRING",
     "description": "Runtime interface message browser_control.kicker"
   },
+  "runtime_browser_control_local_document_detail": {
+    "message": "Godkend adgang til lokale dokumenter for at undersøge denne fil, udtrække dens slides eller tekst og lade Hermes-styring bruge dens fane.",
+    "description": "Runtime interface message browser_control.local_document_detail"
+  },
   "runtime_browser_control_note": {
-    "message": "Adgang til Chromium-controlleren blev givet, da denne udvidelse eller opdatering blev installeret. Hermes tilkobles kun under en autoriseret leasehandling, åbner aldrig et browservindue og blokerer legitimationsoplysninger, MFA, betalingsfelter og hemmelig tekst.",
+    "message": "Chromium giver denne udvidelse debugger-adgang, når den installeres eller opdateres. Hermes bruger kun debuggeren på faner, du tilknytter, bringer aldrig et browservindue frem og blokerer legitimationsoplysninger, MFA, betalingsfelter og hemmelig tekst.",
     "description": "Runtime interface message browser_control.note"
   },
   "runtime_browser_control_pause": {
@@ -951,6 +1007,10 @@
     "message": "Omfanget kunne ikke bekræftes. Kontrollér fanerne, og prøv igen.",
     "description": "Runtime interface message browser_control.scope_failed"
   },
+  "runtime_browser_control_scope_help_locked": {
+    "message": "Slå Hermes-styring fra for at ændre de faner, den kan bruge.",
+    "description": "Runtime interface message browser_control.scope_help_locked"
+  },
   "runtime_browser_control_scope_locked": {
     "message": "Vælg omfanget her, og anvend det. Flere faner skal vælges udtrykkeligt.",
     "description": "Runtime interface message browser_control.scope_locked"
@@ -971,6 +1031,14 @@
     "message": "Valgte faner",
     "description": "Runtime interface message browser_control.selected_tabs"
   },
+  "runtime_browser_control_show_tab": {
+    "message": "Vis fane",
+    "description": "Runtime interface message browser_control.show_tab"
+  },
+  "runtime_browser_control_show_tab_aria": {
+    "message": "Vis den fane Hermes bruger",
+    "description": "Runtime interface message browser_control.show_tab_aria"
+  },
   "runtime_browser_control_state_active": {
     "message": "Aktiv",
     "description": "Runtime interface message browser_control.state_active"
@@ -987,13 +1055,13 @@
     "message": "Klar",
     "description": "Runtime interface message browser_control.state_ready"
   },
-  "runtime_browser_control_stay": {
-    "message": "Bliv på min fane",
-    "description": "Runtime interface message browser_control.stay"
-  },
   "runtime_browser_control_stop": {
     "message": "Stop",
     "description": "Runtime interface message browser_control.stop"
+  },
+  "runtime_browser_control_tab_restricted": {
+    "message": "Ikke tilgængelig. Browsersider og følsomme sider, f.eks. bank- eller adgangskodesider, kan ikke styres.",
+    "description": "Runtime interface message browser_control.tab_restricted"
   },
   "runtime_browser_control_task_set": {
     "message": "Opgavesæt",
@@ -1004,8 +1072,52 @@
     "description": "Runtime interface message browser_control.this_tab"
   },
   "runtime_browser_control_title": {
-    "message": "Betjen leasede faner",
+    "message": "Hermes-styring",
     "description": "Runtime interface message browser_control.title"
+  },
+  "runtime_browser_control_toast_approval_failed": {
+    "message": "Godkendelsen blev ikke accepteret",
+    "description": "Runtime interface message browser_control.toast_approval_failed"
+  },
+  "runtime_browser_control_toast_attach_failed": {
+    "message": "Denne fane blev ikke tilknyttet",
+    "description": "Runtime interface message browser_control.toast_attach_failed"
+  },
+  "runtime_browser_control_toast_attached": {
+    "message": "Denne fane er tilknyttet",
+    "description": "Runtime interface message browser_control.toast_attached"
+  },
+  "runtime_browser_control_toast_attached_detail": {
+    "message": "Hermes-styring er klar til den første browserhandling.",
+    "description": "Runtime interface message browser_control.toast_attached_detail"
+  },
+  "runtime_browser_control_toast_authorize_failed": {
+    "message": "Hermes-styring blev ikke godkendt",
+    "description": "Runtime interface message browser_control.toast_authorize_failed"
+  },
+  "runtime_browser_control_toast_enable_failed": {
+    "message": "Hermes-styring blev ikke tændt",
+    "description": "Runtime interface message browser_control.toast_enable_failed"
+  },
+  "runtime_browser_control_toast_rejection_failed": {
+    "message": "Afvisningen blev ikke accepteret",
+    "description": "Runtime interface message browser_control.toast_rejection_failed"
+  },
+  "runtime_browser_control_toast_scope_unchanged": {
+    "message": "Styringsfanerne er uændrede",
+    "description": "Runtime interface message browser_control.toast_scope_unchanged"
+  },
+  "runtime_browser_control_toast_show_tab_failed": {
+    "message": "Kunne ikke vise den fane",
+    "description": "Runtime interface message browser_control.toast_show_tab_failed"
+  },
+  "runtime_browser_control_toast_state_unchanged": {
+    "message": "Hermes-styringens tilstand er uændret",
+    "description": "Runtime interface message browser_control.toast_state_unchanged"
+  },
+  "runtime_browser_control_toast_stop_failed": {
+    "message": "Browserhandlingerne kunne ikke stoppes",
+    "description": "Runtime interface message browser_control.toast_stop_failed"
   },
   "runtime_browser_control_turn_off": {
     "message": "Slå fra",
@@ -1015,9 +1127,45 @@
     "message": "Venter på Hermes.",
     "description": "Runtime interface message browser_control.waiting"
   },
-  "runtime_browser_control_while_working": {
-    "message": "Mens Hermes arbejder",
-    "description": "Runtime interface message browser_control.while_working"
+  "runtime_clarify_expired": {
+    "message": "This question was already answered or expired.",
+    "description": "Runtime interface message clarify.expired"
+  },
+  "runtime_clarify_kicker": {
+    "message": "QUESTION FROM HERMES",
+    "description": "Runtime interface message clarify.kicker"
+  },
+  "runtime_clarify_multi_hint": {
+    "message": "Select every option that applies.",
+    "description": "Runtime interface message clarify.multi_hint"
+  },
+  "runtime_clarify_placeholder": {
+    "message": "Type your answer",
+    "description": "Runtime interface message clarify.placeholder"
+  },
+  "runtime_clarify_send": {
+    "message": "Send answer",
+    "description": "Runtime interface message clarify.send"
+  },
+  "runtime_clarify_send_failed": {
+    "message": "Could not send your answer: {error}",
+    "description": "Runtime interface message clarify.send_failed"
+  },
+  "runtime_clarify_sent": {
+    "message": "Answer sent",
+    "description": "Runtime interface message clarify.sent"
+  },
+  "runtime_clarify_title": {
+    "message": "Hermes needs an answer",
+    "description": "Runtime interface message clarify.title"
+  },
+  "runtime_clarify_waiting": {
+    "message": "Waiting for your answer",
+    "description": "Runtime interface message clarify.waiting"
+  },
+  "runtime_clarify_waiting_detail": {
+    "message": "Hermes paused this turn until you answer the question card.",
+    "description": "Runtime interface message clarify.waiting_detail"
   },
   "runtime_commands_click_or_enter": {
     "message": "Klik eller tryk på Enter for at køre.",
@@ -1411,6 +1559,78 @@
     "message": "Overflade",
     "description": "Runtime interface message diagnostics.surface"
   },
+  "runtime_exec_approval_cancelled": {
+    "message": "Hermes withdrew this request.",
+    "description": "Runtime interface message exec_approval.cancelled"
+  },
+  "runtime_exec_approval_choice_help": {
+    "message": "Approve once runs this command a single time. Session allows matching commands until this session ends. Always saves a permanent rule for matching commands.",
+    "description": "Runtime interface message exec_approval.choice_help"
+  },
+  "runtime_exec_approval_command_truncated": {
+    "message": "Only the first part of this command is shown. Deny it unless you trust the rest.",
+    "description": "Runtime interface message exec_approval.command_truncated"
+  },
+  "runtime_exec_approval_countdown": {
+    "message": "{time} left to answer",
+    "description": "Runtime interface message exec_approval.countdown"
+  },
+  "runtime_exec_approval_edit_title": {
+    "message": "Proposed file change",
+    "description": "Runtime interface message exec_approval.edit_title"
+  },
+  "runtime_exec_approval_edit_truncated": {
+    "message": "Showing the first part of the change.",
+    "description": "Runtime interface message exec_approval.edit_truncated"
+  },
+  "runtime_exec_approval_expired": {
+    "message": "Denne godkendelse er allerede besvaret eller udløbet.",
+    "description": "Runtime interface message exec_approval.expired"
+  },
+  "runtime_exec_approval_hint": {
+    "message": "Svar her for at lade kommandoen køre. Udløber anmodningen uden svar, køres kommandoen ikke.",
+    "description": "Runtime interface message exec_approval.hint"
+  },
+  "runtime_exec_approval_info_only": {
+    "message": "This gateway does not accept answers from the browser. Answer in Hermes, or the request will expire and the command will not run.",
+    "description": "Runtime interface message exec_approval.info_only"
+  },
+  "runtime_exec_approval_kicker": {
+    "message": "KOMANDOGODKENDELSE",
+    "description": "Runtime interface message exec_approval.kicker"
+  },
+  "runtime_exec_approval_other_session": {
+    "message": "A request in another session is waiting for your answer. Switch to that session to respond.",
+    "description": "Runtime interface message exec_approval.other_session"
+  },
+  "runtime_exec_approval_queue_more": {
+    "message": "{count} more waiting",
+    "description": "Runtime interface message exec_approval.queue_more"
+  },
+  "runtime_exec_approval_send_failed": {
+    "message": "Kunne ikke sende din beslutning: {error}",
+    "description": "Runtime interface message exec_approval.send_failed"
+  },
+  "runtime_exec_approval_sent": {
+    "message": "Decision sent",
+    "description": "Runtime interface message exec_approval.sent"
+  },
+  "runtime_exec_approval_sent_detail": {
+    "message": "Hermes received your decision and is continuing.",
+    "description": "Runtime interface message exec_approval.sent_detail"
+  },
+  "runtime_exec_approval_title": {
+    "message": "Hermes vil køre en kommando",
+    "description": "Runtime interface message exec_approval.title"
+  },
+  "runtime_exec_approval_waiting": {
+    "message": "Waiting for your approval",
+    "description": "Runtime interface message exec_approval.waiting"
+  },
+  "runtime_exec_approval_waiting_detail": {
+    "message": "Hermes paused this turn until you answer the approval card. If it expires unanswered, the command will not run.",
+    "description": "Runtime interface message exec_approval.waiting_detail"
+  },
   "runtime_fulltab_handoff_opened_from": {
     "message": "Åbnet fra {source}.",
     "description": "Runtime interface message fulltab.handoff.opened_from"
@@ -1619,6 +1839,10 @@
     "message": "profiler tilgængelige",
     "description": "Runtime interface message profile.available_suffix"
   },
+  "runtime_profile_companion_not_configured": {
+    "message": "Dashboard companion not configured. Remote API mode does not search this computer for a Hermes Dashboard, so profile switching and Bot Mode need a dashboard companion.",
+    "description": "Runtime interface message profile.companion_not_configured"
+  },
   "runtime_profile_default": {
     "message": "Standardprofil",
     "description": "Runtime interface message profile.default"
@@ -1635,9 +1859,37 @@
     "message": "Bruger {name}{model}{skills}",
     "description": "Runtime interface message profile.using"
   },
+  "runtime_run_release": {
+    "message": "Release",
+    "description": "Runtime interface message run.release"
+  },
+  "runtime_run_release_detail": {
+    "message": "Browser released the composer without Hermes confirming the stop. Check the session before sending another message.",
+    "description": "Runtime interface message run.release_detail"
+  },
   "runtime_run_stop": {
     "message": "■ Stop",
     "description": "Runtime interface message run.stop"
+  },
+  "runtime_run_stop_cancelled_commands": {
+    "message": "Annullerede {count} afventende Hermes-styringskommandoer.",
+    "description": "Runtime interface message run.stop_cancelled_commands"
+  },
+  "runtime_run_stop_controller_toast": {
+    "message": "Hermes Control",
+    "description": "Runtime interface message run.stop_controller_toast"
+  },
+  "runtime_run_stop_controller_unreachable": {
+    "message": "Browser could not reach Hermes Control to cancel pending browser actions.",
+    "description": "Runtime interface message run.stop_controller_unreachable"
+  },
+  "runtime_run_stop_unconfirmed_no_run_id": {
+    "message": "Hermes has not reported a run id for this turn, so Browser cannot confirm the run stopped. The session writer and queued messages stay held until Hermes confirms a terminal state.",
+    "description": "Runtime interface message run.stop_unconfirmed_no_run_id"
+  },
+  "runtime_run_stop_unconfirmed_title": {
+    "message": "Stop not confirmed",
+    "description": "Runtime interface message run.stop_unconfirmed_title"
   },
   "runtime_runtime_fast_mode_toggle": {
     "message": "Hurtig tilstand {state}",
@@ -1671,6 +1923,10 @@
     "message": "Kopiér sessions-id for {title}",
     "description": "Runtime interface message session.copy_id_for"
   },
+  "runtime_session_long_shared_notice": {
+    "message": "This session has {count} messages. Long shared sessions can fall out of sync with other Hermes clients, such as the desktop app, the CLI, or Hermes Web, that write to the same session, so replies can arrive late or out of order. Start a new chat when you can.",
+    "description": "Runtime interface message session.long_shared_notice"
+  },
   "runtime_session_new_extension_session": {
     "message": "＋ Ny Hermes Browser Extension session",
     "description": "Runtime interface message session.new_extension_session"
@@ -1678,6 +1934,14 @@
   "runtime_session_opening": {
     "message": "Åbner {title}",
     "description": "Runtime interface message session.opening"
+  },
+  "runtime_session_origin_refused": {
+    "message": "Hermes refused this browser origin, {origin}, on a session request (HTTP 403 with no JSON error body). Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
+    "description": "Runtime interface message session.origin_refused"
+  },
+  "runtime_session_origin_refused_title": {
+    "message": "Hermes refused this browser origin",
+    "description": "Runtime interface message session.origin_refused_title"
   },
   "runtime_session_rail_save_failed": {
     "message": "Kunne ikke gemme sessionsbjælken: {error}",
@@ -1760,7 +2024,7 @@
     "description": "Runtime interface message settings.categories.models.title"
   },
   "runtime_settings_categories_permissions_summary": {
-    "message": "Browserkontrol, fanebladsomfang og godkendelse af sidedeling.",
+    "message": "Hermes-styring, tabomfang og godkendelse af sidedeling.",
     "description": "Runtime interface message settings.categories.permissions.summary"
   },
   "runtime_settings_categories_permissions_title": {
@@ -2150,6 +2414,14 @@
   "runtime_ui_approve_document_access": {
     "message": "Approve document access",
     "description": "Runtime interface message ui.approve_document_access"
+  },
+  "runtime_ui_artifact_open_on_computer_blocked": {
+    "message": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
+    "description": "Runtime interface message ui.artifact.open_on_computer.blocked"
+  },
+  "runtime_ui_artifact_open_on_computer_confirm": {
+    "message": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+    "description": "Runtime interface message ui.artifact.open_on_computer.confirm"
   },
   "runtime_ui_artifacts": {
     "message": "Artefakter",
@@ -2686,6 +2958,46 @@
   "runtime_ui_component": {
     "message": "Komponent",
     "description": "Runtime interface message ui.component"
+  },
+  "runtime_ui_composer_ask": {
+    "message": "Spørg",
+    "description": "Runtime interface message ui.composer.ask"
+  },
+  "runtime_ui_composer_ask_bot": {
+    "message": "Spørg {name}",
+    "description": "Runtime interface message ui.composer.ask_bot"
+  },
+  "runtime_ui_composer_ask_bot_label": {
+    "message": "SPØRG {name}",
+    "description": "Runtime interface message ui.composer.ask_bot_label"
+  },
+  "runtime_ui_composer_ask_hermes": {
+    "message": "Spørg Hermes",
+    "description": "Runtime interface message ui.composer.ask_hermes"
+  },
+  "runtime_ui_composer_ask_hermes_label": {
+    "message": "SPØRG HERMES",
+    "description": "Runtime interface message ui.composer.ask_hermes_label"
+  },
+  "runtime_ui_composer_bot_running": {
+    "message": "{name} kører",
+    "description": "Runtime interface message ui.composer.bot_running"
+  },
+  "runtime_ui_composer_group_chat": {
+    "message": "GRUPPECHAT",
+    "description": "Runtime interface message ui.composer.group_chat"
+  },
+  "runtime_ui_composer_hermes_running": {
+    "message": "Hermes kører",
+    "description": "Runtime interface message ui.composer.hermes_running"
+  },
+  "runtime_ui_composer_new_thread": {
+    "message": "Ny tråd",
+    "description": "Runtime interface message ui.composer.new_thread"
+  },
+  "runtime_ui_composer_send": {
+    "message": "Send",
+    "description": "Runtime interface message ui.composer.send"
   },
   "runtime_ui_config": {
     "message": "Konfig",
@@ -6230,6 +6542,10 @@
   "runtime_voice_transcription_failed": {
     "message": "Stemmetransskription mislykkedes.\n\n{error}",
     "description": "Runtime interface message voice.transcription_failed"
+  },
+  "runtime_wake_native_local_only": {
+    "message": "Native wake needs the local Hermes gateway on this computer. Remote connections can use browser wake instead.",
+    "description": "Runtime interface message wake.native_local_only"
   },
   "runtime_wake_turn_off": {
     "message": "Slå wake word fra",

@@ -106,6 +106,9 @@ def _normalize_browser_control(value: Any) -> dict[str, Any]:
     availability = value.get("availability")
     if availability == "unavailable":
         return {**_unknown_control(), "availability": "unavailable"}
+    if availability == "not_requested":
+        # Hermes Control was off for this turn: an explicit "off" record, not an unknown one.
+        return {**_unknown_control(), "availability": "not_requested"}
     if availability != "available":
         return _unknown_control()
     controller_id = _bounded_identifier(value.get("controller_id"))

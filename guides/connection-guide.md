@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Chrome / Edge / Chromium 114+ side panel | Yes | Primary public support target. |
 | Brave / Comet / Chromium forks | Best-effort | Must expose the Chromium Side Panel API. |
-| Firefox | Install from [AMO](https://addons.mozilla.org/en-US/firefox/addon/hermes-browser-extension/) (Firefox 142+) | Chat and context only. Real-tab attach is Chromium-only; the Firefox package omits the debugger permission. |
+| Firefox | Install from [AMO](https://addons.mozilla.org/firefox/addon/hermes-browser-extension/) (Firefox 142+) | Chat and context only. Real-tab attach is Chromium-only; the Firefox package omits the debugger permission. |
 | Safari | Not shipped | No Safari package is included. |
 | Local Hermes API server | Yes | Default path: `http://127.0.0.1:8642`. |
 | Hermes Cloud | Yes, Trusted Dashboard Attach | Requires an active signed-in HTTPS Hermes Cloud agent tab. Chat-only. |
@@ -16,7 +16,7 @@
 | Browser Context Protocol | Yes | Typed `hermes.browser.turn.v2` envelopes, with the v1 payload compatibility path. |
 | Hermes Assist | Yes, site-aware preview/review | 31 writing environments. Never submits. |
 | Page comments | Yes | Attach menu. Queues beside Ask Hermes. |
-| Browser control | Yes (Experimental) | Opt-in MV3 controller with per-tab leases and explicit approval gates. Requires compatible Hermes Agent controller support. |
+| Hermes Control | Yes (Experimental) | Opt-in MV3 controller that acts only on tabs you attach, with explicit approval gates. Requires compatible Hermes Agent controller support. |
 | `nativeMessaging` | No | Not requested or required. |
 
 
@@ -31,6 +31,8 @@ API_SERVER_PORT=8642
 API_SERVER_KEY=<your-api-server-key>
 API_SERVER_CORS_ORIGINS=chrome-extension://<your-extension-id>
 ```
+
+On Firefox the extension origin is `moz-extension://<extension-uuid>`, not `chrome-extension://<id>`. Set `API_SERVER_CORS_ORIGINS=moz-extension://<extension-uuid>` with the exact value shown as **Extension origin** in Settings → Support diagnostics. Firefox assigns the UUID when the extension is installed, so copy it again after a reinstall. If a session request fails with HTTP 403 and no error body, this origin is missing from the list; the side panel shows the exact line to add.
 
 Use a private same-LAN/Tailscale/VPN host with HTTP, or put the API server behind a trusted HTTPS reverse proxy for public/proxied access. Do **not** expose the Hermes API server naked to the public internet. The Hermes API server can access the real Hermes runtime and tools.
 

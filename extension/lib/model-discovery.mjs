@@ -508,6 +508,10 @@ export async function resolveDashboardTranscriptionBaseUrl({
   gatewayUrl = '',
   discover = null,
 } = {}) {
+  // A discovered or cached Desktop dashboard is a loopback address; it only
+  // applies to the local gateway. Remote modes use their configured URL (or
+  // none) and never trigger discovery.
+  if (gatewayMode !== 'local-api') return dashboardModelDiscoveryBaseUrl({ gatewayMode, gatewayUrl });
   const known = String(desktopDashboardUrl || '').trim().replace(/\/+$/, '');
   if (known) return known;
   if (typeof discover === 'function') {
@@ -539,20 +543,85 @@ export function dashboardMediaUrl(baseUrl = '', filePath = '') {
   }
 }
 
-export function dashboardFileStreamUrl(baseUrl = '', filePath = '', token = '') {
+// The stream URL carries only the file path. The dashboard refuses the session
+// token in a query string on this route, and it must never sit in a URL anyway,
+// so the bytes are fetched with the header (see fetchDashboardFileStreamObjectUrl).
+export function dashboardFileStreamUrl(baseUrl = '', filePath = '') {
   try {
     const url = new URL(String(baseUrl || '').trim());
     url.hash = '';
     url.search = '';
     url.pathname = '/api/files/stream';
     url.searchParams.set('path', String(filePath || ''));
-    if (token) url.searchParams.set('token', String(token));
     return url.toString();
   } catch {
-    const params = new URLSearchParams({ path: String(filePath || '') });
-    if (token) params.set('token', String(token));
-    return `${String(baseUrl || '').replace(/\/+$/, '')}/api/files/stream?${params}`;
+    return `${String(baseUrl || '').replace(/\/+$/, '')}/api/files/stream?${new URLSearchParams({ path: String(filePath || '') })}`;
   }
+}
+
+// Blob URLs handed to <video> elements. A blob stays alive until it is revoked,
+// so a URL whose element has left the transcript is released after a grace
+// period. Fresh URLs are never released, so a video being mounted is safe.
+const STREAM_BLOB_GRACE_MS = 60_000;
+const streamBlobUrls = new Map(); // blob URL -> { createdAt, element }
+
+export function releaseDashboardStreamBlob(objectUrl = '') {
+  if (!objectUrl || !streamBlobUrls.has(objectUrl)) return;
+  streamBlobUrls.delete(objectUrl);
+  try {
+    globalThis.URL?.revokeObjectURL?.(objectUrl);
+  } catch {
+    /* already revoked */
+  }
+}
+
+function releaseDetachedStreamBlobs(now = Date.now()) {
+  for (const [objectUrl, entry] of [...streamBlobUrls]) {
+    if (now - entry.createdAt < STREAM_BLOB_GRACE_MS) continue;
+    if (entry.element?.isConnected) continue;
+    releaseDashboardStreamBlob(objectUrl);
+  }
+}
+
+export function attachDashboardStreamBlob(objectUrl = '', element = null) {
+  const entry = streamBlobUrls.get(objectUrl);
+  if (entry) entry.element = element;
+}
+
+// Managed videos are fetched with the dashboard session header and played from
+// a blob URL, because a <video> element cannot send headers itself. Resolves to
+// '' whenever the file cannot be read; never to a URL that carries the token.
+export async function fetchDashboardFileStreamObjectUrl({
+  baseUrl = '',
+  filePath = '',
+  token = '',
+  fetchFn = globalThis.fetch?.bind(globalThis),
+  timeoutMs = 300_000,
+} = {}) {
+  const dashboardUrl = String(baseUrl || '').trim();
+  const pathRef = String(filePath || '').trim();
+  if (!dashboardUrl || !pathRef || typeof fetchFn !== 'function') return '';
+  const sessionToken = token || await fetchDashboardSessionToken({ baseUrl: dashboardUrl, fetchFn });
+  if (!sessionToken) return '';
+  let response;
+  try {
+    response = await fetchWithTimeout(fetchFn, dashboardFileStreamUrl(dashboardUrl, pathRef), {
+      method: 'GET',
+      headers: { Accept: '*/*', 'X-Hermes-Session-Token': sessionToken },
+      credentials: 'include',
+      cache: 'no-store',
+    }, timeoutMs);
+  } catch {
+    return '';
+  }
+  if (!response?.ok) return '';
+  const blob = await response.blob().catch(() => null);
+  if (!blob || !(blob.size > 0)) return '';
+  const objectUrl = String(globalThis.URL?.createObjectURL?.(blob) || '');
+  if (!objectUrl.startsWith('blob:')) return '';
+  releaseDetachedStreamBlobs();
+  streamBlobUrls.set(objectUrl, { createdAt: Date.now(), element: null });
+  return objectUrl;
 }
 
 export async function fetchDashboardSessionToken({

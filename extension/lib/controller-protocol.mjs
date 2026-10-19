@@ -6,8 +6,10 @@
  *  - remote-api   → api-ticket-ws  (same transport and payload as local-api)
  *  - cloud-ticket-ws → gateway-rpc (authenticated gateway RPC method call)
  *
- * Protocol version 1. Capabilities are intentionally limited to
- * `controller.noop`; every real browser action stays disabled in Phase 4.
+ * Protocol version 1. A controller registers `controller.noop` plus the
+ * browser actions its adapter reports (filtered to
+ * CONTROLLER_BROWSER_CAPABILITIES below). The gateway keeps only the actions
+ * its own allowlist permits and ignores the rest.
  */
 
 export const CONTROLLER_PROTOCOL_VERSION = 1;
@@ -29,16 +31,24 @@ export const CONTROLLER_HEARTBEAT_INTERVAL_MS = 60_000;
 
 export const CONTROLLER_NOOP_CAPABILITY = 'controller.noop';
 
+// Every entry must be an action the Chromium adapter implements
+// (CHROMIUM_ACTIONS in browser-controller-adapter.mjs); a drift test pins it.
+// browser_batch is run by the executor itself: every step goes through the same
+// classification and approval path as a single command. A gateway that does not
+// know it drops it at registration, so it stays inert until the gateway adds it.
 export const CONTROLLER_BROWSER_CAPABILITIES = Object.freeze([
   'browser_back',
+  'browser_batch',
   'browser_click',
   'browser_drag',
+  'browser_fill',
   'browser_hover',
   'browser_navigate',
   'browser_press',
   'browser_screenshot',
   'browser_scroll',
   'browser_scroll_to',
+  'browser_select',
   'browser_snapshot',
   'browser_tab_activate',
   'browser_tab_close',
@@ -80,7 +90,7 @@ const WEBSOCKET_PATH = '/v1/browser-control/ws';
 
 /**
  * Registration payload shared verbatim by every transport.
- * The controller identity plus the Phase 4 no-op capability set.
+ * The controller identity plus its negotiated capability set.
  */
 function registrationPayload(identity = {}) {
   const controllerId = String(identity.controllerId || '').trim();
@@ -169,10 +179,14 @@ export function controllerRegistrationFor({ family, baseUrl, identity } = {}) {
     };
   }
   if (family === CONTROLLER_TRANSPORT_FAMILIES.CLOUD_TICKET_WS) {
+    // Upstream BrowserControllerRegisterParams (extra=forbid) has no `product`
+    // field, so the gateway-RPC call omits it. The REST registration keeps it.
+    // eslint-disable-next-line no-unused-vars
+    const { product, ...params } = registrationPayload(identity);
     return {
       transport: TRANSPORT_GATEWAY_RPC,
       method: CONTROLLER_METHODS.register,
-      params: registrationPayload(identity),
+      params,
     };
   }
   throw new Error(`Unsupported controller transport family: ${String(family || '')}`);

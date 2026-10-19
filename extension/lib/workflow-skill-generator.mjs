@@ -166,6 +166,16 @@ export function stripEphemeralWorkflowData(value) {
   return output;
 }
 
+// Action results carry the page as the model saw it (rendered snapshot, refs,
+// page text). That is page content, not workflow intent, so it never reaches a
+// stored receipt or a draft.
+const PAGE_STATE_RESULT_KEYS = new Set(['snapshot', 'refs', 'text']);
+
+function stripPageStateFromResult(result) {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return {};
+  return Object.fromEntries(Object.entries(result).filter(([key]) => !PAGE_STATE_RESULT_KEYS.has(key)));
+}
+
 /**
  * Keep only the stable part of a URL for a draft: scheme, host, path. Query
  * strings and hashes are ephemeral and can carry tokens or instructions.
@@ -211,7 +221,7 @@ export function normalizeWorkflowReceipt(value = {}) {
         : '';
   const text = typeof stripped.text === 'string' ? stripped.text.slice(0, WORKFLOW_SKILL_MAX_DETAIL_CHARS) : '';
   const target = stripped.target && typeof stripped.target === 'object' ? stripped.target : {};
-  const result = stripped.result && typeof stripped.result === 'object' ? stripped.result : {};
+  const result = stripPageStateFromResult(stripped.result);
   const warning = compact(stripped.warning || stripped.error?.message || result.warning, 300);
   const receipt = Object.freeze({
     action,

@@ -6,6 +6,7 @@ const CONTROLLER_ADAPTER_IDS = Object.freeze({
 
 const CHROMIUM_ACTIONS = Object.freeze([
   'browser_back',
+  'browser_batch',
   'browser_click',
   'browser_drag',
   'browser_fill',

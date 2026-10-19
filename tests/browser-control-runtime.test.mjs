@@ -173,3 +173,46 @@ test('Phase 6 manifest declares required Chromium debugger permission and Firefo
   const firefox = manifestAssumptionsFor('firefox');
   assert.equal(firefox.removedPermissions.includes('debugger'), true);
 });
+
+test('Phase 6 runtime releases the debugger session of a tab on demand and of every tab on disable', async () => {
+  const { createBrowserControlRuntime } = await runtimeModule();
+  const calls = [];
+  const browser = browserApi();
+  // Chrome only detaches what is attached.
+  const attached = new Set();
+  browser.api.debugger.attach = async (target) => { calls.push(['attach', target.tabId]); attached.add(target.tabId); };
+  browser.api.debugger.detach = async (target) => {
+    if (!attached.delete(target.tabId)) throw new Error(`Debugger is not attached to the tab with id: ${target.tabId}.`);
+    calls.push(['detach', target.tabId]);
+  };
+  browser.api.debugger.getTargets = async () => [...attached, 9].map((tabId) => ({ type: 'page', tabId, attached: true }));
+  browser.api.debugger.sendCommand = async (_target, method) => (
+    method === 'Accessibility.getFullAXTree' ? { nodes: [] } : {}
+  );
+  browser.api.tabs.get = async (tabId) => ({ id: tabId, status: 'complete', title: 'Fixture', url: 'https://example.test/page' });
+  const runtime = createBrowserControlRuntime({ browserApi: browser.api, product: identity.product });
+  const scope = {
+    controllerId: 'controller-1', leaseOwnerId: 'controller-1', leaseId: 'lease-1', leaseGeneration: 1, tabId: 7, frameId: 0, documentGeneration: 2,
+  };
+  const snapshot = (tabId) => runtime.execute(
+    { command_id: `snapshot-${tabId}`, action: 'browser_snapshot', arguments: {}, tab_id: tabId, frame_id: 0, document_generation: 2 },
+    { scope: { ...scope, tabId } },
+    { browserControlEnabled: true },
+  );
+
+  assert.equal(await runtime.releaseTab(7), false, 'nothing to release before the first command');
+  assert.equal((await snapshot(7)).ok, true);
+  assert.equal((await snapshot(7)).ok, true);
+  assert.equal((await snapshot(8)).ok, true);
+  assert.deepEqual(calls, [['attach', 7], ['attach', 8]], 'one attach per tab however many commands run');
+
+  assert.equal(await runtime.releaseTab(7), true);
+  assert.deepEqual(calls.at(-1), ['detach', 7]);
+  // Tab 9 is attached by a previous worker instance; tab 8 is a live session of this one.
+  attached.add(9);
+  assert.equal(await runtime.sweepOrphanSessions(), 1);
+  assert.deepEqual(calls.at(-1), ['detach', 9]);
+  await runtime.disable();
+  assert.deepEqual(calls.slice(-1), [['detach', 8]]);
+  runtime.dispose();
+});

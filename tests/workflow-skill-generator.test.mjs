@@ -88,6 +88,42 @@ test('Phase 8 strips ephemeral ids, nonces, and timestamps from receipts', () =>
   assert.equal('ts' in receipt, false);
 });
 
+test('Phase 2 stored receipts never keep the snapshot, refs, or page text an action result carried', () => {
+  const { receipt } = normalizeWorkflowReceipt(completedReceipt({
+    action: 'browser_click',
+    target: { role: 'link', name: 'eslint/docs' },
+    result: {
+      status: 'clicked',
+      url: 'https://example.com/docs?session_token=abc123',
+      title: 'Docs',
+      navigated: true,
+      text: 'Rendered page text the model saw.',
+      refs: [{ ref: '@e1', role: 'link', name: 'Secret link name' }],
+      snapshot: {
+        text: '[@e1] link "Secret link name"\n\nPrivate account balance 1234',
+        refs: [{ ref: '@e1', role: 'link', name: 'Secret link name' }],
+        truncated: false,
+        element_count: 1,
+      },
+    },
+  }));
+  assert.deepEqual(receipt.result, { status: 'clicked', url: 'https://example.com/docs', title: 'Docs', navigated: true });
+  const serialized = JSON.stringify(receipt);
+  for (const forbidden of ['Secret link name', 'Private account balance', 'Rendered page text', '@e1', 'abc123']) {
+    assert.equal(serialized.includes(forbidden), false, forbidden);
+  }
+
+  const draft = generateWorkflowSkillDraft({
+    receipts: [completedReceipt({
+      action: 'browser_click',
+      target: { role: 'link', name: 'eslint/docs' },
+      result: { status: 'clicked', snapshot: { text: 'Private account balance 1234' } },
+    })],
+  });
+  assert.equal(draft.ok, true);
+  assert.equal(renderWorkflowSkillMarkdown(draft.draft).includes('Private account balance'), false);
+});
+
 test('Phase 8 stripEphemeralWorkflowData removes nested ephemeral keys recursively', () => {
   const stripped = stripEphemeralWorkflowData({
     controllerId: 'c1',

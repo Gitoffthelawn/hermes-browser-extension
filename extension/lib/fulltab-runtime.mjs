@@ -1,4 +1,5 @@
 import { modelRuntimeAckState, normalizeRuntimeModelPayload } from './common.mjs';
+import { isPromptEventName } from './gateway-prompts.mjs';
 import { normalizeBrowserRuntimeEvent, reduceAssistantStreamText } from './runtime-events.mjs';
 
 function responseErrorDetail(payload = {}, fallback = 'Hermes request failed.') {
@@ -74,7 +75,7 @@ export function parseSseBlock(block = '') {
   return event;
 }
 
-export async function readHermesSse(response, { onAssistant, onTool, onRuntime, onRun, onSubagent, signal } = {}) {
+export async function readHermesSse(response, { onAssistant, onTool, onRuntime, onRun, onSubagent, onPrompt, signal } = {}) {
   if (!response?.body) throw new Error('Hermes stream did not return a response body.');
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -103,6 +104,7 @@ export async function readHermesSse(response, { onAssistant, onTool, onRuntime, 
       return true;
     }
     if (event.type.startsWith('subagent.')) onSubagent?.(event);
+    if (isPromptEventName(event.type)) onPrompt?.(event.type, data);
     if (event.type === 'error') throw new Error(data.message || event.data || 'Hermes stream error');
     return false;
   };

@@ -16,7 +16,7 @@ test('Stop from B refuses before touching the local writer in A',async()=>{
 });
 test('settling A cannot flush its queued message into B',async()=>{
  const writes=[]; const queued={sessionId:'A',scopeRevisionId:1,text:'A follow-up',autoSend:true};
- const ctx=vm.createContext({activeRunControl:{phase:'terminal',writerLease:'released',sessionId:'A',scopeRevisionId:1},RUN_CONTROL_PHASES:{TERMINAL:'terminal'},activeAbortController:null,activeRunId:'rA',pendingSteerText:'',sending:true,settings:{sessionId:'B'},queuedTurn:queued,updateComposerBusyState:()=>{},renderContextWindow:()=>{},recheckBuildIdentityAfterUpdateTurn:()=>{},shouldAutoFlushQueuedTurn:()=>true,renderQueueNotice:()=>{},scopeRevision:{isCurrent:()=>true},pendingForeignTurn:null,setStatus:()=>{},askHermes:async text=>{writes.push(text);return false;}});
+ const ctx=vm.createContext({activeDashboardWsConnection:null,promptController:{settleScope:()=>{}},activeRunControl:{phase:'terminal',writerLease:'released',sessionId:'A',scopeRevisionId:1},RUN_CONTROL_PHASES:{TERMINAL:'terminal'},activeAbortController:null,activeRunId:'rA',pendingSteerText:'',sending:true,settings:{sessionId:'B'},queuedTurn:queued,updateComposerBusyState:()=>{},renderContextWindow:()=>{},recheckBuildIdentityAfterUpdateTurn:()=>{},shouldAutoFlushQueuedTurn:()=>true,renderQueueNotice:()=>{},scopeRevision:{isCurrent:()=>true},pendingForeignTurn:null,setStatus:()=>{},askHermes:async text=>{writes.push(text);return false;}});
  const helper=panel.match(/async function flushQueuedTurnForSession\([^\n]*\) \{[\s\S]*?\n\}/)?.[0]||'';
  await vm.runInContext(`${helper}\n${fn(panel,'settleActiveRunTerminal')};settleActiveRunTerminal()`,ctx);
  assert.equal(writes.length,0); assert.equal(ctx.queuedTurn,queued);

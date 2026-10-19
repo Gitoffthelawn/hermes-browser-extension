@@ -39,20 +39,44 @@ function sensitiveNode(node = {}) {
   ].map((value) => compact(value)).join(' '));
 }
 
-function publicNode(node = {}, index) {
+function frameKeyFor(node = {}) {
+  return node.frameId === undefined || node.frameId === null ? '' : compact(node.frameId, 160);
+}
+
+// Identity of a node across re-snapshots of the same document: its backend DOM
+// node id when it has one, otherwise role + name + occurrence among look-alikes.
+function nodeIdentity(node = {}, seen = new Map()) {
+  const backendDOMNodeId = Number(node.backendDOMNodeId);
+  const frame = frameKeyFor(node);
+  if (Number.isInteger(backendDOMNodeId) && backendDOMNodeId > 0) return `b:${frame}:${backendDOMNodeId}`;
+  const base = `n:${frame}:${compact(node.role, 80)}\u0000${compact(node.name || node.label, 300)}`;
+  const occurrence = seen.get(base) || 0;
+  seen.set(base, occurrence + 1);
+  return `${base}\u0000${occurrence}`;
+}
+
+function publicNode(node = {}, number) {
   const sensitive = sensitiveNode(node);
   const backendDOMNodeId = Number(node.backendDOMNodeId);
-  const frameId = node.frameId === undefined || node.frameId === null ? null : compact(node.frameId, 160);
+  const frameId = frameKeyFor(node) || null;
   const prefix = frameId && frameId !== '0' && frameId !== 0
     ? `@f${String(frameId).replace(/^f/i, '')}e`
     : '@e';
   return {
-    ref: `${prefix}${index + 1}`,
+    ref: `${prefix}${number}`,
     role: compact(node.role || 'generic', 80),
     name: sensitive ? 'Sensitive field' : compact(node.name || node.label, 300),
     sensitive,
     ...(Number.isInteger(backendDOMNodeId) && backendDOMNodeId > 0 ? { backendDOMNodeId } : {}),
     ...(frameId ? { frameId } : {}),
+    // State flags only; field values never pass through the ref store.
+    ...(node.disabled === true ? { disabled: true } : {}),
+    ...(node.focused === true ? { focused: true } : {}),
+    ...(node.editable === true ? { editable: true } : {}),
+    ...(node.hasValue === true ? { hasValue: true } : {}),
+    ...(node.checked === true || node.checked === false || node.checked === 'mixed' ? { checked: node.checked } : {}),
+    ...(node.expanded === true || node.expanded === false ? { expanded: node.expanded } : {}),
+    ...(node.selected === true || node.selected === false ? { selected: node.selected } : {}),
   };
 }
 
@@ -64,15 +88,32 @@ export function createBrowserControlRefStore({
   const refLimit = Math.max(1, Number(maxRefsPerDocument) || 1);
   const documentLimit = Math.max(1, Number(maxDocuments) || 1);
 
+  // Re-snapshotting the same tab + frame + document generation keeps the ref of
+  // every node that is still there, gives new nodes a number that was never
+  // handed out in this document, and drops refs of vanished nodes.
   function replace(value = {}) {
     const scope = normalizedScope(value);
     if (!scope) return { ok: false, error: 'invalid_ref_scope' };
     const input = Array.isArray(value.nodes) ? value.nodes : [];
-    const visible = input.slice(0, refLimit).map(publicNode);
-    const byRef = new Map(visible.map((node) => [node.ref, node]));
     const key = scopeKey(scope);
+    const previous = documents.get(key);
+    const known = previous?.numbers || new Map();
+    let next = previous?.next || 1;
+    const seen = new Map();
+    const numbers = new Map();
+    const visible = input.slice(0, refLimit).map((node) => {
+      const identity = nodeIdentity(node, seen);
+      let number = known.get(identity);
+      if (number === undefined || numbers.has(identity)) {
+        number = next;
+        next += 1;
+      }
+      if (!numbers.has(identity)) numbers.set(identity, number);
+      return publicNode(node, number);
+    });
+    const byRef = new Map(visible.map((node) => [node.ref, node]));
     documents.delete(key);
-    documents.set(key, { scope, byRef });
+    documents.set(key, { scope, byRef, numbers, next });
     while (documents.size > documentLimit) documents.delete(documents.keys().next().value);
     return {
       ok: true,

@@ -6,13 +6,16 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { ensureExtensionStartupPage, killProcessTree, resolveChromeExecutable } from './e2e-chrome-env.mjs';
+
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DIST = path.join(ROOT, 'dist');
 const QA = path.join(ROOT, '.hermes', 'qa', 'context-capture');
 const PROFILE = path.join(QA, `profile-${Date.now()}-${process.pid}`);
-const CHROME = process.env.CHROME_PATH;
+const CHROME = resolveChromeExecutable();
 assert.ok(CHROME && existsSync(CHROME), 'Set CHROME_PATH to the isolated Chrome-for-Testing binary.');
-const id = [...createHash('sha256').update(path.resolve(DIST), 'utf16le').digest().subarray(0, 16)]
+// Chrome derives an unpacked extension's id from the path: UTF-16LE on Windows, UTF-8 elsewhere.
+const id = [...createHash('sha256').update(path.resolve(DIST), process.platform === 'win32' ? 'utf16le' : 'utf8').digest().subarray(0, 16)]
   .flatMap(byte => [String.fromCharCode(97 + (byte >> 4)), String.fromCharCode(97 + (byte & 15))]).join('');
 const article = `<html><head><title>Long article fixture</title></head><body><nav>UNRELATED_NAVIGATION</nav><article><h1>LONG_ARTICLE_START</h1>${Array.from({ length: 240 }, (_, i) => `<p>Paragraph ${i}. This published article has content below the fold and its final section must reach the outgoing Browser turn.</p>`).join('')}<p>LONG_ARTICLE_END</p></article></body></html>`;
 const gmail = '<html><head><title>Gmail fixture</title></head><body><aside>PRIVATE_INBOX_LIST</aside><main role="main"><h2 class="hP">Fixture thread</h2><div data-message-id="old" style="display:none"><span class="gD">Old sender</span><div class="a3s">COLLAPSED_OLDER_MESSAGE</div></div><div data-message-id="latest"><span class="gD">Latest sender</span><div class="a3s">LATEST_REPLY_BODY</div></div><textarea>UNSENT_DRAFT_VALUE</textarea><div contenteditable="true">UNSENT_DRAFT_TEXT</div></main></body></html>';
@@ -106,6 +109,7 @@ try {
   await wait(() => existsSync(portFile));
   const [port] = (await readFile(portFile, 'utf8')).split('\n');
   const devtools = `http://127.0.0.1:${Number(port)}`;
+  await ensureExtensionStartupPage(devtools, id);
   const targets = () => fetch(`${devtools}/json/list`).then(res => res.json());
   const attach = async target => { const c = new Cdp(target.webSocketDebuggerUrl); await c.connect(); clients.push(c); await c.call('Runtime.enable'); await c.call('Log.enable').catch(() => {}); return c; };
   const newPage = async url => attach(await fetch(`${devtools}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' }).then(res => res.json()));
@@ -161,7 +165,8 @@ try {
     assert.match(first.browser_context.payload.pageContext.text, /LATEST_REPLY_BODY/);
   }
   assert.doesNotMatch(JSON.stringify(first), /PRIVATE_INBOX_LIST|UNSENT_DRAFT/);
-  assert.equal(first.browser_control.availability, 'unavailable');
+  // Hermes Control is off in this journey, so the turn says control was not requested (not that it is unavailable).
+  assert.equal(first.browser_control.availability, 'not_requested');
   assert.equal(await panel.eval('document.querySelector("#explicitSiteCaptureWrap").hidden'), true);
   const after = await panel.call('Page.captureScreenshot', { format: 'png' });
   await writeFile(path.join(QA, articleCase ? 'article-after.png' : 'gmail-after.png'), Buffer.from(after.data, 'base64'));
@@ -180,7 +185,7 @@ try {
   throw error;
 } finally {
   for (const c of clients) c.close();
-  chrome?.kill();
+  killProcessTree(chrome);
   server.closeAllConnections();
   await new Promise(resolve => server.close(resolve));
 }

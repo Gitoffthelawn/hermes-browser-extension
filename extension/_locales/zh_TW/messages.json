@@ -271,6 +271,10 @@
     "message": "原始檔案無法使用。請重新附加以恢復存取。",
     "description": "Runtime interface message attachments.file_unavailable"
   },
+  "runtime_attachments_paste_excerpt_notice": {
+    "message": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
+    "description": "Runtime interface message attachments.paste_excerpt_notice"
+  },
   "runtime_attachments_preview_limited": {
     "message": "預覽內容有限。請下載完整檔案。",
     "description": "Runtime interface message attachments.preview_limited"
@@ -839,6 +843,10 @@
     "message": "核准一次",
     "description": "Runtime interface message browser_control.approve_once"
   },
+  "runtime_browser_control_attach_not_ready": {
+    "message": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
+    "description": "Runtime interface message browser_control.attach_not_ready"
+  },
   "runtime_browser_control_authorize": {
     "message": "授權控制",
     "description": "Runtime interface message browser_control.authorize"
@@ -852,7 +860,7 @@
     "description": "Runtime interface message browser_control.detach"
   },
   "runtime_browser_control_detached_detail": {
-    "message": "瀏覽器操作已停止，所有受控分頁的租用均已釋放。",
+    "message": "瀏覽器操作已停止。Hermes 不能再使用任何已連接的分頁。",
     "description": "Runtime interface message browser_control.detached_detail"
   },
   "runtime_browser_control_detached_toast": {
@@ -864,16 +872,64 @@
     "description": "Runtime interface message browser_control.enable"
   },
   "runtime_browser_control_enabled_detail": {
-    "message": "只有選取的租用分頁可以接收瀏覽器操作。",
+    "message": "只有已連接的分頁可以接收瀏覽器操作。",
     "description": "Runtime interface message browser_control.enabled_detail"
   },
   "runtime_browser_control_enabled_toast": {
     "message": "已啟用 Hermes 控制",
     "description": "Runtime interface message browser_control.enabled_toast"
   },
-  "runtime_browser_control_follow": {
-    "message": "跟隨 Hermes",
-    "description": "Runtime interface message browser_control.follow"
+  "runtime_browser_control_error_active_tab": {
+    "message": "請先將一個一般網頁設為目前分頁。",
+    "description": "Runtime interface message browser_control.error_active_tab"
+  },
+  "runtime_browser_control_error_approval_failed": {
+    "message": "Hermes 控制未接受此決定。",
+    "description": "Runtime interface message browser_control.error_approval_failed"
+  },
+  "runtime_browser_control_error_attach_busy": {
+    "message": "請等待目前的瀏覽器操作完成後，再連接其他分頁。",
+    "description": "Runtime interface message browser_control.error_attach_busy"
+  },
+  "runtime_browser_control_error_attach_failed": {
+    "message": "無法連接此分頁。",
+    "description": "Runtime interface message browser_control.error_attach_failed"
+  },
+  "runtime_browser_control_error_attach_reconnecting": {
+    "message": "Hermes 控制仍在重新連接。請稍後再次嘗試連接此分頁。",
+    "description": "Runtime interface message browser_control.error_attach_reconnecting"
+  },
+  "runtime_browser_control_error_attach_restricted": {
+    "message": "連接 Hermes 控制前，請先開啟一般的 HTTP 或 HTTPS 頁面。",
+    "description": "Runtime interface message browser_control.error_attach_restricted"
+  },
+  "runtime_browser_control_error_attach_unavailable": {
+    "message": "目前無法連接此分頁。",
+    "description": "Runtime interface message browser_control.error_attach_unavailable"
+  },
+  "runtime_browser_control_error_enable_failed": {
+    "message": "無法連接所選分頁。",
+    "description": "Runtime interface message browser_control.error_enable_failed"
+  },
+  "runtime_browser_control_error_refresh_failed": {
+    "message": "Hermes 控制無法重新整理其連線設定。",
+    "description": "Runtime interface message browser_control.error_refresh_failed"
+  },
+  "runtime_browser_control_error_release_failed": {
+    "message": "無法釋放先前連接的分頁。",
+    "description": "Runtime interface message browser_control.error_release_failed"
+  },
+  "runtime_browser_control_error_select_tabs": {
+    "message": "開啟此範圍前，請在清單中至少選擇一個分頁。",
+    "description": "Runtime interface message browser_control.error_select_tabs"
+  },
+  "runtime_browser_control_error_session_attach": {
+    "message": "請先開始或選擇一個 Hermes 工作階段，然後連接此分頁。",
+    "description": "Runtime interface message browser_control.error_session_attach"
+  },
+  "runtime_browser_control_error_session_enable": {
+    "message": "開啟 Hermes 控制前，請先開始或選擇一個 Hermes 工作階段。",
+    "description": "Runtime interface message browser_control.error_session_enable"
   },
   "runtime_browser_control_help_attach": {
     "message": "允許 Hermes 操作此分頁，取代先前連接的分頁。",
@@ -883,20 +939,16 @@
     "message": "關閉此面板，但不暫停或關閉控制。",
     "description": "Runtime interface message browser_control.help_close"
   },
-  "runtime_browser_control_help_follow": {
-    "message": "顯示 Hermes 正在使用的已連接分頁，但不將瀏覽器視窗帶到最前方。",
-    "description": "Runtime interface message browser_control.help_follow"
-  },
   "runtime_browser_control_help_off": {
-    "message": "關閉瀏覽器控制和此面板。可在設定中重新啟用。",
+    "message": "關閉 Hermes 控制並關閉此面板。可在設定中重新開啟。",
     "description": "Runtime interface message browser_control.help_off"
   },
   "runtime_browser_control_help_pause": {
-    "message": "暫停瀏覽器控制但不將其關閉。已連接的分頁會保留。",
+    "message": "暫停 Hermes 控制但不關閉它。已連接的分頁會保留。",
     "description": "Runtime interface message browser_control.help_pause"
   },
   "runtime_browser_control_help_resume": {
-    "message": "在仍然連接的分頁上恢復瀏覽器控制。",
+    "message": "在仍然連接的分頁上恢復 Hermes 控制。",
     "description": "Runtime interface message browser_control.help_resume"
   },
   "runtime_browser_control_help_scope_selected_tabs": {
@@ -904,16 +956,16 @@
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
   },
   "runtime_browser_control_help_scope_task_set": {
-    "message": "僅將你在下方選擇的分頁作為一個共用瀏覽器工作進行控制。與「所選分頁」不同，這些分頁共用工作識別碼；並不包含所有已開啟的分頁。",
+    "message": "僅控制你在下方選擇的分頁，將它們視為一個共享任務。Hermes 可以在瀏覽器中將它們分組。其他已開啟的分頁不包括在內。",
     "description": "Runtime interface message browser_control.help_scope_task_set"
   },
   "runtime_browser_control_help_scope_this_tab": {
     "message": "僅控制目前的分頁，不包含其他分頁。",
     "description": "Runtime interface message browser_control.help_scope_this_tab"
   },
-  "runtime_browser_control_help_stay": {
-    "message": "停留在目前分頁，同時讓 Hermes 在背景操作已連接的分頁。",
-    "description": "Runtime interface message browser_control.help_stay"
+  "runtime_browser_control_help_show_tab": {
+    "message": "切換到 Hermes 正在使用的分頁。Hermes 絕不會自行切換你的分頁。",
+    "description": "Runtime interface message browser_control.help_show_tab"
   },
   "runtime_browser_control_help_stop": {
     "message": "停止目前和佇列中的瀏覽器操作，但不關閉控制。",
@@ -923,8 +975,12 @@
     "message": "HERMES 控制",
     "description": "Runtime interface message browser_control.kicker"
   },
+  "runtime_browser_control_local_document_detail": {
+    "message": "批准存取本機文件，以便檢查此檔案、擷取其投影片或文字，並允許 Hermes 控制使用其分頁。",
+    "description": "Runtime interface message browser_control.local_document_detail"
+  },
   "runtime_browser_control_note": {
-    "message": "安裝此擴充功能或更新時，即已授予 Chromium 控制器存取權限。Hermes 僅會在獲授權的租用作業期間連接，絕不會將瀏覽器視窗帶到前景，並會封鎖憑證、MFA、付款欄位與機密文字。",
+    "message": "Chromium 會在安裝或更新此擴充功能時授予其偵錯工具存取權限。Hermes 只會在你連接的分頁上使用偵錯工具，從不把瀏覽器視窗移到前景，並會封鎖憑證、MFA、付款欄位和機密文字。",
     "description": "Runtime interface message browser_control.note"
   },
   "runtime_browser_control_pause": {
@@ -951,6 +1007,10 @@
     "message": "無法確認此控制範圍。請檢查分頁後重試。",
     "description": "Runtime interface message browser_control.scope_failed"
   },
+  "runtime_browser_control_scope_help_locked": {
+    "message": "關閉 Hermes 控制後才能變更它可以使用的分頁。",
+    "description": "Runtime interface message browser_control.scope_help_locked"
+  },
   "runtime_browser_control_scope_locked": {
     "message": "在這裡選擇控制範圍，然後套用。多分頁需要明確選取。",
     "description": "Runtime interface message browser_control.scope_locked"
@@ -971,6 +1031,14 @@
     "message": "選取的分頁",
     "description": "Runtime interface message browser_control.selected_tabs"
   },
+  "runtime_browser_control_show_tab": {
+    "message": "顯示分頁",
+    "description": "Runtime interface message browser_control.show_tab"
+  },
+  "runtime_browser_control_show_tab_aria": {
+    "message": "顯示 Hermes 正在使用的分頁",
+    "description": "Runtime interface message browser_control.show_tab_aria"
+  },
   "runtime_browser_control_state_active": {
     "message": "進行中",
     "description": "Runtime interface message browser_control.state_active"
@@ -987,13 +1055,13 @@
     "message": "就緒",
     "description": "Runtime interface message browser_control.state_ready"
   },
-  "runtime_browser_control_stay": {
-    "message": "停留在我的分頁",
-    "description": "Runtime interface message browser_control.stay"
-  },
   "runtime_browser_control_stop": {
     "message": "停止",
     "description": "Runtime interface message browser_control.stop"
+  },
+  "runtime_browser_control_tab_restricted": {
+    "message": "不可用。瀏覽器頁面以及銀行、密碼等敏感頁面無法被控制。",
+    "description": "Runtime interface message browser_control.tab_restricted"
   },
   "runtime_browser_control_task_set": {
     "message": "任務集",
@@ -1004,8 +1072,52 @@
     "description": "Runtime interface message browser_control.this_tab"
   },
   "runtime_browser_control_title": {
-    "message": "操作租用分頁",
+    "message": "Hermes 控制",
     "description": "Runtime interface message browser_control.title"
+  },
+  "runtime_browser_control_toast_approval_failed": {
+    "message": "未接受核准",
+    "description": "Runtime interface message browser_control.toast_approval_failed"
+  },
+  "runtime_browser_control_toast_attach_failed": {
+    "message": "未能連接此分頁",
+    "description": "Runtime interface message browser_control.toast_attach_failed"
+  },
+  "runtime_browser_control_toast_attached": {
+    "message": "此分頁已連接",
+    "description": "Runtime interface message browser_control.toast_attached"
+  },
+  "runtime_browser_control_toast_attached_detail": {
+    "message": "Hermes 控制已準備好執行第一個瀏覽器操作。",
+    "description": "Runtime interface message browser_control.toast_attached_detail"
+  },
+  "runtime_browser_control_toast_authorize_failed": {
+    "message": "Hermes 控制未獲授權",
+    "description": "Runtime interface message browser_control.toast_authorize_failed"
+  },
+  "runtime_browser_control_toast_enable_failed": {
+    "message": "未能開啟 Hermes 控制",
+    "description": "Runtime interface message browser_control.toast_enable_failed"
+  },
+  "runtime_browser_control_toast_rejection_failed": {
+    "message": "未接受拒絕",
+    "description": "Runtime interface message browser_control.toast_rejection_failed"
+  },
+  "runtime_browser_control_toast_scope_unchanged": {
+    "message": "控制的分頁未變更",
+    "description": "Runtime interface message browser_control.toast_scope_unchanged"
+  },
+  "runtime_browser_control_toast_show_tab_failed": {
+    "message": "無法顯示該分頁",
+    "description": "Runtime interface message browser_control.toast_show_tab_failed"
+  },
+  "runtime_browser_control_toast_state_unchanged": {
+    "message": "Hermes 控制狀態未變更",
+    "description": "Runtime interface message browser_control.toast_state_unchanged"
+  },
+  "runtime_browser_control_toast_stop_failed": {
+    "message": "無法停止瀏覽器操作",
+    "description": "Runtime interface message browser_control.toast_stop_failed"
   },
   "runtime_browser_control_turn_off": {
     "message": "關閉控制",
@@ -1015,9 +1127,45 @@
     "message": "正在等待 Hermes。",
     "description": "Runtime interface message browser_control.waiting"
   },
-  "runtime_browser_control_while_working": {
-    "message": "Hermes 運作時",
-    "description": "Runtime interface message browser_control.while_working"
+  "runtime_clarify_expired": {
+    "message": "This question was already answered or expired.",
+    "description": "Runtime interface message clarify.expired"
+  },
+  "runtime_clarify_kicker": {
+    "message": "QUESTION FROM HERMES",
+    "description": "Runtime interface message clarify.kicker"
+  },
+  "runtime_clarify_multi_hint": {
+    "message": "Select every option that applies.",
+    "description": "Runtime interface message clarify.multi_hint"
+  },
+  "runtime_clarify_placeholder": {
+    "message": "Type your answer",
+    "description": "Runtime interface message clarify.placeholder"
+  },
+  "runtime_clarify_send": {
+    "message": "Send answer",
+    "description": "Runtime interface message clarify.send"
+  },
+  "runtime_clarify_send_failed": {
+    "message": "Could not send your answer: {error}",
+    "description": "Runtime interface message clarify.send_failed"
+  },
+  "runtime_clarify_sent": {
+    "message": "Answer sent",
+    "description": "Runtime interface message clarify.sent"
+  },
+  "runtime_clarify_title": {
+    "message": "Hermes needs an answer",
+    "description": "Runtime interface message clarify.title"
+  },
+  "runtime_clarify_waiting": {
+    "message": "Waiting for your answer",
+    "description": "Runtime interface message clarify.waiting"
+  },
+  "runtime_clarify_waiting_detail": {
+    "message": "Hermes paused this turn until you answer the question card.",
+    "description": "Runtime interface message clarify.waiting_detail"
   },
   "runtime_commands_click_or_enter": {
     "message": "按一下或按 Enter 執行。",
@@ -1411,6 +1559,78 @@
     "message": "介面",
     "description": "Runtime interface message diagnostics.surface"
   },
+  "runtime_exec_approval_cancelled": {
+    "message": "Hermes withdrew this request.",
+    "description": "Runtime interface message exec_approval.cancelled"
+  },
+  "runtime_exec_approval_choice_help": {
+    "message": "Approve once runs this command a single time. Session allows matching commands until this session ends. Always saves a permanent rule for matching commands.",
+    "description": "Runtime interface message exec_approval.choice_help"
+  },
+  "runtime_exec_approval_command_truncated": {
+    "message": "Only the first part of this command is shown. Deny it unless you trust the rest.",
+    "description": "Runtime interface message exec_approval.command_truncated"
+  },
+  "runtime_exec_approval_countdown": {
+    "message": "{time} left to answer",
+    "description": "Runtime interface message exec_approval.countdown"
+  },
+  "runtime_exec_approval_edit_title": {
+    "message": "Proposed file change",
+    "description": "Runtime interface message exec_approval.edit_title"
+  },
+  "runtime_exec_approval_edit_truncated": {
+    "message": "Showing the first part of the change.",
+    "description": "Runtime interface message exec_approval.edit_truncated"
+  },
+  "runtime_exec_approval_expired": {
+    "message": "此核准已被回應或已過期。",
+    "description": "Runtime interface message exec_approval.expired"
+  },
+  "runtime_exec_approval_hint": {
+    "message": "在這裡回應即可允許命令執行。若請求在無回應的情況下到期，命令將不會執行。",
+    "description": "Runtime interface message exec_approval.hint"
+  },
+  "runtime_exec_approval_info_only": {
+    "message": "This gateway does not accept answers from the browser. Answer in Hermes, or the request will expire and the command will not run.",
+    "description": "Runtime interface message exec_approval.info_only"
+  },
+  "runtime_exec_approval_kicker": {
+    "message": "命令核准",
+    "description": "Runtime interface message exec_approval.kicker"
+  },
+  "runtime_exec_approval_other_session": {
+    "message": "A request in another session is waiting for your answer. Switch to that session to respond.",
+    "description": "Runtime interface message exec_approval.other_session"
+  },
+  "runtime_exec_approval_queue_more": {
+    "message": "{count} more waiting",
+    "description": "Runtime interface message exec_approval.queue_more"
+  },
+  "runtime_exec_approval_send_failed": {
+    "message": "無法傳送你的決定：{error}",
+    "description": "Runtime interface message exec_approval.send_failed"
+  },
+  "runtime_exec_approval_sent": {
+    "message": "Decision sent",
+    "description": "Runtime interface message exec_approval.sent"
+  },
+  "runtime_exec_approval_sent_detail": {
+    "message": "Hermes received your decision and is continuing.",
+    "description": "Runtime interface message exec_approval.sent_detail"
+  },
+  "runtime_exec_approval_title": {
+    "message": "Hermes 想要執行一個命令",
+    "description": "Runtime interface message exec_approval.title"
+  },
+  "runtime_exec_approval_waiting": {
+    "message": "Waiting for your approval",
+    "description": "Runtime interface message exec_approval.waiting"
+  },
+  "runtime_exec_approval_waiting_detail": {
+    "message": "Hermes paused this turn until you answer the approval card. If it expires unanswered, the command will not run.",
+    "description": "Runtime interface message exec_approval.waiting_detail"
+  },
   "runtime_fulltab_handoff_opened_from": {
     "message": "從 {source} 開啟。",
     "description": "Runtime interface message fulltab.handoff.opened_from"
@@ -1619,6 +1839,10 @@
     "message": "個設定檔可用",
     "description": "Runtime interface message profile.available_suffix"
   },
+  "runtime_profile_companion_not_configured": {
+    "message": "Dashboard companion not configured. Remote API mode does not search this computer for a Hermes Dashboard, so profile switching and Bot Mode need a dashboard companion.",
+    "description": "Runtime interface message profile.companion_not_configured"
+  },
   "runtime_profile_default": {
     "message": "預設設定檔",
     "description": "Runtime interface message profile.default"
@@ -1635,9 +1859,37 @@
     "message": "正在使用 {name}{model}{skills}",
     "description": "Runtime interface message profile.using"
   },
+  "runtime_run_release": {
+    "message": "Release",
+    "description": "Runtime interface message run.release"
+  },
+  "runtime_run_release_detail": {
+    "message": "Browser released the composer without Hermes confirming the stop. Check the session before sending another message.",
+    "description": "Runtime interface message run.release_detail"
+  },
   "runtime_run_stop": {
     "message": "■ 停止",
     "description": "Runtime interface message run.stop"
+  },
+  "runtime_run_stop_cancelled_commands": {
+    "message": "已取消 {count} 個待處理的 Hermes 控制命令。",
+    "description": "Runtime interface message run.stop_cancelled_commands"
+  },
+  "runtime_run_stop_controller_toast": {
+    "message": "Hermes Control",
+    "description": "Runtime interface message run.stop_controller_toast"
+  },
+  "runtime_run_stop_controller_unreachable": {
+    "message": "Browser could not reach Hermes Control to cancel pending browser actions.",
+    "description": "Runtime interface message run.stop_controller_unreachable"
+  },
+  "runtime_run_stop_unconfirmed_no_run_id": {
+    "message": "Hermes has not reported a run id for this turn, so Browser cannot confirm the run stopped. The session writer and queued messages stay held until Hermes confirms a terminal state.",
+    "description": "Runtime interface message run.stop_unconfirmed_no_run_id"
+  },
+  "runtime_run_stop_unconfirmed_title": {
+    "message": "Stop not confirmed",
+    "description": "Runtime interface message run.stop_unconfirmed_title"
   },
   "runtime_runtime_fast_mode_toggle": {
     "message": "快速模式 {state}",
@@ -1671,6 +1923,10 @@
     "message": "複製 {title} 的工作階段 ID",
     "description": "Runtime interface message session.copy_id_for"
   },
+  "runtime_session_long_shared_notice": {
+    "message": "This session has {count} messages. Long shared sessions can fall out of sync with other Hermes clients, such as the desktop app, the CLI, or Hermes Web, that write to the same session, so replies can arrive late or out of order. Start a new chat when you can.",
+    "description": "Runtime interface message session.long_shared_notice"
+  },
   "runtime_session_new_extension_session": {
     "message": "＋ 新增 Hermes Browser 擴充功能工作階段",
     "description": "Runtime interface message session.new_extension_session"
@@ -1678,6 +1934,14 @@
   "runtime_session_opening": {
     "message": "正在開啟 {title}",
     "description": "Runtime interface message session.opening"
+  },
+  "runtime_session_origin_refused": {
+    "message": "Hermes refused this browser origin, {origin}, on a session request (HTTP 403 with no JSON error body). Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
+    "description": "Runtime interface message session.origin_refused"
+  },
+  "runtime_session_origin_refused_title": {
+    "message": "Hermes refused this browser origin",
+    "description": "Runtime interface message session.origin_refused_title"
   },
   "runtime_session_rail_save_failed": {
     "message": "工作階段欄儲存失敗：{error}",
@@ -1760,7 +2024,7 @@
     "description": "Runtime interface message settings.categories.models.title"
   },
   "runtime_settings_categories_permissions_summary": {
-    "message": "瀏覽器控制、分頁範圍與頁面分享核准。",
+    "message": "Hermes 控制、分頁範圍與頁面分享核准。",
     "description": "Runtime interface message settings.categories.permissions.summary"
   },
   "runtime_settings_categories_permissions_title": {
@@ -2150,6 +2414,14 @@
   "runtime_ui_approve_document_access": {
     "message": "Approve document access",
     "description": "Runtime interface message ui.approve_document_access"
+  },
+  "runtime_ui_artifact_open_on_computer_blocked": {
+    "message": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
+    "description": "Runtime interface message ui.artifact.open_on_computer.blocked"
+  },
+  "runtime_ui_artifact_open_on_computer_confirm": {
+    "message": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+    "description": "Runtime interface message ui.artifact.open_on_computer.confirm"
   },
   "runtime_ui_artifacts": {
     "message": "成品",
@@ -2686,6 +2958,46 @@
   "runtime_ui_component": {
     "message": "元件",
     "description": "Runtime interface message ui.component"
+  },
+  "runtime_ui_composer_ask": {
+    "message": "詢問",
+    "description": "Runtime interface message ui.composer.ask"
+  },
+  "runtime_ui_composer_ask_bot": {
+    "message": "詢問 {name}",
+    "description": "Runtime interface message ui.composer.ask_bot"
+  },
+  "runtime_ui_composer_ask_bot_label": {
+    "message": "詢問 {name}",
+    "description": "Runtime interface message ui.composer.ask_bot_label"
+  },
+  "runtime_ui_composer_ask_hermes": {
+    "message": "詢問 Hermes",
+    "description": "Runtime interface message ui.composer.ask_hermes"
+  },
+  "runtime_ui_composer_ask_hermes_label": {
+    "message": "詢問 HERMES",
+    "description": "Runtime interface message ui.composer.ask_hermes_label"
+  },
+  "runtime_ui_composer_bot_running": {
+    "message": "{name} 執行中",
+    "description": "Runtime interface message ui.composer.bot_running"
+  },
+  "runtime_ui_composer_group_chat": {
+    "message": "群組聊天",
+    "description": "Runtime interface message ui.composer.group_chat"
+  },
+  "runtime_ui_composer_hermes_running": {
+    "message": "Hermes 執行中",
+    "description": "Runtime interface message ui.composer.hermes_running"
+  },
+  "runtime_ui_composer_new_thread": {
+    "message": "新討論串",
+    "description": "Runtime interface message ui.composer.new_thread"
+  },
+  "runtime_ui_composer_send": {
+    "message": "傳送",
+    "description": "Runtime interface message ui.composer.send"
   },
   "runtime_ui_config": {
     "message": "設定",
@@ -6230,6 +6542,10 @@
   "runtime_voice_transcription_failed": {
     "message": "語音轉錄失敗。\n\n{error}",
     "description": "Runtime interface message voice.transcription_failed"
+  },
+  "runtime_wake_native_local_only": {
+    "message": "Native wake needs the local Hermes gateway on this computer. Remote connections can use browser wake instead.",
+    "description": "Runtime interface message wake.native_local_only"
   },
   "runtime_wake_turn_off": {
     "message": "關閉喚醒詞",

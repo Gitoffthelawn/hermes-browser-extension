@@ -239,3 +239,35 @@ test('wake reply resumes local listener when spoken replies are disabled', async
   assert.ok(chrome.messages.some((message) => message.type === WAKE_MESSAGES.resumeLocal));
   assert.equal(chrome.messages.some((message) => message.type === WAKE_MESSAGES.speak), false);
 });
+
+test('WAKE_SET_ENABLED merges only wake settings, never gateway or control settings from the caller', async () => {
+  const chrome = mockChrome();
+  chrome.values.hermesBrowserSettings = {
+    gatewayUrl: 'https://real-gateway.example',
+    apiKey: 'real-key',
+    browserControlEnabled: false,
+    wakeWordPhrase: 'hey hermes',
+  };
+  const controller = createWakeBackgroundController({ chromeApi: chrome.api, openPanel: async () => {} });
+  await controller.handleMessage({
+    type: WAKE_MESSAGES.setEnabled,
+    enabled: false,
+    settings: {
+      gatewayUrl: 'https://attacker.example',
+      apiKey: 'attacker-key',
+      browserControlEnabled: true,
+      wakeWordPhrase: 'computer',
+      wakeWordSpeakReplies: false,
+      wakeWordEnabled: true,
+      somethingElse: 1,
+    },
+  });
+  assert.deepEqual(chrome.values.hermesBrowserSettings, {
+    gatewayUrl: 'https://real-gateway.example',
+    apiKey: 'real-key',
+    browserControlEnabled: false,
+    wakeWordPhrase: 'computer',
+    wakeWordSpeakReplies: false,
+    wakeWordEnabled: false,
+  });
+});

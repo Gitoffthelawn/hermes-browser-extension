@@ -271,6 +271,10 @@
     "message": "Оригінальний файл недоступний. Прикріпіть його знову.",
     "description": "Runtime interface message attachments.file_unavailable"
   },
+  "runtime_attachments_paste_excerpt_notice": {
+    "message": "Only the first {head} and last {tail} characters of this {total}-character paste are sent to Hermes. The {omitted} characters in the middle stay on this device and are never uploaded.",
+    "description": "Runtime interface message attachments.paste_excerpt_notice"
+  },
   "runtime_attachments_preview_limited": {
     "message": "Попередній перегляд обмежений. Завантажте весь файл.",
     "description": "Runtime interface message attachments.preview_limited"
@@ -839,6 +843,10 @@
     "message": "Дозволити один раз",
     "description": "Runtime interface message browser_control.approve_once"
   },
+  "runtime_browser_control_attach_not_ready": {
+    "message": "This tab could not be attached because its page is not ready. Wait for the page to finish loading, then attach it again.",
+    "description": "Runtime interface message browser_control.attach_not_ready"
+  },
   "runtime_browser_control_authorize": {
     "message": "Дозволити керування",
     "description": "Runtime interface message browser_control.authorize"
@@ -852,7 +860,7 @@
     "description": "Runtime interface message browser_control.detach"
   },
   "runtime_browser_control_detached_detail": {
-    "message": "Дії браузера зупинено, а всі оренди керованих вкладок звільнено.",
+    "message": "Дії браузера зупинено. Hermes більше не може використовувати підключені вкладки.",
     "description": "Runtime interface message browser_control.detached_detail"
   },
   "runtime_browser_control_detached_toast": {
@@ -864,16 +872,64 @@
     "description": "Runtime interface message browser_control.enable"
   },
   "runtime_browser_control_enabled_detail": {
-    "message": "Лише вибрані орендовані вкладки можуть отримувати дії браузера.",
+    "message": "Дії браузера можуть виконуватися лише на підключених вкладках.",
     "description": "Runtime interface message browser_control.enabled_detail"
   },
   "runtime_browser_control_enabled_toast": {
     "message": "Керування Hermes увімкнено",
     "description": "Runtime interface message browser_control.enabled_toast"
   },
-  "runtime_browser_control_follow": {
-    "message": "Слідувати за Hermes",
-    "description": "Runtime interface message browser_control.follow"
+  "runtime_browser_control_error_active_tab": {
+    "message": "Спершу зробіть звичайну веб-сторінку активною вкладкою.",
+    "description": "Runtime interface message browser_control.error_active_tab"
+  },
+  "runtime_browser_control_error_approval_failed": {
+    "message": "Керування Hermes не прийняло це рішення.",
+    "description": "Runtime interface message browser_control.error_approval_failed"
+  },
+  "runtime_browser_control_error_attach_busy": {
+    "message": "Дочекайтеся завершення поточної дії в браузері, перш ніж підключати іншу вкладку.",
+    "description": "Runtime interface message browser_control.error_attach_busy"
+  },
+  "runtime_browser_control_error_attach_failed": {
+    "message": "Не вдалося підключити цю вкладку.",
+    "description": "Runtime interface message browser_control.error_attach_failed"
+  },
+  "runtime_browser_control_error_attach_reconnecting": {
+    "message": "Керування Hermes досі перепідключається. Спробуйте підключити цю вкладку трохи пізніше.",
+    "description": "Runtime interface message browser_control.error_attach_reconnecting"
+  },
+  "runtime_browser_control_error_attach_restricted": {
+    "message": "Відкрийте звичайну сторінку HTTP або HTTPS, перш ніж підключати Керування Hermes.",
+    "description": "Runtime interface message browser_control.error_attach_restricted"
+  },
+  "runtime_browser_control_error_attach_unavailable": {
+    "message": "Зараз цю вкладку не можна підключити.",
+    "description": "Runtime interface message browser_control.error_attach_unavailable"
+  },
+  "runtime_browser_control_error_enable_failed": {
+    "message": "Не вдалося підключити вибрані вкладки.",
+    "description": "Runtime interface message browser_control.error_enable_failed"
+  },
+  "runtime_browser_control_error_refresh_failed": {
+    "message": "Керування Hermes не вдалося оновити налаштування підключення.",
+    "description": "Runtime interface message browser_control.error_refresh_failed"
+  },
+  "runtime_browser_control_error_release_failed": {
+    "message": "Не вдалося від’єднати раніше підключену вкладку.",
+    "description": "Runtime interface message browser_control.error_release_failed"
+  },
+  "runtime_browser_control_error_select_tabs": {
+    "message": "Виберіть хоча б одну вкладку в списку, перш ніж вмикати цю область.",
+    "description": "Runtime interface message browser_control.error_select_tabs"
+  },
+  "runtime_browser_control_error_session_attach": {
+    "message": "Запустіть або виберіть сеанс Hermes, а потім підключіть цю вкладку.",
+    "description": "Runtime interface message browser_control.error_session_attach"
+  },
+  "runtime_browser_control_error_session_enable": {
+    "message": "Запустіть або виберіть сеанс Hermes, перш ніж вмикати Керування Hermes.",
+    "description": "Runtime interface message browser_control.error_session_enable"
   },
   "runtime_browser_control_help_attach": {
     "message": "Дозвольте Hermes керувати цією вкладкою замість раніше підключеної.",
@@ -883,20 +939,16 @@
     "message": "Закрийте цю панель, не призупиняючи й не вимикаючи керування.",
     "description": "Runtime interface message browser_control.help_close"
   },
-  "runtime_browser_control_help_follow": {
-    "message": "Показуйте підключену вкладку, яку використовує Hermes, не виводячи вікно браузера на передній план.",
-    "description": "Runtime interface message browser_control.help_follow"
-  },
   "runtime_browser_control_help_off": {
-    "message": "Вимкніть керування браузером і закрийте панель. Увімкнути його знову можна в налаштуваннях.",
+    "message": "Вимкніть Керування Hermes і закрийте цю панель. Увімкнути його знову можна в налаштуваннях.",
     "description": "Runtime interface message browser_control.help_off"
   },
   "runtime_browser_control_help_pause": {
-    "message": "Призупиніть керування браузером, не вимикаючи його. Вкладки залишаться підключеними.",
+    "message": "Призупиніть Керування Hermes, не вимикаючи його. Підключені вкладки залишаться.",
     "description": "Runtime interface message browser_control.help_pause"
   },
   "runtime_browser_control_help_resume": {
-    "message": "Відновіть керування браузером на вкладках, які досі підключені.",
+    "message": "Відновіть Керування Hermes на вкладках, які досі підключені.",
     "description": "Runtime interface message browser_control.help_resume"
   },
   "runtime_browser_control_help_scope_selected_tabs": {
@@ -904,16 +956,16 @@
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
   },
   "runtime_browser_control_help_scope_task_set": {
-    "message": "Керувати лише вкладками, вибраними нижче, як одним спільним завданням браузера. На відміну від вибраних вкладок, вони мають спільний ідентифікатор завдання; це не включає всі відкриті вкладки.",
+    "message": "Керуйте лише вкладками, вибраними нижче, як одним спільним завданням. Hermes може згрупувати їх у браузері. Інші відкриті вкладки не включаються.",
     "description": "Runtime interface message browser_control.help_scope_task_set"
   },
   "runtime_browser_control_help_scope_this_tab": {
     "message": "Керувати лише поточною вкладкою. Інші вкладки не включено.",
     "description": "Runtime interface message browser_control.help_scope_this_tab"
   },
-  "runtime_browser_control_help_stay": {
-    "message": "Залишайтеся на своїй вкладці, поки Hermes працює з підключеними вкладками у фоні.",
-    "description": "Runtime interface message browser_control.help_stay"
+  "runtime_browser_control_help_show_tab": {
+    "message": "Перейти на вкладку, яку використовує Hermes. Hermes ніколи не змінює вашу вкладку самостійно.",
+    "description": "Runtime interface message browser_control.help_show_tab"
   },
   "runtime_browser_control_help_stop": {
     "message": "Зупиніть поточні дії браузера й чергу, не вимикаючи керування.",
@@ -923,8 +975,12 @@
     "message": "КЕРУВАННЯ HERMES",
     "description": "Runtime interface message browser_control.kicker"
   },
+  "runtime_browser_control_local_document_detail": {
+    "message": "Дозвольте доступ до локальних документів, щоб переглянути цей файл, витягти його слайди або текст і дозволити Керуванню Hermes працювати з його вкладкою.",
+    "description": "Runtime interface message browser_control.local_document_detail"
+  },
   "runtime_browser_control_note": {
-    "message": "Доступ до контролера Chromium було надано під час встановлення цього розширення або оновлення. Hermes під’єднується лише під час авторизованої орендованої дії, ніколи не піднімає вікно браузера та блокує облікові дані, MFA, платіжні поля й секретний текст.",
+    "message": "Chromium надає цьому розширенню доступ до налагоджувача під час встановлення або оновлення. Hermes використовує налагоджувач лише на вкладках, які ви підключаєте, ніколи не виводить вікно браузера на передній план і блокує облікові дані, MFA, платіжні поля та секретний текст.",
     "description": "Runtime interface message browser_control.note"
   },
   "runtime_browser_control_pause": {
@@ -951,6 +1007,10 @@
     "message": "Не вдалося підтвердити цю область. Перевірте вкладки та повторіть спробу.",
     "description": "Runtime interface message browser_control.scope_failed"
   },
+  "runtime_browser_control_scope_help_locked": {
+    "message": "Вимкніть Керування Hermes, щоб змінити вкладки, які воно може використовувати.",
+    "description": "Runtime interface message browser_control.scope_help_locked"
+  },
   "runtime_browser_control_scope_locked": {
     "message": "Виберіть область тут і застосуйте її. Кілька вкладок потрібно вибрати явно.",
     "description": "Runtime interface message browser_control.scope_locked"
@@ -971,6 +1031,14 @@
     "message": "Вибрані вкладки",
     "description": "Runtime interface message browser_control.selected_tabs"
   },
+  "runtime_browser_control_show_tab": {
+    "message": "Показати вкладку",
+    "description": "Runtime interface message browser_control.show_tab"
+  },
+  "runtime_browser_control_show_tab_aria": {
+    "message": "Показати вкладку, яку використовує Hermes",
+    "description": "Runtime interface message browser_control.show_tab_aria"
+  },
   "runtime_browser_control_state_active": {
     "message": "Активно",
     "description": "Runtime interface message browser_control.state_active"
@@ -987,13 +1055,13 @@
     "message": "Готово",
     "description": "Runtime interface message browser_control.state_ready"
   },
-  "runtime_browser_control_stay": {
-    "message": "Залишатися на моїй вкладці",
-    "description": "Runtime interface message browser_control.stay"
-  },
   "runtime_browser_control_stop": {
     "message": "Зупинити",
     "description": "Runtime interface message browser_control.stop"
+  },
+  "runtime_browser_control_tab_restricted": {
+    "message": "Недоступно. Сторінки браузера та чутливі сторінки, наприклад банківські або сторінки паролів, керувати якими не можна.",
+    "description": "Runtime interface message browser_control.tab_restricted"
   },
   "runtime_browser_control_task_set": {
     "message": "Набір завдань",
@@ -1004,8 +1072,52 @@
     "description": "Runtime interface message browser_control.this_tab"
   },
   "runtime_browser_control_title": {
-    "message": "Керування орендованими вкладками",
+    "message": "Керування Hermes",
     "description": "Runtime interface message browser_control.title"
+  },
+  "runtime_browser_control_toast_approval_failed": {
+    "message": "Підтвердження не прийнято",
+    "description": "Runtime interface message browser_control.toast_approval_failed"
+  },
+  "runtime_browser_control_toast_attach_failed": {
+    "message": "Цю вкладку не підключено",
+    "description": "Runtime interface message browser_control.toast_attach_failed"
+  },
+  "runtime_browser_control_toast_attached": {
+    "message": "Цю вкладку підключено",
+    "description": "Runtime interface message browser_control.toast_attached"
+  },
+  "runtime_browser_control_toast_attached_detail": {
+    "message": "Керування Hermes готове до першої дії в браузері.",
+    "description": "Runtime interface message browser_control.toast_attached_detail"
+  },
+  "runtime_browser_control_toast_authorize_failed": {
+    "message": "Керування Hermes не авторизовано",
+    "description": "Runtime interface message browser_control.toast_authorize_failed"
+  },
+  "runtime_browser_control_toast_enable_failed": {
+    "message": "Керування Hermes не ввімкнулося",
+    "description": "Runtime interface message browser_control.toast_enable_failed"
+  },
+  "runtime_browser_control_toast_rejection_failed": {
+    "message": "Відмову не прийнято",
+    "description": "Runtime interface message browser_control.toast_rejection_failed"
+  },
+  "runtime_browser_control_toast_scope_unchanged": {
+    "message": "Вкладки керування без змін",
+    "description": "Runtime interface message browser_control.toast_scope_unchanged"
+  },
+  "runtime_browser_control_toast_show_tab_failed": {
+    "message": "Не вдалося показати цю вкладку",
+    "description": "Runtime interface message browser_control.toast_show_tab_failed"
+  },
+  "runtime_browser_control_toast_state_unchanged": {
+    "message": "Стан Керування Hermes без змін",
+    "description": "Runtime interface message browser_control.toast_state_unchanged"
+  },
+  "runtime_browser_control_toast_stop_failed": {
+    "message": "Не вдалося зупинити дії браузера",
+    "description": "Runtime interface message browser_control.toast_stop_failed"
   },
   "runtime_browser_control_turn_off": {
     "message": "Вимкнути",
@@ -1015,9 +1127,45 @@
     "message": "Очікування на Hermes.",
     "description": "Runtime interface message browser_control.waiting"
   },
-  "runtime_browser_control_while_working": {
-    "message": "Поки Hermes працює",
-    "description": "Runtime interface message browser_control.while_working"
+  "runtime_clarify_expired": {
+    "message": "This question was already answered or expired.",
+    "description": "Runtime interface message clarify.expired"
+  },
+  "runtime_clarify_kicker": {
+    "message": "QUESTION FROM HERMES",
+    "description": "Runtime interface message clarify.kicker"
+  },
+  "runtime_clarify_multi_hint": {
+    "message": "Select every option that applies.",
+    "description": "Runtime interface message clarify.multi_hint"
+  },
+  "runtime_clarify_placeholder": {
+    "message": "Type your answer",
+    "description": "Runtime interface message clarify.placeholder"
+  },
+  "runtime_clarify_send": {
+    "message": "Send answer",
+    "description": "Runtime interface message clarify.send"
+  },
+  "runtime_clarify_send_failed": {
+    "message": "Could not send your answer: {error}",
+    "description": "Runtime interface message clarify.send_failed"
+  },
+  "runtime_clarify_sent": {
+    "message": "Answer sent",
+    "description": "Runtime interface message clarify.sent"
+  },
+  "runtime_clarify_title": {
+    "message": "Hermes needs an answer",
+    "description": "Runtime interface message clarify.title"
+  },
+  "runtime_clarify_waiting": {
+    "message": "Waiting for your answer",
+    "description": "Runtime interface message clarify.waiting"
+  },
+  "runtime_clarify_waiting_detail": {
+    "message": "Hermes paused this turn until you answer the question card.",
+    "description": "Runtime interface message clarify.waiting_detail"
   },
   "runtime_commands_click_or_enter": {
     "message": "Клацніть або натисніть Enter, щоб запустити.",
@@ -1411,6 +1559,78 @@
     "message": "Інтерфейс",
     "description": "Runtime interface message diagnostics.surface"
   },
+  "runtime_exec_approval_cancelled": {
+    "message": "Hermes withdrew this request.",
+    "description": "Runtime interface message exec_approval.cancelled"
+  },
+  "runtime_exec_approval_choice_help": {
+    "message": "Approve once runs this command a single time. Session allows matching commands until this session ends. Always saves a permanent rule for matching commands.",
+    "description": "Runtime interface message exec_approval.choice_help"
+  },
+  "runtime_exec_approval_command_truncated": {
+    "message": "Only the first part of this command is shown. Deny it unless you trust the rest.",
+    "description": "Runtime interface message exec_approval.command_truncated"
+  },
+  "runtime_exec_approval_countdown": {
+    "message": "{time} left to answer",
+    "description": "Runtime interface message exec_approval.countdown"
+  },
+  "runtime_exec_approval_edit_title": {
+    "message": "Proposed file change",
+    "description": "Runtime interface message exec_approval.edit_title"
+  },
+  "runtime_exec_approval_edit_truncated": {
+    "message": "Showing the first part of the change.",
+    "description": "Runtime interface message exec_approval.edit_truncated"
+  },
+  "runtime_exec_approval_expired": {
+    "message": "Це підтвердження вже оброблено або воно минуло.",
+    "description": "Runtime interface message exec_approval.expired"
+  },
+  "runtime_exec_approval_hint": {
+    "message": "Відповідьте тут, щоб команда виконалася. Якщо запит мине без відповіді, команда не виконається.",
+    "description": "Runtime interface message exec_approval.hint"
+  },
+  "runtime_exec_approval_info_only": {
+    "message": "This gateway does not accept answers from the browser. Answer in Hermes, or the request will expire and the command will not run.",
+    "description": "Runtime interface message exec_approval.info_only"
+  },
+  "runtime_exec_approval_kicker": {
+    "message": "ПІДТВЕРДЖЕННЯ КОМАНДИ",
+    "description": "Runtime interface message exec_approval.kicker"
+  },
+  "runtime_exec_approval_other_session": {
+    "message": "A request in another session is waiting for your answer. Switch to that session to respond.",
+    "description": "Runtime interface message exec_approval.other_session"
+  },
+  "runtime_exec_approval_queue_more": {
+    "message": "{count} more waiting",
+    "description": "Runtime interface message exec_approval.queue_more"
+  },
+  "runtime_exec_approval_send_failed": {
+    "message": "Не вдалося надіслати ваше рішення: {error}",
+    "description": "Runtime interface message exec_approval.send_failed"
+  },
+  "runtime_exec_approval_sent": {
+    "message": "Decision sent",
+    "description": "Runtime interface message exec_approval.sent"
+  },
+  "runtime_exec_approval_sent_detail": {
+    "message": "Hermes received your decision and is continuing.",
+    "description": "Runtime interface message exec_approval.sent_detail"
+  },
+  "runtime_exec_approval_title": {
+    "message": "Hermes хоче виконати команду",
+    "description": "Runtime interface message exec_approval.title"
+  },
+  "runtime_exec_approval_waiting": {
+    "message": "Waiting for your approval",
+    "description": "Runtime interface message exec_approval.waiting"
+  },
+  "runtime_exec_approval_waiting_detail": {
+    "message": "Hermes paused this turn until you answer the approval card. If it expires unanswered, the command will not run.",
+    "description": "Runtime interface message exec_approval.waiting_detail"
+  },
   "runtime_fulltab_handoff_opened_from": {
     "message": "Відкрито з {source}.",
     "description": "Runtime interface message fulltab.handoff.opened_from"
@@ -1619,6 +1839,10 @@
     "message": "профілів доступно",
     "description": "Runtime interface message profile.available_suffix"
   },
+  "runtime_profile_companion_not_configured": {
+    "message": "Dashboard companion not configured. Remote API mode does not search this computer for a Hermes Dashboard, so profile switching and Bot Mode need a dashboard companion.",
+    "description": "Runtime interface message profile.companion_not_configured"
+  },
   "runtime_profile_default": {
     "message": "Профіль за замовчуванням",
     "description": "Runtime interface message profile.default"
@@ -1635,9 +1859,37 @@
     "message": "Використовується {name}{model}{skills}",
     "description": "Runtime interface message profile.using"
   },
+  "runtime_run_release": {
+    "message": "Release",
+    "description": "Runtime interface message run.release"
+  },
+  "runtime_run_release_detail": {
+    "message": "Browser released the composer without Hermes confirming the stop. Check the session before sending another message.",
+    "description": "Runtime interface message run.release_detail"
+  },
   "runtime_run_stop": {
     "message": "■ Зупинити",
     "description": "Runtime interface message run.stop"
+  },
+  "runtime_run_stop_cancelled_commands": {
+    "message": "Скасовано {count} очікуваних команд Керування Hermes.",
+    "description": "Runtime interface message run.stop_cancelled_commands"
+  },
+  "runtime_run_stop_controller_toast": {
+    "message": "Hermes Control",
+    "description": "Runtime interface message run.stop_controller_toast"
+  },
+  "runtime_run_stop_controller_unreachable": {
+    "message": "Browser could not reach Hermes Control to cancel pending browser actions.",
+    "description": "Runtime interface message run.stop_controller_unreachable"
+  },
+  "runtime_run_stop_unconfirmed_no_run_id": {
+    "message": "Hermes has not reported a run id for this turn, so Browser cannot confirm the run stopped. The session writer and queued messages stay held until Hermes confirms a terminal state.",
+    "description": "Runtime interface message run.stop_unconfirmed_no_run_id"
+  },
+  "runtime_run_stop_unconfirmed_title": {
+    "message": "Stop not confirmed",
+    "description": "Runtime interface message run.stop_unconfirmed_title"
   },
   "runtime_runtime_fast_mode_toggle": {
     "message": "Швидкий режим {state}",
@@ -1671,6 +1923,10 @@
     "message": "Копіювати ідентифікатор сеансу для {title}",
     "description": "Runtime interface message session.copy_id_for"
   },
+  "runtime_session_long_shared_notice": {
+    "message": "This session has {count} messages. Long shared sessions can fall out of sync with other Hermes clients, such as the desktop app, the CLI, or Hermes Web, that write to the same session, so replies can arrive late or out of order. Start a new chat when you can.",
+    "description": "Runtime interface message session.long_shared_notice"
+  },
   "runtime_session_new_extension_session": {
     "message": "＋ Новий сеанс Hermes Browser Extension",
     "description": "Runtime interface message session.new_extension_session"
@@ -1678,6 +1934,14 @@
   "runtime_session_opening": {
     "message": "Відкриття {title}",
     "description": "Runtime interface message session.opening"
+  },
+  "runtime_session_origin_refused": {
+    "message": "Hermes refused this browser origin, {origin}, on a session request (HTTP 403 with no JSON error body). Add this line to the Hermes .env file, then restart the gateway: {envLine}. Your draft is still in the composer.",
+    "description": "Runtime interface message session.origin_refused"
+  },
+  "runtime_session_origin_refused_title": {
+    "message": "Hermes refused this browser origin",
+    "description": "Runtime interface message session.origin_refused_title"
   },
   "runtime_session_rail_save_failed": {
     "message": "Не вдалося зберегти панель сеансу: {error}",
@@ -1760,7 +2024,7 @@
     "description": "Runtime interface message settings.categories.models.title"
   },
   "runtime_settings_categories_permissions_summary": {
-    "message": "Керування браузером, охоплення вкладок і дозвіл на передавання сторінки.",
+    "message": "Керування Hermes, область вкладок і дозвіл на передачу сторінки.",
     "description": "Runtime interface message settings.categories.permissions.summary"
   },
   "runtime_settings_categories_permissions_title": {
@@ -2150,6 +2414,14 @@
   "runtime_ui_approve_document_access": {
     "message": "Approve document access",
     "description": "Runtime interface message ui.approve_document_access"
+  },
+  "runtime_ui_artifact_open_on_computer_blocked": {
+    "message": "\"{name}\" is a program or script, so it cannot be opened from here. Save it instead and check it before running it.",
+    "description": "Runtime interface message ui.artifact.open_on_computer.blocked"
+  },
+  "runtime_ui_artifact_open_on_computer_confirm": {
+    "message": "Open \"{name}\" with the app your computer uses for this file type? Hermes returned this file, so only continue if you trust it.",
+    "description": "Runtime interface message ui.artifact.open_on_computer.confirm"
   },
   "runtime_ui_artifacts": {
     "message": "Артефакти",
@@ -2686,6 +2958,46 @@
   "runtime_ui_component": {
     "message": "компонент",
     "description": "Runtime interface message ui.component"
+  },
+  "runtime_ui_composer_ask": {
+    "message": "Запитати",
+    "description": "Runtime interface message ui.composer.ask"
+  },
+  "runtime_ui_composer_ask_bot": {
+    "message": "Запитайте {name}",
+    "description": "Runtime interface message ui.composer.ask_bot"
+  },
+  "runtime_ui_composer_ask_bot_label": {
+    "message": "ЗАПИТАЙТЕ {name}",
+    "description": "Runtime interface message ui.composer.ask_bot_label"
+  },
+  "runtime_ui_composer_ask_hermes": {
+    "message": "Запитайте Hermes",
+    "description": "Runtime interface message ui.composer.ask_hermes"
+  },
+  "runtime_ui_composer_ask_hermes_label": {
+    "message": "ЗАПИТАЙТЕ HERMES",
+    "description": "Runtime interface message ui.composer.ask_hermes_label"
+  },
+  "runtime_ui_composer_bot_running": {
+    "message": "{name} працює",
+    "description": "Runtime interface message ui.composer.bot_running"
+  },
+  "runtime_ui_composer_group_chat": {
+    "message": "ГРУПОВИЙ ЧАТ",
+    "description": "Runtime interface message ui.composer.group_chat"
+  },
+  "runtime_ui_composer_hermes_running": {
+    "message": "Hermes працює",
+    "description": "Runtime interface message ui.composer.hermes_running"
+  },
+  "runtime_ui_composer_new_thread": {
+    "message": "Новий тред",
+    "description": "Runtime interface message ui.composer.new_thread"
+  },
+  "runtime_ui_composer_send": {
+    "message": "Надіслати",
+    "description": "Runtime interface message ui.composer.send"
   },
   "runtime_ui_config": {
     "message": "Конфігурація",
@@ -6230,6 +6542,10 @@
   "runtime_voice_transcription_failed": {
     "message": "Помилка транскрипції голосу.\n\n{error}",
     "description": "Runtime interface message voice.transcription_failed"
+  },
+  "runtime_wake_native_local_only": {
+    "message": "Native wake needs the local Hermes gateway on this computer. Remote connections can use browser wake instead.",
+    "description": "Runtime interface message wake.native_local_only"
   },
   "runtime_wake_turn_off": {
     "message": "Вимкнути слово пробудження",

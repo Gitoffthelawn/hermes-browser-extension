@@ -50,7 +50,14 @@ test('Phase 4 registration preserves one protocol across local API, VPS API, and
   assert.equal(cloud.transport, 'gateway-rpc');
   assert.equal(cloud.method, protocol.CONTROLLER_METHODS.register);
   assert.deepEqual(local.payload, vps.payload);
-  assert.deepEqual(local.payload, cloud.params);
+  // The gateway-RPC params carry the same registration minus `product`, which
+  // upstream BrowserControllerRegisterParams (tui_gateway/contracts/groups_bot_relay.py) forbids.
+  const { product: restProduct, ...restWithoutProduct } = local.payload;
+  assert.equal(restProduct.id, 'chromium');
+  assert.deepEqual(cloud.params, restWithoutProduct);
+  const upstreamRegisterFields = ['session_id', 'controller_id', 'browser_profile_id', 'capabilities', 'protocol_version', 'principal_id'];
+  for (const key of Object.keys(cloud.params)) assert.ok(upstreamRegisterFields.includes(key), `${key} is not an upstream browser.controller.register field`);
+  assert.deepEqual(Object.keys(cloud.params).sort(), ['browser_profile_id', 'capabilities', 'controller_id', 'protocol_version', 'session_id']);
   assert.deepEqual(local.payload.capabilities, ['controller.noop']);
   assert.equal(local.payload.protocol_version, 1);
   assert.equal(local.payload.session_id, 'session-fixture');

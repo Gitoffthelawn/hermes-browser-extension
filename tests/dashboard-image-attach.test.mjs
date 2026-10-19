@@ -113,7 +113,7 @@ test('askHermes and the dashboard attempt both stage images before prompt.submit
   assert.match(sidepanelSource, /attachments: turnAttachments = \[\]/);
   assert.match(
     sidepanelSource,
-    /if \(submitPrompt\) \{\s*void \(async \(\) => \{\s*try \{\s*await attachDashboardTurnImages\(client, sessionId, turnAttachments\);[\s\S]{0,480}WS_METHODS\.promptSubmit/,
+    /if \(submitPrompt\) \{\s*void \(async \(\) => \{\s*try \{\s*await attachDashboardTurnImages\(client, sessionId, turnAttachments\);[\s\S]{0,800}WS_METHODS\.promptSubmit/,
     'the attempt must attach images for the attempt session before submitting',
   );
 });

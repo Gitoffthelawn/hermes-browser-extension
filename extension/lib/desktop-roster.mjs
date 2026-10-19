@@ -131,7 +131,11 @@ async function isDesktopDashboard(
 }
 
 
+// Discovery reaches for ports on this machine, so it only runs when the caller
+// names the local gateway. Any other gatewayMode (remote API, remote dashboard,
+// cloud), and a missing one, returns '' without a single request.
 export async function discoverLocalDashboardBaseUrl({
+  gatewayMode = '',
   explicitUrl = '',
   cachedUrl = '',
   cachedAt: _cachedAt = 0,
@@ -142,6 +146,7 @@ export async function discoverLocalDashboardBaseUrl({
   onProgress = null,
   timeoutMs = 4_000,
 } = {}) {
+  if (String(gatewayMode || '').trim().toLowerCase() !== 'local-api') return '';
   const deadlineAt = Date.now() + Math.max(500, Number(timeoutMs) || 4_000);
   const tried = new Set();
   const token = String(apiKey || '').trim();

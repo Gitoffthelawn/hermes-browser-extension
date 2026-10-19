@@ -27,40 +27,31 @@ async function notify(tabsApi, tabId, phase, action, targetRect = null) {
   }
 }
 
+// The overlay's minimum visible time is enforced by the content script, so a
+// finished action is never held back for presentation.
 export function withBrowserControlIndicator({
   adapter,
   tabsApi,
-  now = Date.now,
-  wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  minimumVisibleMs = 180,
 } = {}) {
   if (!adapter?.contract || typeof adapter.execute !== 'function') throw new TypeError('Browser control adapter is required.');
   return {
     ...adapter,
     async execute(action, args, context = {}) {
       const tabId = Number(context?.scope?.tabId);
-      const shownAt = Number(now()) || 0;
       const targetRect = typeof adapter.targetBounds === 'function'
         ? await adapter.targetBounds(context).catch(() => null)
         : null;
       await notify(tabsApi, tabId, 'start', action, targetRect);
-      let succeeded = false;
       try {
         if (action === 'browser_screenshot') await notify(tabsApi, tabId, 'suspend', action);
-        let result;
         try {
-          result = await adapter.execute(action, args, context);
+          return await adapter.execute(action, args, context);
         } finally {
           if (action === 'browser_screenshot') await notify(tabsApi, tabId, 'resume', action);
         }
-        succeeded = true;
-        return result;
       } finally {
-        if (succeeded) {
-          const remaining = Math.max(0, Number(minimumVisibleMs) - ((Number(now()) || 0) - shownAt));
-          if (remaining > 0) await wait(remaining);
-        }
-        await notify(tabsApi, tabId, 'finish', action);
+        // Fire and forget: the result must not wait on the content script.
+        void notify(tabsApi, tabId, 'finish', action);
       }
     },
   };
