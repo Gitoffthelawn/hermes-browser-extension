@@ -875,9 +875,21 @@
     "message": "Podążaj za Hermesem",
     "description": "Runtime interface message browser_control.follow"
   },
+  "runtime_browser_control_help_apply": {
+    "message": "Stosuje wybrany zakres do kart, którymi Hermes może sterować.",
+    "description": "Runtime interface message browser_control.help_apply"
+  },
+  "runtime_browser_control_help_approve": {
+    "message": "Zezwala na tę jedną oczekującą akcję przeglądarki. Hermes zapyta ponownie przy następnej.",
+    "description": "Runtime interface message browser_control.help_approve"
+  },
   "runtime_browser_control_help_attach": {
     "message": "Pozwól Hermes sterować tą kartą zamiast wcześniej podłączonej karty.",
     "description": "Runtime interface message browser_control.help_attach"
+  },
+  "runtime_browser_control_help_authorize": {
+    "message": "Pozwala tej przeglądarce pobrać od Hermes token sterowania, aby mogła obsługiwać karty.",
+    "description": "Runtime interface message browser_control.help_authorize"
   },
   "runtime_browser_control_help_close": {
     "message": "Zamknij ten panel bez wstrzymywania ani wyłączania sterowania.",
@@ -895,13 +907,25 @@
     "message": "Wstrzymaj sterowanie przeglądarką bez jego wyłączania. Podłączone karty zostają zachowane.",
     "description": "Runtime interface message browser_control.help_pause"
   },
+  "runtime_browser_control_help_reject": {
+    "message": "Odrzuca tę jedną oczekującą akcję przeglądarki. Hermes jej nie wykona.",
+    "description": "Runtime interface message browser_control.help_reject"
+  },
   "runtime_browser_control_help_resume": {
     "message": "Wznów sterowanie przeglądarką na kartach, które nadal są podłączone.",
     "description": "Runtime interface message browser_control.help_resume"
   },
+  "runtime_browser_control_help_scope": {
+    "message": "Wybierz karty, którymi Hermes może sterować. Naciśnij Zastosuj, aby potwierdzić.",
+    "description": "Runtime interface message browser_control.help_scope"
+  },
   "runtime_browser_control_help_scope_selected_tabs": {
     "message": "Steruj tylko kartami wybranymi poniżej. Każdą kartę wybierasz osobno; pozostałe pozostają poza zakresem.",
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
+  },
+  "runtime_browser_control_help_scope_tab": {
+    "message": "Dodaje tę kartę do zakresu. Wybierz karty, które chcesz, i naciśnij Zastosuj.",
+    "description": "Runtime interface message browser_control.help_scope_tab"
   },
   "runtime_browser_control_help_scope_task_set": {
     "message": "Steruj tylko kartami wybranymi poniżej jako jednym wspólnym zadaniem przeglądarki. W odróżnieniu od Wybranych kart mają wspólny identyfikator zadania; nie obejmuje to wszystkich otwartych kart.",

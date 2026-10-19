@@ -875,9 +875,21 @@
     "message": "ตาม Hermes",
     "description": "Runtime interface message browser_control.follow"
   },
+  "runtime_browser_control_help_apply": {
+    "message": "นำขอบเขตที่เลือกไปใช้กับแท็บที่ Hermes ควบคุมได้",
+    "description": "Runtime interface message browser_control.help_apply"
+  },
+  "runtime_browser_control_help_approve": {
+    "message": "อนุญาตการทำงานของเบราว์เซอร์ที่รออยู่นี้ครั้งเดียว Hermes จะถามอีกครั้งสำหรับการทำงานถัดไป",
+    "description": "Runtime interface message browser_control.help_approve"
+  },
   "runtime_browser_control_help_attach": {
     "message": "อนุญาตให้ Hermes ควบคุมแท็บนี้แทนแท็บที่เชื่อมต่อไว้ก่อนหน้า",
     "description": "Runtime interface message browser_control.help_attach"
+  },
+  "runtime_browser_control_help_authorize": {
+    "message": "ให้เบราว์เซอร์นี้รับโทเค็นควบคุมจาก Hermes เพื่อให้ทำงานกับแท็บได้",
+    "description": "Runtime interface message browser_control.help_authorize"
   },
   "runtime_browser_control_help_close": {
     "message": "ปิดแผงนี้โดยไม่หยุดชั่วคราวหรือปิดการควบคุม",
@@ -895,13 +907,25 @@
     "message": "หยุดการควบคุมเบราว์เซอร์ชั่วคราวโดยไม่ปิดใช้งาน แท็บที่เชื่อมต่อจะยังคงอยู่",
     "description": "Runtime interface message browser_control.help_pause"
   },
+  "runtime_browser_control_help_reject": {
+    "message": "ปฏิเสธการทำงานของเบราว์เซอร์ที่รออยู่นี้ครั้งเดียว Hermes จะไม่ทำงานนี้",
+    "description": "Runtime interface message browser_control.help_reject"
+  },
   "runtime_browser_control_help_resume": {
     "message": "ดำเนินการควบคุมเบราว์เซอร์ต่อบนแท็บที่ยังเชื่อมต่ออยู่",
     "description": "Runtime interface message browser_control.help_resume"
   },
+  "runtime_browser_control_help_scope": {
+    "message": "เลือกแท็บที่ Hermes ทำงานได้ กดนำไปใช้เพื่อยืนยัน",
+    "description": "Runtime interface message browser_control.help_scope"
+  },
   "runtime_browser_control_help_scope_selected_tabs": {
     "message": "ควบคุมเฉพาะแท็บที่คุณเลือกด้านล่าง แต่ละแท็บต้องเลือกแยกกัน แท็บอื่นจะอยู่นอกขอบเขต",
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
+  },
+  "runtime_browser_control_help_scope_tab": {
+    "message": "รวมแท็บนี้ไว้ในขอบเขต เลือกแท็บที่ต้องการ แล้วกดนำไปใช้",
+    "description": "Runtime interface message browser_control.help_scope_tab"
   },
   "runtime_browser_control_help_scope_task_set": {
     "message": "ควบคุมเฉพาะแท็บที่คุณเลือกด้านล่างเป็นงานเบราว์เซอร์ร่วมกันหนึ่งงาน ต่างจากแท็บที่เลือก แท็บเหล่านี้ใช้รหัสงานร่วมกัน ไม่ได้รวมทุกแท็บที่เปิดอยู่",

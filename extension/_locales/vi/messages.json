@@ -875,9 +875,21 @@
     "message": "Theo dõi Hermes",
     "description": "Runtime interface message browser_control.follow"
   },
+  "runtime_browser_control_help_apply": {
+    "message": "Áp dụng phạm vi đã chọn cho các thẻ mà Hermes có thể điều khiển.",
+    "description": "Runtime interface message browser_control.help_apply"
+  },
+  "runtime_browser_control_help_approve": {
+    "message": "Cho phép một thao tác trình duyệt đang chờ này. Hermes sẽ hỏi lại ở thao tác tiếp theo.",
+    "description": "Runtime interface message browser_control.help_approve"
+  },
   "runtime_browser_control_help_attach": {
     "message": "Cho phép Hermes điều khiển thẻ này, thay cho thẻ đã kết nối trước đó.",
     "description": "Runtime interface message browser_control.help_attach"
+  },
+  "runtime_browser_control_help_authorize": {
+    "message": "Cho phép trình duyệt này lấy mã điều khiển từ Hermes để thao tác với các thẻ.",
+    "description": "Runtime interface message browser_control.help_authorize"
   },
   "runtime_browser_control_help_close": {
     "message": "Đóng bảng này mà không tạm dừng hay tắt điều khiển.",
@@ -895,13 +907,25 @@
     "message": "Tạm dừng điều khiển trình duyệt mà không tắt. Các thẻ đã kết nối vẫn được giữ lại.",
     "description": "Runtime interface message browser_control.help_pause"
   },
+  "runtime_browser_control_help_reject": {
+    "message": "Từ chối một thao tác trình duyệt đang chờ này. Hermes sẽ không thực hiện.",
+    "description": "Runtime interface message browser_control.help_reject"
+  },
   "runtime_browser_control_help_resume": {
     "message": "Tiếp tục điều khiển trình duyệt trên các thẻ vẫn đang kết nối.",
     "description": "Runtime interface message browser_control.help_resume"
   },
+  "runtime_browser_control_help_scope": {
+    "message": "Chọn các thẻ mà Hermes có thể thao tác. Nhấn Áp dụng để xác nhận.",
+    "description": "Runtime interface message browser_control.help_scope"
+  },
   "runtime_browser_control_help_scope_selected_tabs": {
     "message": "Chỉ điều khiển các tab bạn chọn bên dưới. Mỗi tab được chọn riêng; các tab còn lại nằm ngoài phạm vi.",
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
+  },
+  "runtime_browser_control_help_scope_tab": {
+    "message": "Đưa thẻ này vào phạm vi. Chọn các thẻ bạn muốn rồi nhấn Áp dụng.",
+    "description": "Runtime interface message browser_control.help_scope_tab"
   },
   "runtime_browser_control_help_scope_task_set": {
     "message": "Chỉ điều khiển các tab bạn chọn bên dưới như một tác vụ trình duyệt chung. Khác với Tab đã chọn, các tab này dùng chung định danh tác vụ; không bao gồm mọi tab đang mở.",

@@ -875,9 +875,21 @@
     "message": "Volg Hermes",
     "description": "Runtime interface message browser_control.follow"
   },
+  "runtime_browser_control_help_apply": {
+    "message": "Past het gekozen bereik toe op de tabs die Hermes kan bedienen.",
+    "description": "Runtime interface message browser_control.help_apply"
+  },
+  "runtime_browser_control_help_approve": {
+    "message": "Sta deze ene wachtende browseractie toe. Hermes vraagt opnieuw bij de volgende.",
+    "description": "Runtime interface message browser_control.help_approve"
+  },
   "runtime_browser_control_help_attach": {
     "message": "Laat Hermes dit tabblad besturen in plaats van het eerder gekoppelde tabblad.",
     "description": "Runtime interface message browser_control.help_attach"
+  },
+  "runtime_browser_control_help_authorize": {
+    "message": "Laat deze browser een besturingstoken van Hermes ophalen, zodat hij tabs kan bedienen.",
+    "description": "Runtime interface message browser_control.help_authorize"
   },
   "runtime_browser_control_help_close": {
     "message": "Sluit dit paneel zonder de besturing te pauzeren of uit te schakelen.",
@@ -895,13 +907,25 @@
     "message": "Pauzeer browserbesturing zonder deze uit te schakelen. Gekoppelde tabbladen blijven behouden.",
     "description": "Runtime interface message browser_control.help_pause"
   },
+  "runtime_browser_control_help_reject": {
+    "message": "Weiger deze ene wachtende browseractie. Hermes voert hem niet uit.",
+    "description": "Runtime interface message browser_control.help_reject"
+  },
   "runtime_browser_control_help_resume": {
     "message": "Hervat browserbesturing op de tabbladen die nog gekoppeld zijn.",
     "description": "Runtime interface message browser_control.help_resume"
   },
+  "runtime_browser_control_help_scope": {
+    "message": "Kies welke tabs Hermes kan bedienen. Tik op Toepassen om te bevestigen.",
+    "description": "Runtime interface message browser_control.help_scope"
+  },
   "runtime_browser_control_help_scope_selected_tabs": {
     "message": "Bestuur alleen de tabbladen die je hieronder kiest. Elk tabblad wordt afzonderlijk gekozen; alle andere vallen buiten het bereik.",
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
+  },
+  "runtime_browser_control_help_scope_tab": {
+    "message": "Neem deze tab in het bereik op. Kies de gewenste tabs en tik daarna op Toepassen.",
+    "description": "Runtime interface message browser_control.help_scope_tab"
   },
   "runtime_browser_control_help_scope_task_set": {
     "message": "Bestuur alleen de tabbladen die je hieronder kiest als één gedeelde browsertaak. Anders dan bij Geselecteerde tabbladen delen ze een taakidentiteit; niet alle geopende tabbladen zijn inbegrepen.",

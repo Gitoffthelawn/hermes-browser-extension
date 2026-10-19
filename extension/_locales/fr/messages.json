@@ -875,9 +875,21 @@
     "message": "Suivre Hermes",
     "description": "Runtime interface message browser_control.follow"
   },
+  "runtime_browser_control_help_apply": {
+    "message": "Applique la portée choisie aux onglets que Hermes peut contrôler.",
+    "description": "Runtime interface message browser_control.help_apply"
+  },
+  "runtime_browser_control_help_approve": {
+    "message": "Autorise cette seule action du navigateur en attente. Hermes demandera à nouveau pour la suivante.",
+    "description": "Runtime interface message browser_control.help_approve"
+  },
   "runtime_browser_control_help_attach": {
     "message": "Autorisez Hermes à contrôler cet onglet à la place de l’onglet précédemment associé.",
     "description": "Runtime interface message browser_control.help_attach"
+  },
+  "runtime_browser_control_help_authorize": {
+    "message": "Permet à ce navigateur d'obtenir de Hermes un jeton de contrôle pour utiliser les onglets.",
+    "description": "Runtime interface message browser_control.help_authorize"
   },
   "runtime_browser_control_help_close": {
     "message": "Fermez ce panneau sans suspendre ni désactiver le contrôle.",
@@ -895,13 +907,25 @@
     "message": "Suspendez le contrôle du navigateur sans le désactiver. Les onglets restent associés.",
     "description": "Runtime interface message browser_control.help_pause"
   },
+  "runtime_browser_control_help_reject": {
+    "message": "Refuse cette seule action du navigateur en attente. Hermes ne l'exécutera pas.",
+    "description": "Runtime interface message browser_control.help_reject"
+  },
   "runtime_browser_control_help_resume": {
     "message": "Reprenez le contrôle du navigateur sur les onglets toujours associés.",
     "description": "Runtime interface message browser_control.help_resume"
   },
+  "runtime_browser_control_help_scope": {
+    "message": "Choisissez les onglets que Hermes peut utiliser. Appuyez sur Appliquer pour confirmer.",
+    "description": "Runtime interface message browser_control.help_scope"
+  },
   "runtime_browser_control_help_scope_selected_tabs": {
     "message": "Contrôler uniquement les onglets choisis ci-dessous. Chaque onglet est sélectionné individuellement ; les autres restent hors du périmètre.",
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
+  },
+  "runtime_browser_control_help_scope_tab": {
+    "message": "Ajoutez cet onglet à la portée. Choisissez les onglets voulus, puis appuyez sur Appliquer.",
+    "description": "Runtime interface message browser_control.help_scope_tab"
   },
   "runtime_browser_control_help_scope_task_set": {
     "message": "Contrôler uniquement les onglets choisis ci-dessous comme une tâche de navigateur commune. Contrairement aux Onglets sélectionnés, ils partagent une identité de tâche ; cela n’inclut pas tous les onglets ouverts.",

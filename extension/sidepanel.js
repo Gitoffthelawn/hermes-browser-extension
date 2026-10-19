@@ -2447,6 +2447,9 @@ function renderBrowserControl() {
       attach: t('browser_control.help_attach'), off: t('browser_control.help_off'),
       pause: t(paused ? 'browser_control.help_resume' : 'browser_control.help_pause'),
       stop: t('browser_control.help_stop'), close: t('browser_control.help_close'),
+      apply: t('browser_control.help_apply'), authorize: t('browser_control.help_authorize'),
+      approve: t('browser_control.help_approve'), reject: t('browser_control.help_reject'),
+      scope: t('browser_control.help_scope'),
       status: statusLine,
     },
   });

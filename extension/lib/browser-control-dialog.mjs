@@ -52,8 +52,12 @@ export function createBrowserControlDialog({ dialog, launcher, closeButton, focu
       for (const tab of tabs) {
         const option = dialog.ownerDocument.createElement('label');
         option.className = 'browser-control-tab-option';
+        // Each tab explains its checkbox on hover and focus, like the other controls in the window.
+        option.dataset.controlHelp = 'scope_tab';
+        option.dataset.help = translate('browser_control.help_scope_tab');
         const checkbox = dialog.ownerDocument.createElement('input');
         checkbox.type = 'checkbox';
+        checkbox.setAttribute('aria-description', option.dataset.help);
         checkbox.checked = draftTabIds.has(tab.id);
         checkbox.addEventListener('change', () => {
           if (checkbox.checked) draftTabIds.add(tab.id); else draftTabIds.delete(tab.id);
@@ -103,18 +107,27 @@ export function createBrowserControlDialog({ dialog, launcher, closeButton, focu
   };
   const tooltip = dialog.querySelector('#browserControlTooltip');
   let helpTarget = null;
+  // aria-describedby is a list of ids. Help adds the tooltip's id to that list and removes only that id,
+  // so a control that also points at a hint (the scope picker) keeps the hint.
+  const setHelpDescription = (button, shown) => {
+    const ids = (button.getAttribute('aria-describedby') || '').split(/\s+/).filter((id) => id && id !== tooltip.id);
+    if (shown) ids.push(tooltip.id);
+    if (ids.length) button.setAttribute('aria-describedby', ids.join(' '));
+    else button.removeAttribute('aria-describedby');
+  };
   const hideHelp = () => {
     if (tooltip?.matches(':popover-open')) tooltip.hidePopover();
-    helpTarget?.removeAttribute('aria-describedby');
+    if (helpTarget) setHelpDescription(helpTarget, false);
     helpTarget = null;
   };
   const showHelp = (button) => {
     if (!tooltip || !dialog.open || !button?.dataset.help) return;
+    if (helpTarget && helpTarget !== button) setHelpDescription(helpTarget, false);
     helpTarget = button;
     tooltip.textContent = button.dataset.help;
     if (!tooltip.matches(':popover-open')) tooltip.showPopover();
     // A control named by its help text already says it; describing it with the same text would repeat it.
-    if (!button.hasAttribute('data-help-as-name')) button.setAttribute('aria-describedby', tooltip.id);
+    if (!button.hasAttribute('data-help-as-name')) setHelpDescription(button, true);
     // Anchor option help to the picker, so a lower option's explanation cannot
     // cover the choices above it while the user moves through the menu.
     const picker = button.getAttribute('role') === 'option' ? button.closest('.branded-select') : null;

@@ -875,9 +875,21 @@
     "message": "Hermes に追従",
     "description": "Runtime interface message browser_control.follow"
   },
+  "runtime_browser_control_help_apply": {
+    "message": "選んだ範囲を、Hermes が操作できるタブに適用します。",
+    "description": "Runtime interface message browser_control.help_apply"
+  },
+  "runtime_browser_control_help_approve": {
+    "message": "待機中のこのブラウザー操作を一度だけ許可します。Hermes は次の操作で改めて確認します。",
+    "description": "Runtime interface message browser_control.help_approve"
+  },
   "runtime_browser_control_help_attach": {
     "message": "以前のタブの接続を置き換えて、Hermes がこのタブを操作できるようにします。",
     "description": "Runtime interface message browser_control.help_attach"
+  },
+  "runtime_browser_control_help_authorize": {
+    "message": "このブラウザーが Hermes から操作用のトークンを取得し、タブを操作できるようにします。",
+    "description": "Runtime interface message browser_control.help_authorize"
   },
   "runtime_browser_control_help_close": {
     "message": "制御を一時停止したりオフにしたりせず、このパネルを閉じます。",
@@ -895,13 +907,25 @@
     "message": "ブラウザー制御をオフにせず一時停止します。タブの接続は維持されます。",
     "description": "Runtime interface message browser_control.help_pause"
   },
+  "runtime_browser_control_help_reject": {
+    "message": "待機中のこのブラウザー操作を一度だけ拒否します。Hermes は実行しません。",
+    "description": "Runtime interface message browser_control.help_reject"
+  },
   "runtime_browser_control_help_resume": {
     "message": "接続が維持されているタブでブラウザー制御を再開します。",
     "description": "Runtime interface message browser_control.help_resume"
   },
+  "runtime_browser_control_help_scope": {
+    "message": "Hermes が操作できるタブを選びます。「適用」を押して確定してください。",
+    "description": "Runtime interface message browser_control.help_scope"
+  },
   "runtime_browser_control_help_scope_selected_tabs": {
     "message": "下で選んだタブだけを操作します。タブは個別に選択し、それ以外のタブは対象外です。",
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
+  },
+  "runtime_browser_control_help_scope_tab": {
+    "message": "このタブを範囲に含めます。必要なタブを選び、「適用」を押してください。",
+    "description": "Runtime interface message browser_control.help_scope_tab"
   },
   "runtime_browser_control_help_scope_task_set": {
     "message": "下で選んだタブだけを、共通のブラウザータスクとして操作します。「選択したタブ」と異なり、タブ間でタスクの識別情報を共有します。開いているすべてのタブが対象になるわけではありません。",

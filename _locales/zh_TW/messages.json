@@ -875,9 +875,21 @@
     "message": "跟隨 Hermes",
     "description": "Runtime interface message browser_control.follow"
   },
+  "runtime_browser_control_help_apply": {
+    "message": "將所選範圍套用到 Hermes 可以控制的分頁。",
+    "description": "Runtime interface message browser_control.help_apply"
+  },
+  "runtime_browser_control_help_approve": {
+    "message": "允許這一項等待中的瀏覽器操作。下一項操作時，Hermes 會再次詢問。",
+    "description": "Runtime interface message browser_control.help_approve"
+  },
   "runtime_browser_control_help_attach": {
     "message": "允許 Hermes 操作此分頁，取代先前連接的分頁。",
     "description": "Runtime interface message browser_control.help_attach"
+  },
+  "runtime_browser_control_help_authorize": {
+    "message": "允許此瀏覽器從 Hermes 取得控制權杖，以便操作分頁。",
+    "description": "Runtime interface message browser_control.help_authorize"
   },
   "runtime_browser_control_help_close": {
     "message": "關閉此面板，但不暫停或關閉控制。",
@@ -895,13 +907,25 @@
     "message": "暫停瀏覽器控制但不將其關閉。已連接的分頁會保留。",
     "description": "Runtime interface message browser_control.help_pause"
   },
+  "runtime_browser_control_help_reject": {
+    "message": "拒絕這一項等待中的瀏覽器操作。Hermes 不會執行它。",
+    "description": "Runtime interface message browser_control.help_reject"
+  },
   "runtime_browser_control_help_resume": {
     "message": "在仍然連接的分頁上恢復瀏覽器控制。",
     "description": "Runtime interface message browser_control.help_resume"
   },
+  "runtime_browser_control_help_scope": {
+    "message": "選擇 Hermes 可以操作的分頁。按「套用」確認。",
+    "description": "Runtime interface message browser_control.help_scope"
+  },
   "runtime_browser_control_help_scope_selected_tabs": {
     "message": "僅控制你在下方選擇的分頁。每個分頁需個別選取，其他分頁不在控制範圍內。",
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
+  },
+  "runtime_browser_control_help_scope_tab": {
+    "message": "將此分頁加入範圍。選擇需要的分頁，然後按「套用」。",
+    "description": "Runtime interface message browser_control.help_scope_tab"
   },
   "runtime_browser_control_help_scope_task_set": {
     "message": "僅將你在下方選擇的分頁作為一個共用瀏覽器工作進行控制。與「所選分頁」不同，這些分頁共用工作識別碼；並不包含所有已開啟的分頁。",

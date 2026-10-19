@@ -875,9 +875,21 @@
     "message": "Слідувати за Hermes",
     "description": "Runtime interface message browser_control.follow"
   },
+  "runtime_browser_control_help_apply": {
+    "message": "Застосовує вибрану область до вкладок, якими може керувати Hermes.",
+    "description": "Runtime interface message browser_control.help_apply"
+  },
+  "runtime_browser_control_help_approve": {
+    "message": "Дозволяє одну дію браузера, що очікує. Hermes запитає знову перед наступною.",
+    "description": "Runtime interface message browser_control.help_approve"
+  },
   "runtime_browser_control_help_attach": {
     "message": "Дозвольте Hermes керувати цією вкладкою замість раніше підключеної.",
     "description": "Runtime interface message browser_control.help_attach"
+  },
+  "runtime_browser_control_help_authorize": {
+    "message": "Дозволяє цьому браузеру отримати від Hermes токен керування, щоб працювати з вкладками.",
+    "description": "Runtime interface message browser_control.help_authorize"
   },
   "runtime_browser_control_help_close": {
     "message": "Закрийте цю панель, не призупиняючи й не вимикаючи керування.",
@@ -895,13 +907,25 @@
     "message": "Призупиніть керування браузером, не вимикаючи його. Вкладки залишаться підключеними.",
     "description": "Runtime interface message browser_control.help_pause"
   },
+  "runtime_browser_control_help_reject": {
+    "message": "Відхиляє одну дію браузера, що очікує. Hermes її не виконає.",
+    "description": "Runtime interface message browser_control.help_reject"
+  },
   "runtime_browser_control_help_resume": {
     "message": "Відновіть керування браузером на вкладках, які досі підключені.",
     "description": "Runtime interface message browser_control.help_resume"
   },
+  "runtime_browser_control_help_scope": {
+    "message": "Оберіть вкладки, з якими може працювати Hermes. Натисніть «Застосувати», щоб підтвердити.",
+    "description": "Runtime interface message browser_control.help_scope"
+  },
   "runtime_browser_control_help_scope_selected_tabs": {
     "message": "Керувати лише вкладками, вибраними нижче. Кожна вкладка вибирається окремо; решта залишається поза межами керування.",
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
+  },
+  "runtime_browser_control_help_scope_tab": {
+    "message": "Додайте цю вкладку до області. Оберіть потрібні вкладки і натисніть «Застосувати».",
+    "description": "Runtime interface message browser_control.help_scope_tab"
   },
   "runtime_browser_control_help_scope_task_set": {
     "message": "Керувати лише вкладками, вибраними нижче, як одним спільним завданням браузера. На відміну від вибраних вкладок, вони мають спільний ідентифікатор завдання; це не включає всі відкриті вкладки.",

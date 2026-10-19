@@ -875,9 +875,21 @@
     "message": "Hermes folgen",
     "description": "Runtime interface message browser_control.follow"
   },
+  "runtime_browser_control_help_apply": {
+    "message": "Wendet den gewählten Bereich auf die Tabs an, die Hermes steuern kann.",
+    "description": "Runtime interface message browser_control.help_apply"
+  },
+  "runtime_browser_control_help_approve": {
+    "message": "Erlaubt diese eine wartende Browseraktion. Hermes fragt bei der nächsten erneut.",
+    "description": "Runtime interface message browser_control.help_approve"
+  },
   "runtime_browser_control_help_attach": {
     "message": "Lass Hermes diesen Tab steuern. Er ersetzt den zuvor verbundenen Tab.",
     "description": "Runtime interface message browser_control.help_attach"
+  },
+  "runtime_browser_control_help_authorize": {
+    "message": "Lass diesen Browser ein Steuer-Token von Hermes holen, damit er Tabs bedienen kann.",
+    "description": "Runtime interface message browser_control.help_authorize"
   },
   "runtime_browser_control_help_close": {
     "message": "Schließe dieses Fenster, ohne die Steuerung zu pausieren oder auszuschalten.",
@@ -895,13 +907,25 @@
     "message": "Pausiere die Browsersteuerung, ohne sie auszuschalten. Verbundene Tabs bleiben erhalten.",
     "description": "Runtime interface message browser_control.help_pause"
   },
+  "runtime_browser_control_help_reject": {
+    "message": "Lehnt diese eine wartende Browseraktion ab. Hermes führt sie nicht aus.",
+    "description": "Runtime interface message browser_control.help_reject"
+  },
   "runtime_browser_control_help_resume": {
     "message": "Setze die Browsersteuerung auf den weiterhin verbundenen Tabs fort.",
     "description": "Runtime interface message browser_control.help_resume"
   },
+  "runtime_browser_control_help_scope": {
+    "message": "Wähle, welche Tabs Hermes bedienen darf. Tippe auf Anwenden, um es zu bestätigen.",
+    "description": "Runtime interface message browser_control.help_scope"
+  },
   "runtime_browser_control_help_scope_selected_tabs": {
     "message": "Nur die unten ausgewählten Tabs steuern. Jeder Tab wird einzeln ausgewählt; alle anderen Tabs bleiben außerhalb des Bereichs.",
     "description": "Runtime interface message browser_control.help_scope_selected_tabs"
+  },
+  "runtime_browser_control_help_scope_tab": {
+    "message": "Nimm diesen Tab in den Bereich auf. Wähle die gewünschten Tabs und tippe dann auf Anwenden.",
+    "description": "Runtime interface message browser_control.help_scope_tab"
   },
   "runtime_browser_control_help_scope_task_set": {
     "message": "Nur die unten ausgewählten Tabs als eine gemeinsame Browseraufgabe steuern. Anders als bei Ausgewählte Tabs teilen sie eine Aufgabenidentität; nicht alle offenen Tabs sind eingeschlossen.",
