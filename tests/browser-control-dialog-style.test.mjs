@@ -147,6 +147,44 @@ test('Hermes Control window colours come from theme tokens only', () => {
   }
 });
 
+test('the Hermes Control window uses the Settings card fonts in every profile', () => {
+  // Settings sizes its label eyebrow (10px, weight 700) and the scope picker reads its size from the label.
+  const settingsLabel = rules.find((rule) => /(^|,\s*)\.settings-dialog label(,|$)/.test(rule.selector));
+  assert.ok(settingsLabel, 'the Settings label rule exists');
+  assert.match(settingsLabel.body, /font-size:\s*calc\(10px \* var\(--hermes-text-zoom,\s*1\)\)/);
+  assert.match(settingsLabel.body, /font-weight:\s*700/);
+  // Only the scope field's label takes the eyebrow size. A window-wide label rule would also shrink the per-tab options (12px).
+  const windowLabel = rules.find((rule) => rule.selector === '.browser-control-dialog label.browser-control-field');
+  assert.match(windowLabel?.body || '', /font-size:\s*calc\(10px \* var\(--hermes-text-zoom,\s*1\)\)/);
+  assert.match(windowLabel?.body || '', /font-weight:\s*700/);
+  assert.equal(rules.some((rule) => rule.selector === '.browser-control-dialog label'), false, 'no window-wide label rule');
+  const tabOption = rules.find((rule) => rule.selector === '.browser-control-tab-option');
+  assert.match(tabOption?.body || '', /font:\s*400 calc\(12px \* var\(--hermes-text-zoom,\s*1\)\)\/1\.4 var\(--hermes-font-ui\)/);
+  // The signature profile keeps its own 13px label size.
+  const signatureLabel = rules.find((rule) => rule.selector === 'html[data-hermes-font-profile="signature"] .browser-control-dialog label');
+  assert.match(signatureLabel?.body || '', /font-size:\s*calc\(13px \* var\(--hermes-text-zoom,\s*1\)\)/);
+  // Action buttons take the Settings spacing in every profile, not 0.05em.
+  const action = rules.find((rule) => rule.selector === '.browser-control-action');
+  assert.match(action.body, /letter-spacing:\s*0\.03em/);
+  const everyProfile = rules.find((rule) => rule.selector === 'html[data-hermes-font-profile] .browser-control-dialog .browser-control-action');
+  assert.match(everyProfile?.body || '', /letter-spacing:\s*0\.03em/);
+  assert.match(everyProfile?.body || '', /text-transform:\s*uppercase/);
+  assert.doesNotMatch(css, /\.browser-control-dialog \.browser-control-action[^{]*\{[^}]*letter-spacing:\s*0\.05em/);
+  // The scope helper text is the Settings helper text: mono, weight 400, the Settings note size and line height.
+  const hint = rules.find((rule) => rule.selector === '.browser-control-dialog .browser-control-field small');
+  assert.match(hint?.body || '', /font:\s*400 calc\(11px \* var\(--hermes-text-zoom,\s*1\)\)\/1\.55 var\(--hermes-font-mono\)/);
+  const settingsNote = rules.find((rule) => rule.selector === '.browser-control-note');
+  assert.match(settingsNote?.body || '', /font:\s*calc\(11px \* var\(--hermes-text-zoom,\s*1\)\)\/1\.55 var\(--hermes-font-mono\)/);
+  // The signature-only action rules repeated values the shared rule now sets; they are gone.
+  assert.doesNotMatch(css, /html\[data-hermes-font-profile="signature"\] \.browser-control-dialog \.browser-control-action \{/);
+  // The Settings kicker is the reference size. The window title matches it, and under the signature profile
+  // it takes the display scale that the app gives display headlines there, since that face is narrow.
+  const kicker = rules.find((rule) => rule.selector === '.browser-control-kicker');
+  const title = rules.find((rule) => rule.selector === '.browser-control-dialog .browser-control-dialog-title');
+  assert.match(kicker?.body || '', /font:\s*500 calc\(16px \* var\(--hermes-text-zoom,\s*1\)\)\/1\.15 var\(--hermes-font-display\)/);
+  assert.match(title?.body || '', /font:\s*500 calc\(16px \* var\(--hermes-text-zoom,\s*1\) \* var\(--hermes-display-scale,\s*1\)\)\/1\.15 var\(--hermes-font-display\)/);
+});
+
 test('the composer launcher stays square', () => {
   const launcher = rules.find((rule) => rule.selector === '.composer-actions #browserControlMenuButton');
   assert.ok(launcher, 'the launcher rule exists');

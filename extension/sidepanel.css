@@ -1739,7 +1739,7 @@ body.startup-active .startup-actions #startupConnectButton:not([hidden]):focus-v
   text-align: center;
   border-radius: var(--radius);
   font: 650 calc(13px * var(--hermes-text-zoom, 1))/1.25 var(--hermes-font-ui);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
   white-space: normal;
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), border-color 120ms ease, background 120ms ease, color 120ms ease;
@@ -2062,10 +2062,15 @@ html[data-hermes-mode="light"] .browser-control-dialog { --control-accent: color
   flex: 1 1 auto;
   min-width: min(100%, max-content);
 }
-/* Settings sizes its controls through .settings-dialog (the label eyebrow weight and the
-   default signature profile's control sizes). The window takes the same values, so its
-   select and buttons match the Settings card in every profile. */
-.browser-control-dialog label { font-weight: 700; }
+/* The window takes the Settings card's font values in every profile, so its scope picker, label,
+   helper text and buttons match Settings. Settings sizes these through .settings-dialog: the label
+   eyebrow (10px, weight 700, scaled by the text zoom), which the scope picker reads its size from.
+   The signature profile keeps its own 13px label size and 1.4 line height. Only the scope field's label
+   takes the eyebrow size; the per-tab scope options are labels too and keep their 12px text. */
+.browser-control-dialog label.browser-control-field {
+  font-size: calc(10px * var(--hermes-text-zoom, 1));
+  font-weight: 700;
+}
 html[data-hermes-font-profile="signature"] .browser-control-dialog label {
   font-size: calc(13px * var(--hermes-text-zoom, 1));
   letter-spacing: 0.01em;
@@ -2077,18 +2082,23 @@ html[data-hermes-font-profile="signature"] .browser-control-dialog button {
   line-height: 1.4;
   text-transform: none;
 }
-html[data-hermes-font-profile="signature"] .browser-control-dialog .browser-control-action {
-  font-size: calc(13px * var(--hermes-text-zoom, 1));
+/* Action buttons take the Settings spacing (0.03em, uppercase) in every profile. This rule outranks the
+   signature button rule above, so only the line height differs between profiles, as in Settings. */
+html[data-hermes-font-profile] .browser-control-dialog .browser-control-action {
   letter-spacing: 0.03em;
   text-transform: uppercase;
+}
+/* The scope helper text is the Settings helper text: mono, weight 400, the Settings note size and line height. */
+.browser-control-dialog .browser-control-field small {
+  margin: 0;
+  color: var(--hermes-muted);
+  font: 400 calc(11px * var(--hermes-text-zoom, 1))/1.55 var(--hermes-font-mono);
+  letter-spacing: 0;
+  text-transform: none;
 }
 .browser-control-dialog .browser-control-action:not(.secondary) {
   background: var(--hermes-primary-bg, var(--hermes-ink));
   color: var(--hermes-primary-fg, var(--hermes-paper));
-}
-html[data-hermes-font-profile="signature"] .browser-control-dialog .browser-control-action {
-  font-size: calc(13px * var(--hermes-text-zoom, 1));
-  letter-spacing: 0.03em;
 }
 .browser-control-dialog .browser-control-dismiss:focus-visible { outline: 2px solid var(--hermes-accent); outline-offset: 2px; }
 .browser-control-tooltip {
